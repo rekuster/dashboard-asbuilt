@@ -9,6 +9,7 @@ import * as pgSchema from "../drizzle/schema.pg.ts";
 
 // Re-export tables based on active dialect
 // Forcing Postgres Schema
+const isPostgres = true; // Hardcoded for production stability as we removed SQLite
 const activeSchema = pgSchema;
 
 export const { users, salas, apontamentos, ifcFiles, uploads, entregasAsBuilt, entregasHistorico } = activeSchema as any;
@@ -35,7 +36,8 @@ export async function getDb() {
                 });
                 _db = drizzlePg(_client, { schema: pgSchema });
             } else {
-                throw new Error("DATABASE_URL is missing. SQLite fallback is removed for production stability.");
+                console.warn("[Database] DATABASE_URL is missing! Queries will fail.");
+                return null;
             }
         } catch (error) {
             console.warn("[Database] Failed to connect:", error);
