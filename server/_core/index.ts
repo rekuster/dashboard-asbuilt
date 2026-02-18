@@ -83,15 +83,32 @@ app.post('/api/upload-image', upload.single('image'), async (req, res) => {
 // Health Check
 app.get('/api/health', async (req, res) => {
     try {
-        const { getDb, users } = await import('../db');
+        const { getDb, users, salas } = await import('../db');
         const db = await getDb();
-        if (!db) throw new Error('DB Connection failed');
+        if (!db) throw new Error('DB Connection failed (db is null)');
+
+        // Diagnostic counts
+        const rUsers = await db.select({ count: sql`count(*)` }).from(users).catch((e: any) => ({ error: e.message }));
+        const rSalas = await db.select({ count: sql`count(*)` }).from(salas).catch((e: any) => ({ error: e.message }));
+
+        // Return sensitive info masked for debugging
+        const dbUrl = process.env.DATABASE_URL || 'NOT_SET';
+        const maskedUrl = dbUrl.length > 20 ? dbUrl.substring(0, 15) + '...' : dbUrl;
+
         res.json({
             status: 'ok',
             db: 'connected',
-            dbType: process.env.DATABASE_URL ? 'Postgres' : 'SQLite (Fallback)',
-            users: count[0].count,
-            env: process.env.NODE_ENV
+            dbType: process.env.DATABASE_URL ? 'Postgres' : 'SQLite',
+            connectionString: maskedUrl,
+            counts: {
+                users: rUsers[0]?.count || rUsers.error || 'error',
+                salas: rSalas[0]?.count || rSalas.error || 'error'
+            },
+            env: process.env.NODE_ENV,
+            postgresParams: {
+                ssl: 'require',
+                prepare: false
+            }
         });
     } catch (e: any) {
         res.status(500).json({ status: 'error', error: e.message, stack: e.stack });
