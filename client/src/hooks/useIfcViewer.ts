@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { IFCLoader } from "web-ifc-three";
+// import { IFCLoader } from "web-ifc-three";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
@@ -11,7 +11,7 @@ export function useIfcViewer() {
     const sceneRef = useRef<THREE.Scene | null>(null);
     const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
     const controlsRef = useRef<OrbitControls | null>(null);
-    const ifcLoaderRef = useRef<IFCLoader | null>(null);
+    const ifcLoaderRef = useRef<any | null>(null);
     const modelRef = useRef<any>(null);
     const utils = trpc.useUtils();
 
@@ -73,13 +73,13 @@ export function useIfcViewer() {
             scene.add(dl);
             scene.add(new THREE.HemisphereLight(0xffffff, 0x080820, 0.8));
 
-            const loader = new IFCLoader();
-            loader.ifcManager.setWasmPath("/wasm/");
-            loader.ifcManager.applyWebIfcConfig({
-                COORDINATE_TO_ORIGIN: true,
-                USE_FAST_BOOLS: false
-            });
-            ifcLoaderRef.current = loader;
+            // const loader = new IFCLoader();
+            // loader.ifcManager.setWasmPath("/wasm/");
+            // loader.ifcManager.applyWebIfcConfig({
+            //     COORDINATE_TO_ORIGIN: true,
+            //     USE_FAST_BOOLS: false
+            // });
+            // ifcLoaderRef.current = loader;
 
             const animate = () => {
                 animationId = requestAnimationFrame(animate);
