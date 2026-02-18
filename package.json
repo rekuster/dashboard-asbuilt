@@ -16,7 +16,10 @@
     },
     "overrides": {
         "three": "$three",
-        "vite": "$vite"
+        "vite": "$vite",
+        "web-ifc-three": {
+            "three": "$three"
+        }
     },
     "dependencies": {
         "@hookform/resolvers": "^5.2.2",
