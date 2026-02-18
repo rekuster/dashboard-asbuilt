@@ -86,8 +86,13 @@ app.get('/api/health', async (req, res) => {
         const { getDb, users } = await import('../db');
         const db = await getDb();
         if (!db) throw new Error('DB Connection failed');
-        const count = await db.select({ count: sql`count(*)` }).from(users); // Attempt query
-        res.json({ status: 'ok', db: 'connected', users: count[0].count, env: process.env.NODE_ENV });
+        res.json({
+            status: 'ok',
+            db: 'connected',
+            dbType: process.env.DATABASE_URL ? 'Postgres' : 'SQLite (Fallback)',
+            users: count[0].count,
+            env: process.env.NODE_ENV
+        });
     } catch (e: any) {
         res.status(500).json({ status: 'error', error: e.message, stack: e.stack });
     }
