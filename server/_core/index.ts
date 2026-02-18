@@ -94,11 +94,12 @@ app.use(
 );
 
 // Serve static files in production
+// Serve static files in production
 if (ENV.nodeEnv === 'production') {
-    app.use(express.static(path.join(process.cwd(), 'dist/public')));
+    app.use(express.static(path.join(process.cwd(), 'dist')));
 
     app.get('*', (_, res) => {
-        res.sendFile(path.join(process.cwd(), 'dist/public/index.html'));
+        res.sendFile(path.join(process.cwd(), 'dist/index.html'));
     });
 }
 
