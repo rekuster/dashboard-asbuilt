@@ -14,13 +14,6 @@
         "test": "vitest run",
         "db:push": "drizzle-kit generate && drizzle-kit migrate"
     },
-    "overrides": {
-        "three": "$three",
-        "vite": "$vite",
-        "web-ifc-three": {
-            "three": "$three"
-        }
-    },
     "dependencies": {
         "@hookform/resolvers": "^5.2.2",
         "@libsql/client": "^0.17.0",
@@ -95,8 +88,6 @@
         "typescript": "5.9.3",
         "vite": "^7.1.7",
         "vitest": "^2.1.4",
-        "web-ifc": "^0.0.66",
-        "web-ifc-three": "^0.0.126",
         "wouter": "^3.3.5",
         "xlsx": "^0.18.5",
         "zod": "^4.1.12"
