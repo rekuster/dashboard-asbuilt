@@ -97,10 +97,9 @@ export function useIfcViewer() {
             rendererRef.current = null;
         }
 
-    }
-
-    setIsLoaded(false);
-    setIsModelLoaded(false);
+        setIsLoaded(false);
+        setIsModelLoaded(false);
+    };
 }, []);
 
 const applyColors = useCallback(async (model: any, force: boolean = false) => {
