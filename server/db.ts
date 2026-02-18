@@ -4,17 +4,20 @@ import { eq, sql, desc } from "drizzle-orm";
 import { drizzle as drizzlePg } from "drizzle-orm/postgres-js";
 // import Database from "better-sqlite3"; // REMOVED STATIC IMPORT
 import postgres from "postgres";
-import * as sqliteSchema from "../drizzle/schema.ts";
+// import * as sqliteSchema from "../drizzle/schema.ts"; // Not used anymore
 import * as pgSchema from "../drizzle/schema.pg.ts";
 
 // Re-export tables based on active dialect
-const isPostgres = !!process.env.DATABASE_URL;
-const activeSchema = isPostgres ? pgSchema : sqliteSchema;
+// Forcing Postgres Schema
+const activeSchema = pgSchema;
 
 export const { users, salas, apontamentos, ifcFiles, uploads, entregasAsBuilt, entregasHistorico } = activeSchema as any;
-export type InsertUser = typeof sqliteSchema.users.$inferInsert;
-export type InsertApontamento = typeof sqliteSchema.apontamentos.$inferInsert;
-export type InsertSala = typeof sqliteSchema.salas.$inferInsert;
+// export type InsertUser = typeof sqliteSchema.users.$inferInsert; // Use PG types or generic
+
+// Temporary type alignment (since we used to export from sqliteSchema)
+export type InsertUser = typeof pgSchema.users.$inferInsert;
+export type InsertApontamento = typeof pgSchema.apontamentos.$inferInsert;
+export type InsertSala = typeof pgSchema.salas.$inferInsert;
 
 let _db: any = null;
 let _client: any = null;
@@ -24,7 +27,7 @@ export async function getDb() {
         try {
             if (process.env.DATABASE_URL) {
                 console.log("[Database] Connecting to PostgreSQL...");
-                // Postgres connection (Static import is fine, pure JS/compatible)
+                // Postgres connection
                 _client = postgres(process.env.DATABASE_URL, {
                     ssl: { rejectUnauthorized: false },
                     max: 10,
@@ -32,14 +35,7 @@ export async function getDb() {
                 });
                 _db = drizzlePg(_client, { schema: pgSchema });
             } else {
-                console.log("[Database] Connecting to SQLite...");
-                // DYNAMICALLY IMPORT SQLite keys only when needed (Local Dev)
-                // This prevents Vercel from crashing due to missing 'better-sqlite3' native bindings
-                const { default: Database } = await import("better-sqlite3");
-                const { drizzle: drizzleSqlite } = await import("drizzle-orm/better-sqlite3");
-
-                const sqlite = new Database("sqlite.db");
-                _db = drizzleSqlite(sqlite, { schema: sqliteSchema });
+                throw new Error("DATABASE_URL is missing. SQLite fallback is removed for production stability.");
             }
         } catch (error) {
             console.warn("[Database] Failed to connect:", error);
