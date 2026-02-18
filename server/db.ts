@@ -1,8 +1,8 @@
 import "dotenv/config";
 import { eq, sql, desc } from "drizzle-orm";
-import { drizzle as drizzleSqlite } from "drizzle-orm/better-sqlite3";
+// import { drizzle as drizzleSqlite } from "drizzle-orm/better-sqlite3"; // REMOVED STATIC IMPORT
 import { drizzle as drizzlePg } from "drizzle-orm/postgres-js";
-import Database from "better-sqlite3";
+// import Database from "better-sqlite3"; // REMOVED STATIC IMPORT
 import postgres from "postgres";
 import * as sqliteSchema from "../drizzle/schema.ts";
 import * as pgSchema from "../drizzle/schema.pg.ts";
@@ -24,6 +24,7 @@ export async function getDb() {
         try {
             if (process.env.DATABASE_URL) {
                 console.log("[Database] Connecting to PostgreSQL...");
+                // Postgres connection (Static import is fine, pure JS/compatible)
                 _client = postgres(process.env.DATABASE_URL, {
                     ssl: { rejectUnauthorized: false },
                     max: 10,
@@ -32,6 +33,11 @@ export async function getDb() {
                 _db = drizzlePg(_client, { schema: pgSchema });
             } else {
                 console.log("[Database] Connecting to SQLite...");
+                // DYNAMICALLY IMPORT SQLite keys only when needed (Local Dev)
+                // This prevents Vercel from crashing due to missing 'better-sqlite3' native bindings
+                const { default: Database } = await import("better-sqlite3");
+                const { drizzle: drizzleSqlite } = await import("drizzle-orm/better-sqlite3");
+
                 const sqlite = new Database("sqlite.db");
                 _db = drizzleSqlite(sqlite, { schema: sqliteSchema });
             }
