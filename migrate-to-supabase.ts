@@ -20,37 +20,80 @@ async function migrate() {
     try {
         // Migrar Usuários
         console.log("👥 Migrando usuários...");
-        const localUsers = await dbSqlite.select().from(sqliteSchema.users);
-        if (localUsers.length > 0) {
-            await dbPg.insert(users).values(localUsers).onConflictDoNothing();
+        try {
+            const localUsers = await dbSqlite.select().from(sqliteSchema.users);
+            if (localUsers.length > 0) {
+                await dbPg.insert(users).values(localUsers).onConflictDoNothing();
+            }
+        } catch (e) {
+            console.log("⚠️ Erro ao migrar usuários (pode não existir localmente ou schema diferente), pulando...", e);
         }
 
         // Migrar Salas
         console.log("🏢 Migrando salas...");
-        const localSalas = await dbSqlite.select().from(sqliteSchema.salas);
+        const localSalas = await dbSqlite.select({
+            id: sqliteSchema.salas.id,
+            edificacao: sqliteSchema.salas.edificacao,
+            pavimento: sqliteSchema.salas.pavimento,
+            setor: sqliteSchema.salas.setor,
+            nome: sqliteSchema.salas.nome,
+            numeroSala: sqliteSchema.salas.numeroSala,
+            augin: sqliteSchema.salas.augin,
+            status: sqliteSchema.salas.status,
+            dataVerificada: sqliteSchema.salas.dataVerificada,
+            faltouDisciplina: sqliteSchema.salas.faltouDisciplina,
+            revisar: sqliteSchema.salas.revisar,
+            obs: sqliteSchema.salas.obs,
+            createdAt: sqliteSchema.salas.createdAt,
+            updatedAt: sqliteSchema.salas.updatedAt,
+            ifcExpressId: sqliteSchema.salas.ifcExpressId,
+            statusRA: sqliteSchema.salas.statusRA
+        }).from(sqliteSchema.salas);
+
         if (localSalas.length > 0) {
             await dbPg.insert(salas).values(localSalas).onConflictDoNothing();
         }
 
         // Migrar Apontamentos
         console.log("⚠️ Migrando apontamentos...");
-        const localApontamentos = await dbSqlite.select().from(sqliteSchema.apontamentos);
+        const localApontamentos = await dbSqlite.select({
+            id: sqliteSchema.apontamentos.id,
+            numeroApontamento: sqliteSchema.apontamentos.numeroApontamento,
+            data: sqliteSchema.apontamentos.data,
+            edificacao: sqliteSchema.apontamentos.edificacao,
+            pavimento: sqliteSchema.apontamentos.pavimento,
+            setor: sqliteSchema.apontamentos.setor,
+            sala: sqliteSchema.apontamentos.sala,
+            disciplina: sqliteSchema.apontamentos.disciplina,
+            divergencia: sqliteSchema.apontamentos.divergencia,
+            createdAt: sqliteSchema.apontamentos.createdAt,
+            updatedAt: sqliteSchema.apontamentos.updatedAt
+        }).from(sqliteSchema.apontamentos);
+
         if (localApontamentos.length > 0) {
             await dbPg.insert(apontamentos).values(localApontamentos).onConflictDoNothing();
         }
 
         // Migrar Entregas
         console.log("📦 Migrando entregas as-built...");
-        const localEntregas = await dbSqlite.select().from(sqliteSchema.entregasAsBuilt);
-        if (localEntregas.length > 0) {
-            await dbPg.insert(entregasAsBuilt).values(localEntregas).onConflictDoNothing();
+        try {
+            const localEntregas = await dbSqlite.select().from(sqliteSchema.entregasAsBuilt);
+            if (localEntregas.length > 0) {
+                await dbPg.insert(entregasAsBuilt).values(localEntregas).onConflictDoNothing();
+            }
+        } catch (e) {
+            console.log("⚠️ Tabela entregasAsBuilt não encontrada localmente, pulando...");
         }
 
         // Migrar Histórico de Entregas
-        console.log("📜 Migrando histórico de entregas...");
-        const localHistorico = await dbSqlite.select().from(sqliteSchema.entregasHistorico);
-        if (localHistorico.length > 0) {
-            await dbPg.insert(entregasHistorico).values(localHistorico).onConflictDoNothing();
+        try {
+            console.log("📜 Migrando histórico de entregas...");
+            const localHistorico = await dbSqlite.select().from(sqliteSchema.entregasHistorico);
+            if (localHistorico.length > 0) {
+                await dbPg.insert(entregasHistorico).values(localHistorico).onConflictDoNothing();
+            }
+        } catch (e) {
+            console.log("⚠️ Tabela entregasHistorico não encontrada localmente, pulando...");
         }
 
         // Migrar IFC Files

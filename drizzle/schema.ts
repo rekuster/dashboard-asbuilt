@@ -41,6 +41,7 @@ export const salas = sqliteTable("salas", {
     trackerPosicionado: integer("trackerPosicionado").default(0), // 0: Não, 1: Sim
     plantaImpressa: integer("plantaImpressa").default(0), // 0: Não, 1: Sim
     qrCodePlastificado: integer("qrCodePlastificado").default(0), // 0: Não, 1: Sim
+    ifcExpressId: text("ifcExpressId"),
     createdAt: integer("createdAt", { mode: "timestamp_ms" }).default(sql`(unixepoch() * 1000)`).notNull(),
     updatedAt: integer("updatedAt", { mode: "timestamp_ms" }).default(sql`(unixepoch() * 1000)`).notNull(),
 });

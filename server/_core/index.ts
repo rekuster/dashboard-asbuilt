@@ -102,10 +102,14 @@ if (ENV.nodeEnv === 'production') {
     });
 }
 
-// Start server
-const PORT = ENV.port;
-app.listen(PORT, () => {
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
-    console.log(`📊 Dashboard: http://localhost:${PORT}`);
-    console.log(`🔌 tRPC API: http://localhost:${PORT}/api/trpc`);
-});
+// Start server if not in Vercel
+if (!process.env.VERCEL) {
+    const PORT = ENV.port;
+    app.listen(PORT, () => {
+        console.log(`🚀 Server running on http://localhost:${PORT}`);
+        console.log(`📊 Dashboard: http://localhost:${PORT}`);
+        console.log(`🔌 tRPC API: http://localhost:${PORT}/api/trpc`);
+    });
+}
+
+export default app;
