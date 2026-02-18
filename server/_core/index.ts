@@ -80,6 +80,21 @@ app.post('/api/upload-image', upload.single('image'), async (req, res) => {
     }
 });
 
+// Health Check
+app.get('/api/health', async (req, res) => {
+    try {
+        const { getDb, users } = await import('../db');
+        const db = await getDb();
+        if (!db) throw new Error('DB Connection failed');
+        const count = await db.select({ count: sql`count(*)` }).from(users); // Attempt query
+        res.json({ status: 'ok', db: 'connected', users: count[0].count, env: process.env.NODE_ENV });
+    } catch (e: any) {
+        res.status(500).json({ status: 'error', error: e.message, stack: e.stack });
+    }
+});
+
+import { sql } from 'drizzle-orm';
+
 // tRPC endpoint
 app.use(
     '/api/trpc',
@@ -114,3 +129,5 @@ if (!process.env.VERCEL) {
 }
 
 export default app;
+
+// Trigger Vercel deploy: Final fix for static files
