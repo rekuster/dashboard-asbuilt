@@ -24,7 +24,11 @@ export async function getDb() {
         try {
             if (process.env.DATABASE_URL) {
                 console.log("[Database] Connecting to PostgreSQL...");
-                _client = postgres(process.env.DATABASE_URL, { ssl: 'require', max: 10, prepare: false });
+                _client = postgres(process.env.DATABASE_URL, {
+                    ssl: { rejectUnauthorized: false },
+                    max: 10,
+                    prepare: false
+                });
                 _db = drizzlePg(_client, { schema: pgSchema });
             } else {
                 console.log("[Database] Connecting to SQLite...");
