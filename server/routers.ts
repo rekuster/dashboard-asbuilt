@@ -31,6 +31,7 @@ import {
     getSalaById,
     getDb,
     salas,
+    apontamentos,
 } from './db';
 import { eq } from "drizzle-orm";
 import { handleExcelUpload } from './uploadHandler';
@@ -149,7 +150,7 @@ export const appRouter = router({
         getPDFReport: publicProcedure
             .input(z.object({ edificacao: z.string().optional() }).optional())
             .query(async ({ input }) => {
-                const buffer = await generatePDFReport(input?.edificacao);
+                const buffer = await generatePDFReport({ edificacao: input?.edificacao });
                 return buffer.toString('base64');
             }),
 
@@ -230,6 +231,30 @@ export const appRouter = router({
                     status: 'PENDENTE'
                 };
                 return await createApontamento(data as any);
+                return await createApontamento(data as any);
+            }),
+
+        updateApontamento: publicProcedure
+            .input(z.object({
+                id: z.number(),
+                disciplina: z.string().optional(),
+                responsavel: z.string().optional(),
+                divergencia: z.string().optional(),
+                fotoUrl: z.string().optional(),
+                fotoReferenciaUrl: z.string().optional(),
+            }))
+            .mutation(async ({ input }) => {
+                const { id, ...data } = input;
+                const db = await getDb();
+                if (!db) throw new Error("Database not connected");
+
+                return await db.update(apontamentos)
+                    .set({
+                        ...data,
+                        updatedAt: new Date()
+                    })
+                    .where(eq(apontamentos.id, id))
+                    .returning();
             }),
 
         updateSalaStatus: publicProcedure
@@ -248,6 +273,7 @@ export const appRouter = router({
                 dataVerificacao2: z.date().or(z.string()).optional(),
                 obs2: z.string().optional(),
                 augin: z.number().optional(),
+                imagemPlantaUrl: z.string().optional(),
             }))
             .mutation(async ({ input }) => {
                 const { id, ...data } = input;

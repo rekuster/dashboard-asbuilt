@@ -15,18 +15,27 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
     Search,
     FileSpreadsheet,
-    FileText,
     Layout,
     Map,
     ListChecks,
-    ClipboardCheck
+    ClipboardCheck,
+    Image as ImageIcon
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { ImageUpload } from "@/components/ui/ImageUpload";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ReportPreviewModal } from "@/components/dashboard/ReportPreviewModal";
 
 export default function DataHubTab() {
     const [search, setSearch] = useState("");
     const [subTab, setSubTab] = useState("mapping");
+
+    // Filters
+    const [filterEdificacao, setFilterEdificacao] = useState("Todas");
+    const [filterPavimento, setFilterPavimento] = useState("Todos");
+    const [filterDisciplina, setFilterDisciplina] = useState("Todas");
+    const [filterStatus, setFilterStatus] = useState("Todos");
     const [responsavelFilter, setResponsavelFilter] = useState("Todos");
 
     const utils = trpc.useUtils();
@@ -74,7 +83,8 @@ export default function DataHubTab() {
 
             return { previousSalas };
         },
-        onError: (err, variables, context) => {
+        onError: (err, _variables, context) => {
+            console.error(err);
             if (context?.previousSalas) {
                 utils.dashboard.getSalas.setData(undefined, context.previousSalas);
             }
@@ -83,6 +93,14 @@ export default function DataHubTab() {
         onSettled: () => {
             utils.dashboard.getSalas.invalidate();
         },
+    });
+
+    const updateApontamento = trpc.dashboard.updateApontamento.useMutation({
+        onSuccess: () => {
+            toast.success("Apontamento atualizado!");
+            utils.dashboard.getApontamentos.invalidate();
+        },
+        onError: () => toast.error("Erro ao atualizar apontamento.")
     });
 
     const downloadExcel = async () => {
@@ -100,32 +118,24 @@ export default function DataHubTab() {
         }
     };
 
-    const downloadPDF = async (type: 'CQ' | 'AB') => {
-        try {
-            toast.info(`Gerando PDF ${type}...`);
-            const base64 = type === 'CQ'
-                ? await utils.dashboard.getPDFReport.fetch()
-                : await utils.dashboard.getAsBuiltReport.fetch();
 
-            const link = document.createElement('a');
-            link.href = `data:application/pdf;base64,${base64}`;
-            link.download = `Relatorio_${type}_${new Date().toISOString().split('T')[0]}.pdf`;
-            link.click();
-            toast.success(`PDF ${type} baixado!`);
-        } catch (e) {
-            console.error(e);
-            toast.error(`Erro ao baixar PDF ${type}.`);
-        }
-    };
 
     // Filter & Sort Logic
     const sortedSalas = useMemo(() => {
         const filtered = (salas || []).filter((s: any) => {
             const searchLower = (search || "").toLowerCase();
-            return (s.nome || "").toLowerCase().includes(searchLower) ||
+            const matchesSearch = (s.nome || "").toLowerCase().includes(searchLower) ||
                 (s.edificacao || "").toLowerCase().includes(searchLower) ||
                 (s.pavimento || "").toLowerCase().includes(searchLower) ||
                 (s.numeroSala || "").toLowerCase().includes(searchLower);
+
+            const matchesEdificacao = filterEdificacao === "Todas" || s.edificacao === filterEdificacao;
+            const matchesPavimento = filterPavimento === "Todos" || s.pavimento === filterPavimento;
+            // Status filter logic for "Status Verificação" tab mainly, but consistent
+            const currentStatus = s.status || "PENDENTE";
+            const matchesStatus = filterStatus === "Todos" || currentStatus === filterStatus;
+
+            return matchesSearch && matchesEdificacao && matchesPavimento && matchesStatus;
         });
 
         // Numerical stable sort
@@ -135,7 +145,15 @@ export default function DataHubTab() {
             if (nA !== nB) return nA - nB;
             return (a.nome || "").localeCompare(b.nome || "");
         });
-    }, [salas, search]);
+    }, [salas, search, filterEdificacao, filterPavimento, filterStatus]);
+
+
+    // Unique values for dropdowns
+    const uniqueEdificacoes = useMemo(() => Array.from(new Set(salas.map((s: any) => s.edificacao))).sort() as string[], [salas]);
+    const uniquePavimentos = useMemo(() => {
+        const filteredByBuilding = filterEdificacao === "Todas" ? salas : salas.filter((s: any) => s.edificacao === filterEdificacao);
+        return Array.from(new Set(filteredByBuilding.map((s: any) => s.pavimento))).sort();
+    }, [salas, filterEdificacao]);
 
     const sortedApontamentos = useMemo(() => {
         const filtered = (apontamentos || []).filter((a: any) => {
@@ -146,13 +164,18 @@ export default function DataHubTab() {
                 (a.edificacao || "").toLowerCase().includes(searchLower);
 
             const matchesResponsavel = responsavelFilter === "Todos" || a.responsavel === responsavelFilter;
-            return matchesSearch && matchesResponsavel;
+            const matchesDisciplina = filterDisciplina === "Todas" || a.disciplina === filterDisciplina;
+
+            return matchesSearch && matchesResponsavel && matchesDisciplina;
         });
 
         return [...filtered].sort((a, b) => {
             return new Date(b.data || 0).getTime() - new Date(a.data || 0).getTime() || (b.numeroApontamento - a.numeroApontamento);
         });
-    }, [apontamentos, search, responsavelFilter]);
+    }, [apontamentos, search, responsavelFilter, filterDisciplina]);
+
+    const uniqueDisciplinas = useMemo(() => Array.from(new Set(apontamentos.map((a: any) => a.disciplina))).sort() as string[], [apontamentos]);
+    const uniqueResponsaveis = useMemo(() => Array.from(new Set(apontamentos.map((a: any) => a.responsavel))).filter(Boolean).sort() as string[], [apontamentos]);
 
     if (salasLoading && salas.length === 0) {
         return <div className="p-8 text-center text-muted-foreground">Carregando tabelas pela primeira vez...</div>;
@@ -177,14 +200,12 @@ export default function DataHubTab() {
                         <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
                         Excel
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => downloadPDF('CQ')} className="h-9 gap-2 border-red-200 text-red-700 bg-red-50 hover:bg-red-100">
-                        <FileText className="w-4 h-4" />
-                        PDF CQ
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => downloadPDF('AB')} className="h-9 gap-2 border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100">
-                        <Layout className="w-4 h-4" />
-                        PDF AB
-                    </Button>
+
+                    <ReportPreviewModal
+                        edificacoes={uniqueEdificacoes}
+                        disciplinas={uniqueDisciplinas}
+                        responsaveis={uniqueResponsaveis}
+                    />
                 </div>
             </div>
 
@@ -207,8 +228,18 @@ export default function DataHubTab() {
                 {/* TAB 1: MAPEAMENTO SALAS */}
                 <TabsContent value="mapping" className="mt-4">
                     <Card>
-                        <CardHeader className="pb-3 border-b border-[#940707]/10">
+                        <CardHeader className="pb-3 border-b border-[#940707]/10 flex flex-row items-center justify-between">
                             <CardTitle className="text-sm font-bold uppercase tracking-widest text-[#940707]">Controle de Modelos (Checklist)</CardTitle>
+                            <div className="flex gap-2">
+                                <select className="text-xs border rounded p-1" value={filterEdificacao} onChange={(e) => setFilterEdificacao(e.target.value)}>
+                                    <option value="Todas">Todas Edificações</option>
+                                    {uniqueEdificacoes.map((ed: any) => <option key={ed} value={ed}>{ed}</option>)}
+                                </select>
+                                <select className="text-xs border rounded p-1" value={filterPavimento} onChange={(e) => setFilterPavimento(e.target.value)}>
+                                    <option value="Todos">Todos Pavimentos</option>
+                                    {uniquePavimentos.map((p: any) => <option key={p} value={p}>{p}</option>)}
+                                </select>
+                            </div>
                         </CardHeader>
                         <CardContent>
                             <div className="rounded-md border overflow-hidden bg-white">
@@ -219,8 +250,9 @@ export default function DataHubTab() {
                                             <TableHead className="font-bold">Pavimento</TableHead>
                                             <TableHead className="font-bold">Setor</TableHead>
                                             <TableHead className="font-bold">Sala</TableHead>
+                                            <TableHead className="text-center font-bold">Planta</TableHead>
                                             <TableHead className="text-center font-bold">Augin?</TableHead>
-                                            <TableHead className="text-center font-bold">Tracker/Planta?</TableHead>
+                                            <TableHead className="text-center font-bold">Tracker?</TableHead>
                                             <TableHead className="text-center font-bold">QR Plast.?</TableHead>
                                             <TableHead className="font-bold">Status RA</TableHead>
                                         </TableRow>
@@ -228,12 +260,30 @@ export default function DataHubTab() {
                                     <TableBody>
                                         {sortedSalas.map((sala: any) => (
                                             <TableRow key={sala.id}>
-                                                <TableCell className="text-xs">{sala.edificacao}</TableCell>
-                                                <TableCell className="text-xs">{sala.pavimento}</TableCell>
-                                                <TableCell className="text-xs font-bold text-slate-500">{sala.setor}</TableCell>
-                                                <TableCell className="font-medium text-xs">
+                                                <TableCell className="text-sm">{sala.edificacao}</TableCell>
+                                                <TableCell className="text-sm">{sala.pavimento}</TableCell>
+                                                <TableCell className="text-sm font-bold text-slate-500">{sala.setor}</TableCell>
+                                                <TableCell className="font-medium text-sm">
                                                     <div>{sala.nome}</div>
                                                     <div className="text-[10px] text-muted-foreground">Nº {sala.numeroSala}</div>
+                                                </TableCell>
+                                                <TableCell className="text-center">
+                                                    <Popover>
+                                                        <PopoverTrigger asChild>
+                                                            <Button variant="ghost" size="icon" className={sala.imagemPlantaUrl ? "text-green-600" : "text-gray-400"}>
+                                                                <ImageIcon size={16} />
+                                                            </Button>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent className="w-80">
+                                                            <ImageUpload
+                                                                bucketName="project-assets"
+                                                                folderPath={`plantas/${sala.edificacao}/${sala.pavimento}`}
+                                                                currentImageUrl={sala.imagemPlantaUrl}
+                                                                onUploadComplete={(url) => updateSala.mutate({ id: sala.id, imagemPlantaUrl: url })}
+                                                                label={`Planta: ${sala.nome}`}
+                                                            />
+                                                        </PopoverContent>
+                                                    </Popover>
                                                 </TableCell>
                                                 <TableCell className="text-center">
                                                     <div className="flex justify-center">
@@ -295,15 +345,25 @@ export default function DataHubTab() {
                         <CardHeader className="pb-3 flex flex-row items-center justify-between border-b border-[#940707]/10">
                             <CardTitle className="text-sm font-bold uppercase tracking-widest text-[#940707]">Divergências de Campo</CardTitle>
                             <div className="flex items-center gap-2">
-                                <span className="text-xs text-muted-foreground mr-1">Responsável:</span>
+                                <span className="text-xs text-muted-foreground mr-1">Filtros:</span>
+                                <select
+                                    className="text-xs border rounded p-1"
+                                    value={filterDisciplina}
+                                    onChange={(e) => setFilterDisciplina(e.target.value)}
+                                >
+                                    <option value="Todas">Todas Disciplinas</option>
+                                    {uniqueDisciplinas.map((d: any) => <option key={d} value={d}>{d}</option>)}
+                                </select>
                                 <select
                                     className="text-xs border rounded p-1"
                                     value={responsavelFilter}
                                     onChange={(e) => setResponsavelFilter(e.target.value)}
                                 >
-                                    <option value="Todos">Todos</option>
+                                    <option value="Todos">Todos Responsáveis</option>
                                     <option value="Thá">Thá</option>
                                     <option value="Ocle">Ocle</option>
+                                    <option value="Stecla">Stecla</option>
+                                    <option value="Instaladora">Instaladora</option>
                                 </select>
                             </div>
                         </CardHeader>
@@ -319,7 +379,8 @@ export default function DataHubTab() {
                                             <TableHead className="font-bold">Sala</TableHead>
                                             <TableHead className="font-bold">Disc.</TableHead>
                                             <TableHead className="font-bold">Responsável</TableHead>
-                                            <TableHead className="font-bold w-[30%]">Divergência</TableHead>
+                                            <TableHead className="font-bold w-[25%]">Divergência</TableHead>
+                                            <TableHead className="font-bold text-center">Evidências</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -329,23 +390,82 @@ export default function DataHubTab() {
                                                     <div className="font-medium text-primary">#{item.numeroApontamento}</div>
                                                     <div className="text-muted-foreground">{format(new Date(item.data), "dd/MM/yy")}</div>
                                                 </TableCell>
-                                                <TableCell className="text-xs">{item.edificacao}</TableCell>
-                                                <TableCell className="text-xs">{item.pavimento}</TableCell>
-                                                <TableCell className="text-xs font-bold text-slate-500">{item.setor}</TableCell>
-                                                <TableCell className="text-xs font-bold">{item.sala}</TableCell>
+                                                <TableCell className="text-sm">{item.edificacao}</TableCell>
+                                                <TableCell className="text-sm">{item.pavimento}</TableCell>
+                                                <TableCell className="text-sm font-bold text-slate-500">{item.setor}</TableCell>
+                                                <TableCell className="text-sm font-bold">{item.sala}</TableCell>
                                                 <TableCell>
-                                                    <span className="px-2 py-0.5 bg-slate-100 rounded text-[10px] font-bold">
-                                                        {item.disciplina}
-                                                    </span>
+                                                    <Input
+                                                        className="h-7 text-xs w-24"
+                                                        defaultValue={item.disciplina}
+                                                        onBlur={(e) => {
+                                                            if (e.target.value !== item.disciplina) {
+                                                                updateApontamento.mutate({ id: item.id, disciplina: e.target.value });
+                                                            }
+                                                        }}
+                                                    />
                                                 </TableCell>
                                                 <TableCell>
-                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.responsavel === 'Thá' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'
-                                                        }`}>
-                                                        {item.responsavel}
-                                                    </span>
+                                                    <select
+                                                        className={`h-7 px-2 rounded text-[10px] font-bold border ${item.responsavel === 'Thá' ? 'bg-red-50 text-red-600 border-red-200' : 'bg-blue-50 text-blue-600 border-blue-200'}`}
+                                                        value={item.responsavel || "Ocle"}
+                                                        onChange={(e) => updateApontamento.mutate({ id: item.id, responsavel: e.target.value })}
+                                                    >
+                                                        <option value="Thá">Thá</option>
+                                                        <option value="Ocle">Ocle</option>
+                                                        <option value="Stecla">Stecla</option>
+                                                        <option value="Instaladora">Instaladora</option>
+                                                    </select>
                                                 </TableCell>
-                                                <TableCell className="text-xs italic text-muted-foreground">
-                                                    {item.divergencia}
+                                                <TableCell className="text-sm italic text-muted-foreground w-full">
+                                                    <Input
+                                                        className="h-8 text-sm"
+                                                        defaultValue={item.divergencia || ""}
+                                                        onBlur={(e) => {
+                                                            if (e.target.value !== (item.divergencia || "")) {
+                                                                updateApontamento.mutate({ id: item.id, divergencia: e.target.value });
+                                                            }
+                                                        }}
+                                                    />
+                                                </TableCell>
+                                                <TableCell className="text-center">
+                                                    <div className="flex gap-1 justify-center">
+                                                        {/* Model Photo (Referencia) */}
+                                                        <Popover>
+                                                            <PopoverTrigger asChild>
+                                                                <Button variant="ghost" size="icon" className={item.fotoReferenciaUrl ? "text-blue-600" : "text-gray-300"} title="Foto Modelo">
+                                                                    <Layout size={16} />
+                                                                </Button>
+                                                            </PopoverTrigger>
+                                                            <PopoverContent className="w-80">
+                                                                <ImageUpload
+                                                                    bucketName="project-assets"
+                                                                    folderPath={`apontamentos/referencias`}
+                                                                    currentImageUrl={item.fotoReferenciaUrl}
+                                                                    onUploadComplete={(url) => updateApontamento.mutate({ id: item.id, fotoReferenciaUrl: url })}
+                                                                    label="Foto Modelo / Referência"
+                                                                />
+                                                            </PopoverContent>
+                                                        </Popover>
+
+                                                        {/* Real Photo (Obra) */}
+                                                        <Popover>
+                                                            <PopoverTrigger asChild>
+                                                                <Button variant="ghost" size="icon" className={item.fotoUrl ? "text-red-600" : "text-gray-300"} title="Foto Obra">
+                                                                    <ImageIcon size={16} />
+                                                                </Button>
+                                                            </PopoverTrigger>
+                                                            <PopoverContent className="w-80">
+                                                                <ImageUpload
+                                                                    bucketName="project-assets"
+                                                                    folderPath={`apontamentos/real`}
+                                                                    currentImageUrl={item.fotoUrl}
+                                                                    onUploadComplete={(url) => updateApontamento.mutate({ id: item.id, fotoUrl: url })}
+                                                                    label="Foto Real / Obra"
+                                                                />
+                                                            </PopoverContent>
+                                                        </Popover>
+                                                    </div>
                                                 </TableCell>
                                             </TableRow>
                                         ))}
@@ -359,8 +479,24 @@ export default function DataHubTab() {
                 {/* TAB 3: STATUS VERIFICAÇÃO */}
                 <TabsContent value="status" className="mt-4">
                     <Card>
-                        <CardHeader className="pb-3 border-b border-[#940707]/10">
+                        <CardHeader className="pb-3 border-b border-[#940707]/10 flex flex-row items-center justify-between">
                             <CardTitle className="text-sm font-bold uppercase tracking-widest text-[#940707]">Acompanhamento da Verificação</CardTitle>
+                            <div className="flex gap-2">
+                                <select className="text-xs border rounded p-1" value={filterEdificacao} onChange={(e) => setFilterEdificacao(e.target.value)}>
+                                    <option value="Todas">Todas Edificações</option>
+                                    {uniqueEdificacoes.map((ed: any) => <option key={ed} value={ed}>{ed}</option>)}
+                                </select>
+                                <select className="text-xs border rounded p-1" value={filterPavimento} onChange={(e) => setFilterPavimento(e.target.value)}>
+                                    <option value="Todos">Todos Pavimentos</option>
+                                    {uniquePavimentos.map((p: any) => <option key={p} value={p}>{p}</option>)}
+                                </select>
+                                <select className="text-xs border rounded p-1" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+                                    <option value="Todos">Todos Status</option>
+                                    <option value="VERIFICADA">Verificada</option>
+                                    <option value="REVISAR">Revisar</option>
+                                    <option value="PENDENTE">Pendente</option>
+                                </select>
+                            </div>
                         </CardHeader>
                         <CardContent>
                             <div className="rounded-md border overflow-hidden bg-white">
@@ -382,10 +518,10 @@ export default function DataHubTab() {
                                     <TableBody>
                                         {sortedSalas.map((sala: any) => (
                                             <TableRow key={sala.id}>
-                                                <TableCell className="text-xs">{sala.edificacao}</TableCell>
-                                                <TableCell className="text-xs">{sala.pavimento}</TableCell>
-                                                <TableCell className="text-xs font-bold text-slate-500">{sala.setor}</TableCell>
-                                                <TableCell className="text-xs">
+                                                <TableCell className="text-sm">{sala.edificacao}</TableCell>
+                                                <TableCell className="text-sm">{sala.pavimento}</TableCell>
+                                                <TableCell className="text-sm font-bold text-slate-500">{sala.setor}</TableCell>
+                                                <TableCell className="text-sm">
                                                     <div className="font-bold">{sala.nome}</div>
                                                     <div className="text-[10px] text-muted-foreground">Nº {sala.numeroSala}</div>
                                                 </TableCell>
@@ -438,7 +574,7 @@ export default function DataHubTab() {
                                                 </TableCell>
                                                 <TableCell>
                                                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${sala.status === 'VERIFICADA' ? 'bg-emerald-100 text-emerald-700' :
-                                                        sala.status === 'REVISAR' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'
+                                                        sala.status === 'REVISAR' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500' // Changed to Slate/Gray for Pendente
                                                         }`}>
                                                         {sala.status || 'PENDENTE'}
                                                     </span>

@@ -1,0 +1,13 @@
+# Same as .gitignore but explicit for Vercel
+node_modules
+dist
+dist-ssr
+.git
+.vscode
+.idea
+uploads
+Relatório de divergencias
+*.log
+*.db
+*.sqlite
+.env*

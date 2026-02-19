@@ -177,21 +177,29 @@ export default function Dashboard() {
                                 title="Salas Mapeadas"
                                 value={kpis?.totalSalas || 0}
                                 subtitle="Total de salas registradas"
+                                icon={LayoutDashboard}
+                                variant="blue"
                             />
                             <KPICard
                                 title="Liberado para Obra"
                                 value={`${kpis?.taxaLiberacao?.toFixed(1) || 0}%`}
                                 subtitle={`${kpis?.salasLiberadas || 0} salas liberadas`}
+                                icon={Box}
+                                variant="green"
                             />
                             <KPICard
                                 title="Taxa de Verificação"
                                 value={`${kpis?.taxaVerificacao?.toFixed(1) || 0}%`}
                                 subtitle={`${kpis?.salasVerificadas || 0} salas verificadas`}
+                                icon={Smartphone}
+                                variant="orange"
                             />
                             <KPICard
                                 title="Total Apontamentos"
                                 value={kpis?.totalApontamentos || 0}
                                 subtitle={`${kpis?.mediaApontamentos?.toFixed(1) || 0} média por sala`}
+                                icon={Database}
+                                variant="red"
                             />
                         </div>
 

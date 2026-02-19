@@ -1,11 +1,13 @@
+
 import PDFDocument from 'pdfkit';
 import ExcelJS from 'exceljs';
 import { getDb, apontamentos, salas } from './db';
 import { eq } from 'drizzle-orm';
 import path from 'path';
 import fs from 'fs';
+import axios from 'axios';
 
-export async function generatePDFReport(edificacao?: string): Promise<Buffer> {
+export async function generatePDFReport(filters?: { edificacao?: string; disciplina?: string; responsavel?: string; sala?: string; }): Promise<Buffer> {
     const doc = new PDFDocument({
         margin: 0,
         size: 'A4',
@@ -21,15 +23,34 @@ export async function generatePDFReport(edificacao?: string): Promise<Buffer> {
     let query = database.select({
         apontamento: apontamentos,
         numeroSala: salas.numeroSala,
-        salaNome: salas.nome
+        salaNome: salas.nome,
+        imagemPlantaUrl: salas.imagemPlantaUrl
     })
         .from(apontamentos)
         .innerJoin(salas, eq(apontamentos.sala, salas.nome));
 
-    if (edificacao) {
-        query = query.where(eq(apontamentos.edificacao, edificacao)) as any;
+    if (filters?.edificacao && filters.edificacao !== "Todas") {
+        query = query.where(eq(apontamentos.edificacao, filters.edificacao)) as any;
     }
-    const data = await query;
+
+    let data = await query;
+
+    // Apply JS filters for non-indexed/complex fields
+    if (filters) {
+        if (filters.disciplina && filters.disciplina !== "Todas") {
+            data = data.filter((i: any) => i.apontamento.disciplina === filters.disciplina);
+        }
+        if (filters.responsavel && filters.responsavel !== "Todos") {
+            data = data.filter((i: any) => i.apontamento.responsavel === filters.responsavel);
+        }
+        if (filters.sala) {
+            const search = filters.sala.toLowerCase();
+            data = data.filter((i: any) =>
+                (i.numeroSala || "").toLowerCase().includes(search) ||
+                (i.salaNome || "").toLowerCase().includes(search)
+            );
+        }
+    }
 
     const logoPath = path.join(process.cwd(), 'client', 'public', 'logos_stecla', 'versão horizontal.png');
     const hasLogo = fs.existsSync(logoPath);
@@ -37,7 +58,11 @@ export async function generatePDFReport(edificacao?: string): Promise<Buffer> {
     if (data.length === 0) {
         doc.fontSize(20).text('Nenhum apontamento encontrado.', 0, 200, { align: 'center' });
     } else {
-        data.forEach((item: any, index: number) => {
+        // Use for...of loop to handle async image fetching
+        for (let i = 0; i < data.length; i++) {
+            const item = data[i];
+            const index = i;
+
             if (index > 0) doc.addPage();
 
             // ─── Header Section ───
@@ -48,8 +73,8 @@ export async function generatePDFReport(edificacao?: string): Promise<Buffer> {
             doc.fillColor('#444444').fontSize(12).font('Helvetica').text('REALIDADE AUMENTADA', 60, 40);
             doc.fillColor('#000000').fontSize(24).font('Helvetica-Bold').text('CONTROLE DA QUALIDADE', 60, 55);
 
-            // Page Number
-            doc.fillColor('#444444').fontSize(24).font('Helvetica-Bold').text(String(index + 1).padStart(3, '0'), 750, 20);
+            // Page Number -> Room Number
+            doc.fillColor('#444444').fontSize(24).font('Helvetica-Bold').text(item.numeroSala, 750, 20);
 
             // ─── Room & Discipline Info ───
             const infoX = 580;
@@ -67,38 +92,65 @@ export async function generatePDFReport(edificacao?: string): Promise<Buffer> {
             const imgWidth = 240;
             const imgHeight = 350;
 
-            // Foto Referência (RA/Modelo)
-            if (item.apontamento.fotoReferenciaUrl) {
-                const fullPath = path.join(process.cwd(), item.apontamento.fotoReferenciaUrl.replace(/^\//, ''));
-                if (fs.existsSync(fullPath)) {
-                    doc.image(fullPath, 60, imgY, { width: imgWidth, height: imgHeight, fit: [imgWidth, imgHeight] });
+            const plantaUrl = item.imagemPlantaUrl;
+            const refUrl = item.apontamento.fotoReferenciaUrl;
+            const rightFotoUrl = item.apontamento.fotoUrl;
+
+            // Helper to fetch/draw image
+            const drawImage = async (url: string | null, x: number, y: number, label: string, labelColor: string) => {
+                let success = false;
+                if (url) {
+                    try {
+                        if (url.startsWith('http')) {
+                            const response = await axios.get(url, { responseType: 'arraybuffer' });
+                            const buffer = Buffer.from(response.data);
+                            doc.image(buffer, x, y, { width: imgWidth, height: imgHeight, fit: [imgWidth, imgHeight] });
+                            success = true;
+                        } else {
+                            const fullPath = path.join(process.cwd(), url.replace(/^\//, ''));
+                            if (fs.existsSync(fullPath)) {
+                                doc.image(fullPath, x, y, { width: imgWidth, height: imgHeight, fit: [imgWidth, imgHeight] });
+                                success = true;
+                            }
+                        }
+                    } catch (e) {
+                        console.error(`Error loading image ${url}:`, e);
+                        // Fallback to error placeholder
+                    }
                 }
+
+                if (!success) {
+                    doc.rect(x, y, imgWidth, imgHeight).stroke('#CCCCCC');
+                    doc.fillColor('#999999').fontSize(10).text(url ? 'Erro imagem' : 'Sem imagem', x, y + 150, { width: imgWidth, align: 'center' });
+                }
+
+                if (label) {
+                    doc.fillColor(labelColor).fontSize(10).font('Helvetica-Bold').text(label, x, y - 15);
+                }
+            };
+
+            // Left Image (Planta or Reference)
+            if (plantaUrl) {
+                await drawImage(plantaUrl, 60, imgY, 'PLANTA SALA', '#006400');
+            } else if (refUrl) {
+                await drawImage(refUrl, 60, imgY, 'PROJETO RA / MODELO', '#666666');
             } else {
-                doc.rect(60, imgY, imgWidth, imgHeight).stroke('#CCCCCC');
-                doc.fillColor('#999999').fontSize(10).text('Sem foto de referência', 60, imgY + 150, { width: imgWidth, align: 'center' });
+                await drawImage(null, 60, imgY, 'Sem planta ou referência', '#999999');
             }
 
-            // Foto Real (Campo)
-            if (item.apontamento.fotoUrl) {
-                const fullPath = path.join(process.cwd(), item.apontamento.fotoUrl.replace(/^\//, ''));
-                if (fs.existsSync(fullPath)) {
-                    doc.image(fullPath, 60 + imgWidth + 20, imgY, { width: imgWidth, height: imgHeight, fit: [imgWidth, imgHeight] });
-                }
-            } else {
-                doc.rect(60 + imgWidth + 20, imgY, imgWidth, imgHeight).stroke('#CCCCCC');
-                doc.fillColor('#999999').fontSize(10).text('Sem foto real', 60 + imgWidth + 20, imgY + 150, { width: imgWidth, align: 'center' });
-            }
+            // Right Image (Real photo)
+            await drawImage(rightFotoUrl, 60 + imgWidth + 20, imgY, 'EXECUÇÃO REAL / OBRA', '#666666');
 
-            // Labels under images
+            // Bottom Labels
             doc.fillColor('#666666').fontSize(8).font('Helvetica-Bold');
-            doc.text('PROJETO RA / MODELO', 60, imgY + imgHeight + 5);
+            doc.text(plantaUrl ? '' : 'PROJETO RA / MODELO', 60, imgY + imgHeight + 5);
             doc.text('EXECUÇÃO REAL / OBRA', 60 + imgWidth + 20, imgY + imgHeight + 5);
 
             // ─── Footer Section ───
             if (hasLogo) {
                 doc.image(logoPath, 680, 520, { width: 140 });
             }
-        });
+        }
     }
 
     doc.end();
@@ -141,7 +193,11 @@ export async function generateAsBuiltReport(edificacao?: string): Promise<Buffer
     if (data.length === 0) {
         doc.fontSize(20).text('Nenhum dado as-built encontrado.', 0, 200, { align: 'center' });
     } else {
-        data.forEach((item: any, index: number) => {
+        // Use for...of loop for async image fetching
+        for (let i = 0; i < data.length; i++) {
+            const item = data[i];
+            const index = i;
+
             if (index > 0) doc.addPage();
 
             // Background blue/gray accent for As-Built
@@ -159,26 +215,41 @@ export async function generateAsBuiltReport(edificacao?: string): Promise<Buffer
             const imgWidth = 340;
             const imgHeight = 350;
 
-            // FOTO REAL (Left) - Using fotoUrl
-            if (item.apontamento.fotoUrl) {
-                const fullPath = path.join(process.cwd(), item.apontamento.fotoUrl.replace(/^\//, ''));
-                if (fs.existsSync(fullPath)) {
-                    doc.image(fullPath, 60, imgY, { width: imgWidth, height: imgHeight, fit: [imgWidth, imgHeight] });
+            // Helper to fetch/draw image
+            const drawImage = async (url: string | null, x: number, y: number, height: number = imgHeight) => {
+                let success = false;
+                if (url) {
+                    try {
+                        if (url.startsWith('http')) {
+                            const response = await axios.get(url, { responseType: 'arraybuffer' });
+                            const buffer = Buffer.from(response.data);
+                            doc.image(buffer, x, y, { width: imgWidth, height: height, fit: [imgWidth, height] });
+                            success = true;
+                        } else {
+                            const fullPath = path.join(process.cwd(), url.replace(/^\//, ''));
+                            if (fs.existsSync(fullPath)) {
+                                doc.image(fullPath, x, y, { width: imgWidth, height: height, fit: [imgWidth, height] });
+                                success = true;
+                            }
+                        }
+                    } catch (e) {
+                        console.error(`Error loading image ${url}:`, e);
+                    }
                 }
-            } else {
-                doc.rect(60, imgY, imgWidth, imgHeight).stroke('#CCCCCC');
-                doc.fillColor('#999999').fontSize(10).text('Sem foto real', 60, imgY + 150, { width: imgWidth, align: 'center' });
-            }
+
+                if (!success) {
+                    doc.rect(x, y, imgWidth, height).stroke('#CCCCCC');
+                    doc.fillColor('#999999').fontSize(10).text(url ? 'Erro imagem' : 'Sem foto', x, y + 150, { width: imgWidth, align: 'center' });
+                }
+            };
+
+            // FOTO REAL (Left) - Using fotoUrl
+            await drawImage(item.apontamento.fotoUrl, 60, imgY);
             doc.fillColor('#666666').fontSize(10).font('Helvetica-Bold').text('REALIDADE (OBRA)', 60, imgY - 15);
 
             // MODELO/PROJETO (Right) - Using fotoReferenciaUrl
             const rightX = 60 + imgWidth + 20;
-            if (item.apontamento.fotoReferenciaUrl) {
-                const fullPath = path.join(process.cwd(), item.apontamento.fotoReferenciaUrl.replace(/^\//, ''));
-                if (fs.existsSync(fullPath)) {
-                    doc.image(fullPath, rightX, imgY, { width: imgWidth, height: 220, fit: [imgWidth, 220] });
-                }
-            }
+            await drawImage(item.apontamento.fotoReferenciaUrl, rightX, imgY, 220);
             doc.fillColor('#666666').fontSize(10).font('Helvetica-Bold').text('MODELO AS-BUILT (INFORMAÇÃO)', rightX, imgY - 15);
 
             // ─── Legend ───
@@ -199,7 +270,7 @@ export async function generateAsBuiltReport(edificacao?: string): Promise<Buffer
             if (hasLogo) {
                 doc.image(logoPath, 680, 520, { width: 140 });
             }
-        });
+        }
     }
 
     doc.end();

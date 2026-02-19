@@ -38,6 +38,7 @@ export const salas = pgTable("salas", {
     trackerPosicionado: integer("trackerPosicionado").default(0),
     plantaImpressa: integer("plantaImpressa").default(0),
     qrCodePlastificado: integer("qrCodePlastificado").default(0),
+    imagemPlantaUrl: text("imagemPlantaUrl"),
     ifcExpressId: text("ifcExpressId"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().notNull(),
