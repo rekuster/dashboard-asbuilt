@@ -1,4 +1,4 @@
-import { Sala, Apontamento } from "../drizzle/schema";
+import { Sala } from "../drizzle/schema";
 
 /**
  * Calculates the Status RA based on the room's conditions.
@@ -39,6 +39,9 @@ export function assignResponsavel(disciplina: string): string {
  * - Pendente: Not verified yet
  */
 export function calculateRoomStatus(sala: Partial<Sala>): string {
+    if (sala.dataVerificacao2) {
+        return "VERIFICADA";
+    }
     if (sala.revisar || sala.obs || sala.obs2) {
         return "REVISAR";
     }

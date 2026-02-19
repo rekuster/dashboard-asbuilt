@@ -67,7 +67,9 @@ export default function DataHubTab() {
                         updated.statusRA = isLiberado ? "LIBERADO PARA OBRA" : "PENDENTE";
 
                         // Room status
-                        if (updated.revisar || updated.obs || updated.obs2) {
+                        if (updated.dataVerificacao2) {
+                            updated.status = "VERIFICADA";
+                        } else if (updated.revisar || updated.obs || updated.obs2) {
                             updated.status = "REVISAR";
                         } else if (updated.dataVerificada) {
                             updated.status = "VERIFICADA";
