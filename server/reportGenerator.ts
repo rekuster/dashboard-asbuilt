@@ -7,6 +7,46 @@ import path from 'path';
 import fs from 'fs';
 import axios from 'axios';
 
+async function drawCoverPage(doc: any, logoPath: string, hasLogo: boolean) {
+    // Larger grey shape at top right
+    doc.save();
+    doc.translate(700, 100);
+    doc.rotate(-35);
+    doc.fillColor('#D1D5DB').roundedRect(-200, -150, 500, 300, 40).fill();
+    doc.restore();
+
+    // Red shape at bottom center-right
+    doc.save();
+    doc.translate(600, 550);
+    doc.rotate(-45);
+    doc.fillColor('#A31D1D').roundedRect(-150, -150, 300, 300, 40).fill();
+    doc.restore();
+
+    // Main Title
+    doc.fillColor('#444444').fontSize(40).font('Helvetica-Bold').text('RELATÓRIO DE DIVERGÊNCIAS', 60, 320);
+
+    // Info
+    doc.fillColor('#666666').fontSize(18).font('Helvetica');
+    doc.text('Cliente: NEODENT', 60, 380);
+    doc.text('Obra: SUPERNOVA', 60, 405);
+
+    const dataAtual = new Date().toLocaleDateString('pt-BR');
+    doc.text(`Atualização: [${dataAtual}]`, 60, 450);
+
+    // Logo bottom left
+    if (hasLogo) {
+        // Try vertical version first if it matches image
+        const logoVertical = logoPath.replace('versão horizontal.png', 'versão vertical.png');
+        const logoPathToUse = fs.existsSync(logoVertical) ? logoVertical : logoPath;
+        doc.image(logoPathToUse, 60, 500, { width: 140 });
+    }
+
+    // Year bottom right
+    doc.fillColor('#666666').fontSize(16).text('2026', 780, 540);
+
+    doc.addPage();
+}
+
 export async function generatePDFReport(filters?: { edificacao?: string; disciplina?: string; responsavel?: string; sala?: string; }): Promise<Buffer> {
     const doc = new PDFDocument({
         margin: 0,
@@ -58,6 +98,9 @@ export async function generatePDFReport(filters?: { edificacao?: string; discipl
     if (data.length === 0) {
         doc.fontSize(20).text('Nenhum apontamento encontrado.', 0, 200, { align: 'center' });
     } else {
+        // Draw Cover Page
+        await drawCoverPage(doc, logoPath, hasLogo);
+
         // Use for...of loop to handle async image fetching
         for (let i = 0; i < data.length; i++) {
             const item = data[i];
@@ -71,7 +114,7 @@ export async function generatePDFReport(filters?: { edificacao?: string; discipl
 
             // Title
             doc.fillColor('#444444').fontSize(12).font('Helvetica').text('REALIDADE AUMENTADA', 60, 40);
-            doc.fillColor('#000000').fontSize(24).font('Helvetica-Bold').text('CONTROLE DA QUALIDADE', 60, 55);
+            doc.fillColor('#000000').fontSize(24).font('Helvetica-Bold').text((item.salaNome || 'RELATÓRIO DE DIVERGÊNCIAS').toUpperCase(), 60, 55);
 
             // Page Number -> Room Number
             doc.fillColor('#444444').fontSize(24).font('Helvetica-Bold').text(item.numeroSala, 750, 20);

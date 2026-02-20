@@ -2,17 +2,18 @@ import fs from 'fs/promises';
 import path from 'path';
 import { eq } from 'drizzle-orm';
 import { getDb, ifcFiles } from './db';
+import { createClient } from "@supabase/supabase-js";
 
-const UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'ifc');
+// Initialize Supabase Client for Server-Side operations
+const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+// Note: For server-side storage operations (upload/delete), we might need the Service Role Key if RLS is strict.
+// However, since we are using a public bucket and anon key usually has insert permissions if configured, we'll try with anon first.
+// If it fails, we'll need the service role key env var.
 
-// Ensure upload directory exists
-async function ensureUploadDir() {
-    try {
-        await fs.mkdir(UPLOAD_DIR, { recursive: true });
-    } catch (error) {
-        console.error('Error creating upload directory:', error);
-    }
-}
+const supabase = (supabaseUrl && supabaseKey)
+    ? createClient(supabaseUrl, supabaseKey)
+    : null;
 
 /**
  * Handle IFC file upload
@@ -28,16 +29,37 @@ export async function handleIfcUpload(
     filePath: string;
 }> {
     try {
-        await ensureUploadDir();
+        if (!supabase) {
+            throw new Error('Supabase client not initialized. Check environment variables.');
+        }
 
         // Generate unique filename
         const timestamp = Date.now();
         const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
         const uniqueFileName = `${timestamp}_${sanitizedFileName}`;
-        const filePath = path.join(UPLOAD_DIR, uniqueFileName);
+        const filePath = `uploads/${uniqueFileName}`; // Path inside the bucket
 
-        // Save file to disk
-        await fs.writeFile(filePath, fileBuffer);
+        console.log(`[IFC Upload] Uploading to Supabase Storage: ${filePath}`);
+
+        // Upload to Supabase Storage
+        const { data, error } = await supabase.storage
+            .from('ifc-files')
+            .upload(filePath, fileBuffer, {
+                contentType: 'application/x-step', // Standard MIME type for IFC
+                upsert: false
+            });
+
+        if (error) {
+            console.error('[IFC Upload] Storage Error:', error);
+            throw new Error(`Storage Upload Failed: ${error.message}`);
+        }
+
+        // Get Public URL
+        const { data: { publicUrl } } = supabase.storage
+            .from('ifc-files')
+            .getPublicUrl(filePath);
+
+        console.log(`[IFC Upload] Success! Public URL: ${publicUrl}`);
 
         // Save to database
         const db = await getDb();
@@ -45,9 +67,9 @@ export async function handleIfcUpload(
             throw new Error('Database not available');
         }
 
-        const insertData: any = { // Changed from InsertIfcFile to any as per instruction
+        const insertData: any = {
             fileName: sanitizedFileName,
-            filePath: `/uploads/ifc/${uniqueFileName}`,
+            filePath: publicUrl, // Save the full URL
             edificacao: edificacao || null,
             uploadedBy,
             fileSize: fileBuffer.length,
@@ -59,7 +81,7 @@ export async function handleIfcUpload(
         return {
             success: true,
             fileId,
-            filePath: `/uploads/ifc/${uniqueFileName}`,
+            filePath: publicUrl,
         };
     } catch (error) {
         console.error('Error handling IFC upload:', error);
@@ -80,32 +102,32 @@ export async function deleteIfcFile(fileId: number): Promise<boolean> {
         // Get file info
         const fileResult = await db.select().from(ifcFiles).where(eq(ifcFiles.id, fileId)).limit(1);
         if (fileResult.length === 0) {
-            // If file record doesn't exist, considered "deleted"
             return true;
         }
 
         const file = fileResult[0];
 
-        // Normalize path handling
-        // We know uploads are in process.cwd() / uploads / ifc
-        const fileName = path.basename(file.filePath);
-        const fullPath = path.join(UPLOAD_DIR, fileName);
+        // Delete from Storage
+        if (supabase && file.filePath && file.filePath.includes('supabase.co')) {
+            try {
+                // Extract path from URL. 
+                // URL: https://[project].supabase.co/storage/v1/object/public/ifc-files/uploads/[filename]
+                // We need: uploads/[filename]
 
-        console.log(`[deleteIfcFile] Attempting to delete: ${fullPath} (DB ID: ${fileId})`);
+                const urlParts = file.filePath.split('/ifc-files/');
+                if (urlParts.length > 1) {
+                    const storagePath = urlParts[1]; // content after bucket name
+                    console.log(`[deleteIfcFile] Deleting from Storage: ${storagePath}`);
+                    const { error } = await supabase.storage
+                        .from('ifc-files')
+                        .remove([storagePath]);
 
-        // Delete from disk
-        try {
-            // Check if file exists first to avoid unnecessary errors
-            await fs.access(fullPath);
-            await fs.unlink(fullPath);
-            console.log(`[deleteIfcFile] Deleted from disk: ${fullPath}`);
-        } catch (error: any) {
-            if (error.code === 'ENOENT') {
-                console.warn(`[deleteIfcFile] File not found on disk, proceeding with DB delete: ${fullPath}`);
-            } else if (error.code === 'EBUSY' || error.code === 'EPERM') {
-                console.warn(`[deleteIfcFile] File locked or permission denied. Disk delete failed but removing from DB. Error: ${error.message}`);
-            } else {
-                console.warn('[deleteIfcFile] Error deleting file from disk:', error);
+                    if (error) {
+                        console.warn('[deleteIfcFile] Error deleting from storage:', error);
+                    }
+                }
+            } catch (e) {
+                console.warn('[deleteIfcFile] Failed to parse URL for storage deletion:', e);
             }
         }
 

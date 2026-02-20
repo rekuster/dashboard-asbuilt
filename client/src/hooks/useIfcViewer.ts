@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-// import { IFCLoader } from "web-ifc-three";
+import { IFCLoader } from "web-ifc-three";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
@@ -11,7 +11,7 @@ export function useIfcViewer() {
     const sceneRef = useRef<THREE.Scene | null>(null);
     const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
     const controlsRef = useRef<OrbitControls | null>(null);
-    const ifcLoaderRef = useRef<any | null>(null);
+    const ifcLoaderRef = useRef<IFCLoader | null>(null);
     const modelRef = useRef<any>(null);
     const utils = trpc.useUtils();
 
@@ -41,15 +41,98 @@ export function useIfcViewer() {
     }, [utils]);
 
     const init = useCallback((container: HTMLDivElement) => {
-        // Mock init for Vercel/Web compatibility without 3D viewer
-        console.log("🚀 [useIfcViewer] Mock initialization...");
+        if (!container) return () => { };
+
+        console.log("🚀 [useIfcViewer] Initializing 3D Viewer...");
+
+        // Scene
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf1f5f9); // Slate-100
+        sceneRef.current = scene;
+
+        // Camera
+        const camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 1000);
+        camera.position.set(0, 10, 10);
+        cameraRef.current = camera;
+
+        // Renderer
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        container.appendChild(renderer.domElement);
+        rendererRef.current = renderer;
+
+        // Controls
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.1;
+        controlsRef.current = controls;
+
+        // Lights
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(20, 20, 20);
+        scene.add(directionalLight);
+
+        const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.5);
+        directionalLight2.position.set(-20, 20, -20);
+        scene.add(directionalLight2);
+
+        // IFC Loader
+        try {
+            const ifcLoader = new IFCLoader();
+            ifcLoader.ifcManager.setWasmPath("wasm/"); // Servido via public/wasm/
+
+            // Opcional: Configurar setup p/ multithreading se web-ifc-mt.wasm existir
+            ifcLoader.ifcManager.setupThreeMeshBVH(
+                // @ts-ignore
+                THREE.computeBoundsTree,
+                THREE.disposeBoundsTree,
+                THREE.acceleratedRaycast
+            );
+
+            ifcLoaderRef.current = ifcLoader;
+        } catch (e) {
+            console.error("Error initializing IFC Loader:", e);
+            toast.error("Erro ao inicializar visualizador 3D");
+        }
+
+        // Animation Loop
+        let animationId: number;
+        const animate = () => {
+            animationId = requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        };
+        animate();
+
+        // Resize Handler
+        const handleResize = () => {
+            if (container && camera && renderer) {
+                camera.aspect = container.clientWidth / container.clientHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(container.clientWidth, container.clientHeight);
+            }
+        };
+        window.addEventListener("resize", handleResize);
+
         setIsLoaded(true);
+
         return () => {
+            cancelAnimationFrame(animationId);
+            window.removeEventListener("resize", handleResize);
+            if (renderer) {
+                renderer.dispose();
+                container.removeChild(renderer.domElement);
+            }
+            if (scene) {
+                scene.clear();
+            }
             setIsLoaded(false);
         };
     }, []);
-
-
 
     const applyColors = useCallback(async (model: any, force: boolean = false) => {
         if (isProcessingRef.current && !force) return;
@@ -114,7 +197,7 @@ export function useIfcViewer() {
                     });
                     if (subset) subset.userData.isStatusSubset = true;
                 } catch (e) {
-                    console.warn(`Error applying color ${colorStr}:`, e);
+                    // console.warn(`Error applying color ${colorStr}:`, e);
                 }
             }
         } finally {
@@ -285,6 +368,7 @@ export function useIfcViewer() {
             sceneRef.current.children = sceneRef.current.children.filter(c => c instanceof THREE.Light);
             setIsModelLoaded(false);
 
+            console.log(`[IFC] Loading from: ${url}`);
             const model = (await ifcLoaderRef.current.loadAsync(url)) as any;
             const modelID = model.modelID;
             currentModelID.current = modelID;

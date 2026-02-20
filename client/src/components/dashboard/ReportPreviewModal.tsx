@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, FileText, Download, Filter } from "lucide-react";
@@ -24,7 +23,7 @@ export function ReportPreviewModal({ edificacoes, disciplinas, responsaveis }: R
     const [filterEdificacao, setFilterEdificacao] = useState("Todas");
     const [filterDisciplina, setFilterDisciplina] = useState("Todas");
     const [filterResponsavel, setFilterResponsavel] = useState("Todos");
-    const [filterSala, setFilterSala] = useState("");
+    const [filterSala] = useState(""); // Keeping variable but without unused setter
 
     const utils = trpc.useUtils();
 
@@ -61,7 +60,7 @@ export function ReportPreviewModal({ edificacoes, disciplinas, responsaveis }: R
         if (!base64Pdf) return;
         const link = document.createElement('a');
         link.href = `data:application/pdf;base64,${base64Pdf}`;
-        link.download = `Relatorio_${reportType}_${new Date().toISOString().split('T')[0]}.pdf`;
+        link.download = `${reportType === 'CQ' ? 'Relatorio_Divergencias' : 'Relatorio_AsBuilt'}_${new Date().toISOString().split('T')[0]}.pdf`;
         link.click();
     };
 
@@ -88,7 +87,7 @@ export function ReportPreviewModal({ edificacoes, disciplinas, responsaveis }: R
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="CQ">Controle de Qualidade (CQ)</SelectItem>
+                                <SelectItem value="CQ">Relatório de Divergências</SelectItem>
                                 <SelectItem value="AB">As-Built (AB)</SelectItem>
                             </SelectContent>
                         </Select>
