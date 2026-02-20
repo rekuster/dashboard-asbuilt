@@ -92,6 +92,13 @@ export async function generatePDFReport(filters?: { edificacao?: string; discipl
         }
     }
 
+    // Sorting by room number numerically
+    data.sort((a: any, b: any) => {
+        const numA = parseInt(String(a.numeroSala || "0").replace(/\D/g, ""), 10) || 0;
+        const numB = parseInt(String(b.numeroSala || "0").replace(/\D/g, ""), 10) || 0;
+        return numA - numB;
+    });
+
     const logoPath = path.join(process.cwd(), 'client', 'public', 'logos_stecla', 'versão horizontal.png');
     const hasLogo = fs.existsSync(logoPath);
 
