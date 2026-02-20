@@ -532,7 +532,7 @@ export default function DataHubTab() {
                                                         type="date"
                                                         className="h-8 text-[10px] w-28 p-1"
                                                         value={sala.dataVerificada ? new Date(sala.dataVerificada).toISOString().split('T')[0] : ""}
-                                                        onChange={(e) => updateSala.mutate({ id: sala.id, dataVerificada: e.target.value ? new Date(e.target.value) : undefined })}
+                                                        onChange={(e) => updateSala.mutate({ id: sala.id, dataVerificada: e.target.value ? new Date(e.target.value) : null })}
                                                     />
                                                 </TableCell>
                                                 <TableCell className="text-center">
@@ -562,7 +562,7 @@ export default function DataHubTab() {
                                                         type="date"
                                                         className="h-8 text-[10px] w-28 p-1"
                                                         value={sala.dataVerificacao2 ? new Date(sala.dataVerificacao2).toISOString().split('T')[0] : ""}
-                                                        onChange={(e) => updateSala.mutate({ id: sala.id, dataVerificacao2: e.target.value ? new Date(e.target.value) : undefined })}
+                                                        onChange={(e) => updateSala.mutate({ id: sala.id, dataVerificacao2: e.target.value ? new Date(e.target.value) : null })}
                                                     />
                                                 </TableCell>
                                                 <TableCell className="py-1">
