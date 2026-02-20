@@ -12,7 +12,7 @@ import * as pgSchema from "../drizzle/schema.pg.ts";
 const isPostgres = true; // Hardcoded for production stability as we removed SQLite
 const activeSchema = pgSchema;
 
-export const { users, salas, apontamentos, ifcFiles, uploads, entregasAsBuilt, entregasHistorico } = activeSchema as any;
+export const { users, salas, apontamentos, ifcFiles, uploads, escopoAsBuilt, entregasAsBuilt, entregasHistorico } = activeSchema as any;
 // export type InsertUser = typeof sqliteSchema.users.$inferInsert; // Use PG types or generic
 
 // Temporary type alignment (since we used to export from sqliteSchema)
@@ -556,6 +556,12 @@ export async function upsertEntrega(data: any) {
     if (values.dataRecebimento && typeof values.dataRecebimento === 'string') {
         values.dataRecebimento = new Date(values.dataRecebimento + 'T12:00:00');
     }
+    if (values.periodoInicio && typeof values.periodoInicio === 'string') {
+        values.periodoInicio = new Date(values.periodoInicio + 'T12:00:00');
+    }
+    if (values.periodoFim && typeof values.periodoFim === 'string') {
+        values.periodoFim = new Date(values.periodoFim + 'T12:00:00');
+    }
 
     let result;
 
@@ -651,6 +657,86 @@ export async function getEntregasStats(edificacao?: string) {
             new Date(e.dataPrevista) < now
         ).length,
     };
+}
+
+// ============================================================================
+// ESCOPO AS-BUILT (LISTA MESTRA) FUNCTIONS
+// ============================================================================
+
+export async function getEscopos() {
+    const db = await getDb();
+    if (!db) return [];
+    return db.select().from(escopoAsBuilt).orderBy(desc(escopoAsBuilt.createdAt));
+}
+
+export async function upsertEscopo(data: any) {
+    const db = await getDb();
+    if (!db) return null;
+
+    const { id, ...values } = data;
+
+    if (id) {
+        const result = await db.update(escopoAsBuilt)
+            .set({ ...values, updatedAt: new Date() })
+            .where(eq(escopoAsBuilt.id, id))
+            .returning();
+        return result[0];
+    } else {
+        const result = await db.insert(escopoAsBuilt)
+            .values({
+                ...values,
+                createdAt: new Date(),
+                updatedAt: new Date()
+            })
+            .returning();
+        return result[0];
+    }
+}
+
+export async function deleteEscopo(id: number) {
+    const db = await getDb();
+    if (!db) return false;
+    await db.delete(escopoAsBuilt).where(eq(escopoAsBuilt.id, id));
+    return true;
+}
+
+export async function getEntregasByEscopo(escopoId: number) {
+    const db = await getDb();
+    if (!db) return [];
+    return db.select().from(entregasAsBuilt)
+        .where(eq(entregasAsBuilt.escopoId, escopoId))
+        .orderBy(desc(entregasAsBuilt.dataPrevista));
+}
+
+export async function registrarVerificacao(data: { id: number, resultado: string, apontamentosVerificacao?: string | null }) {
+    const db = await getDb();
+    if (!db) return null;
+
+    const newStatus = data.resultado === 'CONFORME' ? 'VALIDADO' : 'REJEITADO';
+
+    const result = await db.update(entregasAsBuilt)
+        .set({
+            resultado: data.resultado,
+            dataVerificacao: new Date(),
+            apontamentosVerificacao: data.apontamentosVerificacao || null,
+            status: newStatus,
+            updatedAt: new Date()
+        })
+        .where(eq(entregasAsBuilt.id, data.id))
+        .returning();
+
+    // Log the verification in history
+    if (result && result.length > 0) {
+        await db.insert(entregasHistorico).values({
+            entregaId: data.id,
+            acao: 'STATUS_ALTERADO',
+            descricao: `Verificação: ${data.resultado}${data.apontamentosVerificacao ? ' — ' + data.apontamentosVerificacao : ''}`,
+            usuario: 'Usuário',
+            createdAt: new Date()
+        });
+    }
+
+    return result;
 }
 
 // --- Field Report Functions ---

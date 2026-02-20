@@ -93,10 +93,27 @@ export const ifcFiles = pgTable("ifcFiles", {
 });
 
 /**
- * As-Built Deliveries table - manual control for document collection
+ * As-Built Scope Master List - defines expected deliveries per company
+ */
+export const escopoAsBuilt = pgTable("escopoAsBuilt", {
+    id: serial("id").primaryKey(),
+    empresa: text("empresa").notNull(),           // "Ocle", "AeB"
+    disciplina: text("disciplina").notNull(),      // "Hidrossanitário", "Elétrica"
+    edificacao: text("edificacao").notNull(),       // "Bloco A"
+    nomeModelo: text("nomeModelo").notNull(),       // "Hidro_BlocoA.rvt"
+    descricao: text("descricao"),
+    periodicidadeDias: integer("periodicidadeDias").default(15),
+    ativo: integer("ativo").default(1).notNull(),   // 1=ativo, 0=encerrado
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+
+/**
+ * As-Built Deliveries table - partial deliveries linked to scope items
  */
 export const entregasAsBuilt = pgTable("entregasAsBuilt", {
     id: serial("id").primaryKey(),
+    escopoId: integer("escopoId").references(() => escopoAsBuilt.id, { onDelete: 'set null' }),
     nomeDocumento: text("nomeDocumento").notNull(),
     tipoDocumento: text("tipoDocumento").notNull(), // 'relatorio' | 'dwg' | 'rvt'
     edificacao: text("edificacao").notNull(),
@@ -104,7 +121,12 @@ export const entregasAsBuilt = pgTable("entregasAsBuilt", {
     empresaResponsavel: text("empresaResponsavel").notNull(),
     dataPrevista: timestamp("dataPrevista").notNull(),
     dataRecebimento: timestamp("dataRecebimento"),
-    status: text("status").default("AGUARDANDO").notNull(), // 'AGUARDANDO', 'RECEBIDO', 'EM_REVISAO', 'VALIDADO', 'REJEITADO'
+    periodoInicio: timestamp("periodoInicio"),
+    periodoFim: timestamp("periodoFim"),
+    status: text("status").default("AGUARDANDO").notNull(),
+    resultado: text("resultado"),                   // 'CONFORME' | 'NAO_CONFORME' | null
+    dataVerificacao: timestamp("dataVerificacao"),
+    apontamentosVerificacao: text("apontamentosVerificacao"),
     descricao: text("descricao"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().notNull(),

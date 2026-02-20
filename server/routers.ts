@@ -26,6 +26,11 @@ import {
     deleteEntrega,
     getEntregasStats,
     getEntregasHistorico,
+    getEscopos,
+    upsertEscopo,
+    deleteEscopo,
+    getEntregasByEscopo,
+    registrarVerificacao,
     createApontamento,
     updateSalaStatus,
     getSalaById,
@@ -176,6 +181,7 @@ export const appRouter = router({
         upsertEntrega: publicProcedure
             .input(z.object({
                 id: z.number().optional(),
+                escopoId: z.number().nullable().optional(),
                 nomeDocumento: z.string(),
                 tipoDocumento: z.string(),
                 edificacao: z.string(),
@@ -183,6 +189,8 @@ export const appRouter = router({
                 empresaResponsavel: z.string(),
                 dataPrevista: z.string().or(z.date()),
                 dataRecebimento: z.string().or(z.date()).nullable().optional(),
+                periodoInicio: z.string().or(z.date()).nullable().optional(),
+                periodoFim: z.string().or(z.date()).nullable().optional(),
                 status: z.string(),
                 descricao: z.string().nullish(),
                 comentario: z.string().optional(),
@@ -207,6 +215,48 @@ export const appRouter = router({
             .input(z.object({ edificacao: z.string().optional() }).optional())
             .query(async ({ input }) => {
                 return await getEntregasStats(input?.edificacao);
+            }),
+
+        // Escopo As-Built (Lista Mestra)
+        getEscopos: publicProcedure.query(async () => {
+            return await getEscopos();
+        }),
+
+        upsertEscopo: publicProcedure
+            .input(z.object({
+                id: z.number().optional(),
+                empresa: z.string(),
+                disciplina: z.string(),
+                edificacao: z.string(),
+                nomeModelo: z.string(),
+                descricao: z.string().nullish(),
+                periodicidadeDias: z.number().optional(),
+                ativo: z.number().optional(),
+            }))
+            .mutation(async ({ input }) => {
+                return await upsertEscopo(input);
+            }),
+
+        deleteEscopo: publicProcedure
+            .input(z.object({ id: z.number() }))
+            .mutation(async ({ input }) => {
+                return await deleteEscopo(input.id);
+            }),
+
+        getEntregasByEscopo: publicProcedure
+            .input(z.object({ escopoId: z.number() }))
+            .query(async ({ input }) => {
+                return await getEntregasByEscopo(input.escopoId);
+            }),
+
+        registrarVerificacao: publicProcedure
+            .input(z.object({
+                id: z.number(),
+                resultado: z.string(),
+                apontamentosVerificacao: z.string().nullish(),
+            }))
+            .mutation(async ({ input }) => {
+                return await registrarVerificacao(input);
             }),
 
         // Field Report Mutations

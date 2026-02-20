@@ -22,8 +22,6 @@ import {
     Building2,
     Layers,
     Briefcase,
-    PieChart,
-    Check
 } from "lucide-react";
 import dayjs from "dayjs";
 import KPICard from "./KPICard";
@@ -244,81 +242,106 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
 }
 
 // ------------------------------------------------------------------
-// SCOPE MANAGEMENT VIEW
+// SCOPE MANAGEMENT VIEW (v2) — LISTA MESTRA + TIMELINE + VERIFICAÇÃO
 // ------------------------------------------------------------------
 function ScopeManagementView({ entregas, selectedEdificacao }: { entregas: any[], selectedEdificacao?: string }) {
-    const scopeData = useMemo(() => {
-        const groups: Record<string, any> = {};
+    const [selectedEscopo, setSelectedEscopo] = useState<any>(null);
+    const [isEscopoFormOpen, setIsEscopoFormOpen] = useState(false);
+    const [editingEscopo, setEditingEscopo] = useState<any>(null);
 
-        entregas.forEach(e => {
-            if (selectedEdificacao && e.edificacao !== selectedEdificacao) return;
+    const { data: escopos = [], isLoading: loadingEscopos } = trpc.dashboard.getEscopos.useQuery();
+    const utils = trpc.useUtils();
+    const deleteMutation = trpc.dashboard.deleteEscopo.useMutation({
+        onSuccess: () => utils.dashboard.getEscopos.invalidate()
+    });
 
-            const key = `${e.edificacao || 'Sem Edif.'}|${e.empresaResponsavel}`;
-            if (!groups[key]) {
-                groups[key] = {
-                    edificacao: e.edificacao || 'Sem Edif.',
-                    empresa: e.empresaResponsavel,
-                    disciplinas: new Set(),
-                    total: 0,
-                    validados: 0,
-                    pendentes: 0
-                };
+    const filteredEscopos = escopos.filter((e: any) =>
+        !selectedEdificacao || e.edificacao === selectedEdificacao
+    );
+
+    // Count entregas per escopo
+    const entregasPerEscopo = useMemo(() => {
+        const counts: Record<number, { total: number, validados: number, rejeitados: number, conformes: number, naoConformes: number }> = {};
+        entregas.forEach((e: any) => {
+            if (e.escopoId) {
+                if (!counts[e.escopoId]) counts[e.escopoId] = { total: 0, validados: 0, rejeitados: 0, conformes: 0, naoConformes: 0 };
+                counts[e.escopoId].total++;
+                if (e.status === 'VALIDADO') counts[e.escopoId].validados++;
+                if (e.status === 'REJEITADO') counts[e.escopoId].rejeitados++;
+                if (e.resultado === 'CONFORME') counts[e.escopoId].conformes++;
+                if (e.resultado === 'NAO_CONFORME') counts[e.escopoId].naoConformes++;
             }
-
-            groups[key].disciplinas.add(e.disciplina);
-            groups[key].total++;
-            if (e.status === 'VALIDADO') groups[key].validados++;
-            if (e.status === 'AGUARDANDO' || e.status === 'REJEITADO') groups[key].pendentes++;
         });
+        return counts;
+    }, [entregas]);
 
-        return Object.values(groups).sort((a, b) => a.edificacao.localeCompare(b.edificacao));
-    }, [entregas, selectedEdificacao]);
+    if (selectedEscopo) {
+        return (
+            <TimelineParciais
+                escopo={selectedEscopo}
+                onBack={() => setSelectedEscopo(null)}
+            />
+        );
+    }
 
     return (
-        <Card className="border-none shadow-xl bg-white/70 backdrop-blur-md">
-            <CardHeader>
-                <CardTitle className="text-xl font-bold flex items-center gap-2">
-                    <PieChart className="w-5 h-5 text-primary" />
-                    Resumo de Escopo por Edificação e Empresa
-                </CardTitle>
-                <CardDescription>Acompanhamento quantitativo das entregas esperadas</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <div className="rounded-xl border overflow-hidden">
-                    <Table>
-                        <TableHeader className="bg-slate-50">
-                            <TableRow>
-                                <TableHead className="font-bold uppercase text-[10px]">Edificação</TableHead>
-                                <TableHead className="font-bold uppercase text-[10px]">Empresa Responsável</TableHead>
-                                <TableHead className="font-bold uppercase text-[10px]">Disciplinas</TableHead>
-                                <TableHead className="text-center font-bold uppercase text-[10px]">Expectativa (Qtd)</TableHead>
-                                <TableHead className="text-center font-bold uppercase text-[10px]">Validados</TableHead>
-                                <TableHead className="text-center font-bold uppercase text-[10px]">Pendente</TableHead>
-                                <TableHead className="text-center font-bold uppercase text-[10px]">Progresso</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {scopeData.length === 0 ? (
+        <div className="space-y-4">
+            <Card className="border-none shadow-xl bg-white/70 backdrop-blur-md">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <div>
+                        <CardTitle className="text-xl font-bold flex items-center gap-2">
+                            <Layers className="w-5 h-5 text-[#940707]" />
+                            Lista Mestra — Escopo por Empresa
+                        </CardTitle>
+                        <CardDescription>Modelos esperados de cada construtora/instaladora</CardDescription>
+                    </div>
+                    <Button
+                        className="rounded-full gap-2 shadow-lg shadow-primary/20 bg-[#940707] hover:bg-[#7a0606]"
+                        onClick={() => { setEditingEscopo(null); setIsEscopoFormOpen(true); }}
+                    >
+                        <Plus className="w-4 h-4" />
+                        Novo Item de Escopo
+                    </Button>
+                </CardHeader>
+                <CardContent>
+                    <div className="rounded-xl border overflow-hidden">
+                        <Table>
+                            <TableHeader className="bg-slate-50">
                                 <TableRow>
-                                    <TableCell colSpan={7} className="text-center py-10 text-slate-400 italic">Nenhum dado de escopo mapeado.</TableCell>
+                                    <TableHead className="font-bold uppercase text-[10px] tracking-wider">Empresa</TableHead>
+                                    <TableHead className="font-bold uppercase text-[10px] tracking-wider">Disciplina</TableHead>
+                                    <TableHead className="font-bold uppercase text-[10px] tracking-wider">Edificação</TableHead>
+                                    <TableHead className="font-bold uppercase text-[10px] tracking-wider">Modelo Base</TableHead>
+                                    <TableHead className="text-center font-bold uppercase text-[10px] tracking-wider">Parciais</TableHead>
+                                    <TableHead className="text-center font-bold uppercase text-[10px] tracking-wider">Verificados</TableHead>
+                                    <TableHead className="text-center font-bold uppercase text-[10px] tracking-wider">Progresso</TableHead>
+                                    <TableHead className="text-right font-bold uppercase text-[10px] tracking-wider">Ações</TableHead>
                                 </TableRow>
-                            ) : (
-                                scopeData.map((group, idx) => {
-                                    const progress = Math.round((group.validados / group.total) * 100);
+                            </TableHeader>
+                            <TableBody>
+                                {loadingEscopos ? (
+                                    <TableRow>
+                                        <TableCell colSpan={8} className="text-center py-10 text-slate-400 italic">Carregando...</TableCell>
+                                    </TableRow>
+                                ) : filteredEscopos.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={8} className="text-center py-10 text-slate-400 italic">
+                                            Nenhum item de escopo cadastrado. Clique em "Novo Item de Escopo" para começar.
+                                        </TableCell>
+                                    </TableRow>
+                                ) : filteredEscopos.map((esc: any) => {
+                                    const counts = entregasPerEscopo[esc.id] || { total: 0, validados: 0, conformes: 0 };
+                                    const progress = counts.total > 0 ? Math.round((counts.validados / counts.total) * 100) : 0;
                                     return (
-                                        <TableRow key={idx} className="hover:bg-slate-50/50">
-                                            <TableCell className="font-bold text-slate-700">{group.edificacao}</TableCell>
-                                            <TableCell className="font-medium text-slate-600">{group.empresa}</TableCell>
+                                        <TableRow key={esc.id} className="hover:bg-slate-50/50 cursor-pointer group" onClick={() => setSelectedEscopo(esc)}>
+                                            <TableCell className="font-bold text-slate-700">{esc.empresa}</TableCell>
                                             <TableCell>
-                                                <div className="flex flex-wrap gap-1">
-                                                    {Array.from(group.disciplinas).map((d: any, i) => (
-                                                        <span key={i} className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded text-[9px] font-bold">{d}</span>
-                                                    ))}
-                                                </div>
+                                                <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-bold">{esc.disciplina}</span>
                                             </TableCell>
-                                            <TableCell className="text-center font-bold">{group.total}</TableCell>
-                                            <TableCell className="text-center text-emerald-600 font-bold">{group.validados}</TableCell>
-                                            <TableCell className="text-center text-amber-600 font-bold">{group.pendentes}</TableCell>
+                                            <TableCell className="font-medium text-slate-600">{esc.edificacao}</TableCell>
+                                            <TableCell className="text-sm text-slate-500">{esc.nomeModelo}</TableCell>
+                                            <TableCell className="text-center font-bold">{counts.total}</TableCell>
+                                            <TableCell className="text-center font-bold text-emerald-600">{counts.validados}</TableCell>
                                             <TableCell>
                                                 <div className="flex items-center gap-2 min-w-[100px]">
                                                     <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
@@ -327,30 +350,469 @@ function ScopeManagementView({ entregas, selectedEdificacao }: { entregas: any[]
                                                     <span className="text-[10px] font-bold text-slate-500">{progress}%</span>
                                                 </div>
                                             </TableCell>
+                                            <TableCell className="text-right">
+                                                <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-primary hover:bg-primary/5 rounded-full"
+                                                        onClick={(e) => { e.stopPropagation(); setEditingEscopo(esc); setIsEscopoFormOpen(true); }}>
+                                                        <Edit2 className="w-3.5 h-3.5" />
+                                                    </Button>
+                                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-full"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            if (confirm("Excluir este item de escopo?")) deleteMutation.mutate({ id: esc.id });
+                                                        }}>
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </Button>
+                                                </div>
+                                            </TableCell>
                                         </TableRow>
                                     );
-                                })
-                            )}
-                        </TableBody>
-                    </Table>
-                </div>
+                                })}
+                            </TableBody>
+                        </Table>
+                    </div>
+                </CardContent>
+            </Card>
 
-                <div className="mt-6 p-4 bg-[#940707]/5 border border-[#940707]/10 rounded-2xl flex items-start gap-3">
-                    <div className="p-2 bg-[#940707] rounded-lg text-white">
-                        <Check className="w-4 h-4" />
-                    </div>
-                    <div>
-                        <h4 className="text-sm font-bold text-[#940707]">Dica de Uso</h4>
-                        <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                            Para documentar o escopo esperado de uma construtora, crie novas entregas com o status <b>Aguardando</b>.
-                            Elas aparecerão aqui como "Expectativa" e serão contabilizadas conforme forem sendo validadas.
-                        </p>
-                    </div>
-                </div>
-            </CardContent>
-        </Card>
+            {isEscopoFormOpen && (
+                <EscopoForm
+                    escopo={editingEscopo}
+                    selectedEdificacao={selectedEdificacao}
+                    onClose={() => setIsEscopoFormOpen(false)}
+                />
+            )}
+        </div>
     );
 }
+
+// ------------------------------------------------------------------
+// ESCOPO FORM MODAL
+// ------------------------------------------------------------------
+function EscopoForm({ escopo, selectedEdificacao, onClose }: { escopo?: any, selectedEdificacao?: string, onClose: () => void }) {
+    const utils = trpc.useUtils();
+    const mutation = trpc.dashboard.upsertEscopo.useMutation({
+        onSuccess: () => {
+            utils.dashboard.getEscopos.invalidate();
+            onClose();
+        },
+        onError: (error) => alert("Erro ao salvar: " + error.message)
+    });
+
+    const [formData, setFormData] = useState({
+        id: escopo?.id,
+        empresa: escopo?.empresa || "",
+        disciplina: escopo?.disciplina || "",
+        edificacao: escopo?.edificacao || selectedEdificacao || "",
+        nomeModelo: escopo?.nomeModelo || "",
+        descricao: escopo?.descricao || "",
+        periodicidadeDias: escopo?.periodicidadeDias || 15,
+    });
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        mutation.mutate(formData);
+    };
+
+    return (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden">
+                <div className="bg-[#940707] p-6 text-white">
+                    <h2 className="text-xl font-bold">{escopo ? 'Editar Item de Escopo' : 'Novo Item de Escopo'}</h2>
+                    <p className="text-white/70 text-sm">Defina o modelo esperado de cada empresa</p>
+                </div>
+                <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Empresa *</label>
+                            <Input required value={formData.empresa} onChange={e => setFormData({ ...formData, empresa: e.target.value })} placeholder="Ex: Ocle" className="rounded-xl border-slate-200" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Disciplina *</label>
+                            <Input required value={formData.disciplina} onChange={e => setFormData({ ...formData, disciplina: e.target.value })} placeholder="Ex: Hidrossanitário" className="rounded-xl border-slate-200" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Edificação *</label>
+                            <Input required value={formData.edificacao} onChange={e => setFormData({ ...formData, edificacao: e.target.value })} placeholder="Ex: Bloco A" className="rounded-xl border-slate-200" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Periodicidade (dias)</label>
+                            <Input type="number" value={formData.periodicidadeDias} onChange={e => setFormData({ ...formData, periodicidadeDias: parseInt(e.target.value) || 15 })} className="rounded-xl border-slate-200" />
+                        </div>
+                        <div className="space-y-1.5 col-span-2">
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Nome do Modelo Base *</label>
+                            <Input required value={formData.nomeModelo} onChange={e => setFormData({ ...formData, nomeModelo: e.target.value })} placeholder="Ex: Hidro_BlocoA.rvt" className="rounded-xl border-slate-200" />
+                        </div>
+                        <div className="space-y-1.5 col-span-2">
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Descrição</label>
+                            <Textarea value={formData.descricao} onChange={e => setFormData({ ...formData, descricao: e.target.value })} placeholder="Observações sobre este escopo..." className="resize-none rounded-xl border-slate-200 min-h-[80px]" />
+                        </div>
+                    </div>
+                    <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                        <Button type="button" variant="ghost" onClick={onClose} className="rounded-full">Cancelar</Button>
+                        <Button type="submit" disabled={mutation.isPending} className="rounded-full px-8 bg-[#940707] hover:bg-[#7a0606] text-white">
+                            {mutation.isPending ? 'Salvando...' : (escopo ? 'Salvar' : 'Criar Item')}
+                        </Button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+}
+
+// ------------------------------------------------------------------
+// TIMELINE DE PARCIAIS (Detail view for a scope item)
+// ------------------------------------------------------------------
+function TimelineParciais({ escopo, onBack }: { escopo: any, onBack: () => void }) {
+    const [isParcialFormOpen, setIsParcialFormOpen] = useState(false);
+    const [verificandoId, setVerificandoId] = useState<number | null>(null);
+
+    const { data: parciais = [], isLoading } = trpc.dashboard.getEntregasByEscopo.useQuery({ escopoId: escopo.id });
+    const utils = trpc.useUtils();
+
+    const validados = parciais.filter((p: any) => p.status === 'VALIDADO').length;
+    const rejeitados = parciais.filter((p: any) => p.status === 'REJEITADO').length;
+    const aguardando = parciais.filter((p: any) => p.status === 'AGUARDANDO' || p.status === 'RECEBIDO' || p.status === 'EM_REVISAO').length;
+
+    return (
+        <div className="space-y-6 animate-in slide-in-from-right-10 duration-500">
+            <div className="flex items-center gap-4">
+                <Button variant="ghost" onClick={onBack} className="rounded-full gap-2 hover:bg-white/50">
+                    <ArrowLeft className="w-5 h-5 text-slate-500" />
+                    <span className="text-slate-600 font-medium">Voltar à Lista Mestra</span>
+                </Button>
+            </div>
+
+            {/* Escopo Header */}
+            <Card className="border-none shadow-xl bg-gradient-to-r from-[#940707]/5 to-white/70 backdrop-blur-md">
+                <CardContent className="pt-6">
+                    <div className="flex items-start justify-between">
+                        <div>
+                            <h2 className="text-2xl font-bold text-slate-800">{escopo.nomeModelo}</h2>
+                            <div className="flex items-center gap-3 mt-2">
+                                <span className="px-3 py-1 bg-[#940707]/10 text-[#940707] rounded-full text-xs font-bold">{escopo.empresa}</span>
+                                <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-xs font-bold">{escopo.disciplina}</span>
+                                <span className="text-sm text-slate-400">•</span>
+                                <span className="text-sm text-slate-500 font-medium">{escopo.edificacao}</span>
+                                <span className="text-sm text-slate-400">•</span>
+                                <span className="text-sm text-slate-400">A cada {escopo.periodicidadeDias} dias</span>
+                            </div>
+                        </div>
+                        <div className="flex gap-4 text-center">
+                            <div className="px-4 py-2 bg-white rounded-xl shadow-sm border">
+                                <div className="text-2xl font-bold text-slate-800">{parciais.length}</div>
+                                <div className="text-[10px] font-bold text-slate-400 uppercase">Parciais</div>
+                            </div>
+                            <div className="px-4 py-2 bg-emerald-50 rounded-xl shadow-sm border border-emerald-100">
+                                <div className="text-2xl font-bold text-emerald-600">{validados}</div>
+                                <div className="text-[10px] font-bold text-emerald-500 uppercase">Validados</div>
+                            </div>
+                            <div className="px-4 py-2 bg-amber-50 rounded-xl shadow-sm border border-amber-100">
+                                <div className="text-2xl font-bold text-amber-600">{aguardando}</div>
+                                <div className="text-[10px] font-bold text-amber-500 uppercase">Pendentes</div>
+                            </div>
+                            {rejeitados > 0 && (
+                                <div className="px-4 py-2 bg-rose-50 rounded-xl shadow-sm border border-rose-100">
+                                    <div className="text-2xl font-bold text-rose-600">{rejeitados}</div>
+                                    <div className="text-[10px] font-bold text-rose-500 uppercase">Rejeitados</div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* Parciais List */}
+            <Card className="border-none shadow-xl bg-white/70 backdrop-blur-md">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="text-lg font-bold flex items-center gap-2">
+                        <History className="w-5 h-5 text-[#940707]" />
+                        Entregas Parciais
+                    </CardTitle>
+                    <Button
+                        className="rounded-full gap-2 bg-[#940707] hover:bg-[#7a0606] text-white"
+                        size="sm"
+                        onClick={() => setIsParcialFormOpen(true)}
+                    >
+                        <Plus className="w-4 h-4" />
+                        Registrar Parcial
+                    </Button>
+                </CardHeader>
+                <CardContent>
+                    {isLoading ? (
+                        <p className="text-center py-10 text-slate-400 italic">Carregando parciais...</p>
+                    ) : parciais.length === 0 ? (
+                        <div className="text-center py-10 text-slate-400">
+                            <Clock className="w-10 h-10 mx-auto mb-3 text-slate-300" />
+                            <p className="font-medium">Nenhuma entrega parcial registrada</p>
+                            <p className="text-sm mt-1">Clique em "Registrar Parcial" ao receber um modelo da empresa</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            {parciais.map((parcial: any, idx: number) => {
+                                const statusInfo = STATUS_LABELS[parcial.status] || STATUS_LABELS['AGUARDANDO'];
+                                const StatusIcon = statusInfo.icon;
+                                const isVerifying = verificandoId === parcial.id;
+
+                                return (
+                                    <div key={parcial.id} className="border rounded-xl p-4 hover:bg-slate-50/50 transition-colors">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-sm font-bold text-slate-500">
+                                                    #{parciais.length - idx}
+                                                </div>
+                                                <div>
+                                                    <div className="font-semibold text-slate-700">{parcial.nomeDocumento}</div>
+                                                    <div className="flex items-center gap-2 mt-1 text-xs text-slate-400">
+                                                        {parcial.periodoInicio && parcial.periodoFim && (
+                                                            <>
+                                                                <Calendar className="w-3 h-3" />
+                                                                <span>{dayjs(parcial.periodoInicio).format('DD/MM')} a {dayjs(parcial.periodoFim).format('DD/MM/YYYY')}</span>
+                                                                <span>•</span>
+                                                            </>
+                                                        )}
+                                                        <span>Recebido: {parcial.dataRecebimento ? dayjs(parcial.dataRecebimento).format('DD/MM/YYYY') : 'Não recebido'}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex items-center gap-3">
+                                                {parcial.resultado && (
+                                                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${parcial.resultado === 'CONFORME'
+                                                        ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                                                        : 'bg-rose-100 text-rose-700 border border-rose-200'
+                                                        }`}>
+                                                        {parcial.resultado === 'CONFORME' ? '✓ Conforme' : '✗ Não Conforme'}
+                                                    </span>
+                                                )}
+                                                <div className={`px-3 py-1 rounded-full border text-[10px] font-bold uppercase flex items-center gap-1.5 w-fit ${statusInfo.color}`}>
+                                                    <StatusIcon className="w-3 h-3" />
+                                                    {statusInfo.label}
+                                                </div>
+
+                                                {!parcial.resultado && (parcial.status === 'RECEBIDO' || parcial.status === 'EM_REVISAO') && (
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="rounded-full text-xs border-[#940707] text-[#940707] hover:bg-[#940707] hover:text-white"
+                                                        onClick={() => setVerificandoId(isVerifying ? null : parcial.id)}
+                                                    >
+                                                        <Search className="w-3 h-3 mr-1" />
+                                                        Verificar
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Verification Panel (inline) */}
+                                        {isVerifying && (
+                                            <VerificacaoPanel
+                                                entregaId={parcial.id}
+                                                onDone={() => {
+                                                    setVerificandoId(null);
+                                                    utils.dashboard.getEntregasByEscopo.invalidate({ escopoId: escopo.id });
+                                                    utils.dashboard.getEntregas.invalidate();
+                                                    utils.dashboard.getEntregasStats.invalidate();
+                                                }}
+                                                onCancel={() => setVerificandoId(null)}
+                                            />
+                                        )}
+
+                                        {/* Show apontamentos if rejected */}
+                                        {parcial.resultado === 'NAO_CONFORME' && parcial.apontamentosVerificacao && (
+                                            <div className="mt-3 p-3 bg-rose-50 border border-rose-100 rounded-lg">
+                                                <span className="text-[10px] font-bold uppercase text-rose-500">Apontamentos:</span>
+                                                <p className="text-sm text-rose-700 mt-1">{parcial.apontamentosVerificacao}</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            {isParcialFormOpen && (
+                <ParcialForm
+                    escopo={escopo}
+                    parcialCount={parciais.length}
+                    onClose={() => setIsParcialFormOpen(false)}
+                />
+            )}
+        </div>
+    );
+}
+
+// ------------------------------------------------------------------
+// VERIFICAÇÃO PANEL (inline)
+// ------------------------------------------------------------------
+function VerificacaoPanel({ entregaId, onDone, onCancel }: { entregaId: number, onDone: () => void, onCancel: () => void }) {
+    const [resultado, setResultado] = useState<string>('');
+    const [apontamentos, setApontamentos] = useState('');
+
+    const mutation = trpc.dashboard.registrarVerificacao.useMutation({
+        onSuccess: () => onDone(),
+        onError: (error) => alert("Erro ao registrar verificação: " + error.message)
+    });
+
+    const handleSubmit = () => {
+        if (!resultado) return alert("Selecione o resultado da verificação.");
+        if (resultado === 'NAO_CONFORME' && !apontamentos.trim()) return alert("Informe os apontamentos para itens não conformes.");
+        mutation.mutate({
+            id: entregaId,
+            resultado,
+            apontamentosVerificacao: apontamentos || null
+        });
+    };
+
+    return (
+        <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-xl animate-in slide-in-from-top-3 duration-300">
+            <h4 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+                <Search className="w-4 h-4 text-[#940707]" />
+                Registrar Verificação
+            </h4>
+            <div className="flex gap-3 mb-3">
+                <button
+                    type="button"
+                    className={`flex-1 p-3 rounded-xl border-2 text-sm font-bold transition-all ${resultado === 'CONFORME'
+                        ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                        : 'border-slate-200 text-slate-400 hover:border-emerald-200'
+                        }`}
+                    onClick={() => setResultado('CONFORME')}
+                >
+                    <CheckCircle2 className="w-5 h-5 mx-auto mb-1" />
+                    Conforme
+                </button>
+                <button
+                    type="button"
+                    className={`flex-1 p-3 rounded-xl border-2 text-sm font-bold transition-all ${resultado === 'NAO_CONFORME'
+                        ? 'border-rose-500 bg-rose-50 text-rose-700'
+                        : 'border-slate-200 text-slate-400 hover:border-rose-200'
+                        }`}
+                    onClick={() => setResultado('NAO_CONFORME')}
+                >
+                    <XCircle className="w-5 h-5 mx-auto mb-1" />
+                    Não Conforme
+                </button>
+            </div>
+            {resultado === 'NAO_CONFORME' && (
+                <div className="mb-3">
+                    <label className="text-xs font-bold uppercase text-slate-500 ml-1">Apontamentos *</label>
+                    <Textarea
+                        value={apontamentos}
+                        onChange={(e) => setApontamentos(e.target.value)}
+                        placeholder="Descreva as divergências encontradas..."
+                        className="resize-none rounded-xl border-slate-200 min-h-[80px] mt-1"
+                    />
+                </div>
+            )}
+            <div className="flex justify-end gap-2">
+                <Button variant="ghost" size="sm" onClick={onCancel} className="rounded-full">Cancelar</Button>
+                <Button
+                    size="sm"
+                    onClick={handleSubmit}
+                    disabled={mutation.isPending || !resultado}
+                    className="rounded-full px-6 bg-[#940707] hover:bg-[#7a0606] text-white"
+                >
+                    {mutation.isPending ? 'Salvando...' : 'Confirmar Verificação'}
+                </Button>
+            </div>
+        </div>
+    );
+}
+
+// ------------------------------------------------------------------
+// PARCIAL FORM (Quick form to register a new partial delivery)
+// ------------------------------------------------------------------
+function ParcialForm({ escopo, parcialCount, onClose }: { escopo: any, parcialCount: number, onClose: () => void }) {
+    const utils = trpc.useUtils();
+    const mutation = trpc.dashboard.upsertEntrega.useMutation({
+        onSuccess: () => {
+            utils.dashboard.getEntregasByEscopo.invalidate({ escopoId: escopo.id });
+            utils.dashboard.getEntregas.invalidate();
+            utils.dashboard.getEntregasStats.invalidate();
+            onClose();
+        },
+        onError: (error) => alert("Erro ao registrar parcial: " + error.message)
+    });
+
+    const nextNum = parcialCount + 1;
+    const [formData, setFormData] = useState({
+        nomeDocumento: `Parcial #${nextNum} — ${escopo.nomeModelo}`,
+        tipoDocumento: 'rvt',
+        edificacao: escopo.edificacao,
+        disciplina: escopo.disciplina,
+        empresaResponsavel: escopo.empresa,
+        dataPrevista: dayjs().format('YYYY-MM-DD'),
+        dataRecebimento: dayjs().format('YYYY-MM-DD'),
+        periodoInicio: '',
+        periodoFim: '',
+        status: 'RECEBIDO',
+        descricao: '',
+    });
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        mutation.mutate({
+            ...formData,
+            escopoId: escopo.id,
+            dataRecebimento: formData.dataRecebimento || null,
+            periodoInicio: formData.periodoInicio || null,
+            periodoFim: formData.periodoFim || null,
+        });
+    };
+
+    return (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden">
+                <div className="bg-[#940707] p-6 text-white">
+                    <h2 className="text-xl font-bold">Registrar Entrega Parcial</h2>
+                    <p className="text-white/70 text-sm">{escopo.empresa} — {escopo.disciplina} — {escopo.edificacao}</p>
+                </div>
+                <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-bold uppercase text-slate-500 ml-1">Nome do Documento</label>
+                        <Input value={formData.nomeDocumento} onChange={e => setFormData({ ...formData, nomeDocumento: e.target.value })} className="rounded-xl border-slate-200" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Período Início</label>
+                            <Input type="date" value={formData.periodoInicio} onChange={e => setFormData({ ...formData, periodoInicio: e.target.value })} className="rounded-xl border-slate-200" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Período Fim</label>
+                            <Input type="date" value={formData.periodoFim} onChange={e => setFormData({ ...formData, periodoFim: e.target.value })} className="rounded-xl border-slate-200" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Data Recebimento</label>
+                            <Input type="date" value={formData.dataRecebimento} onChange={e => setFormData({ ...formData, dataRecebimento: e.target.value })} className="rounded-xl border-slate-200" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Status</label>
+                            <select className="flex h-10 w-full rounded-xl border border-slate-200 bg-background px-3 py-2 text-sm" value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })}>
+                                {Object.entries(STATUS_LABELS).map(([val, { label }]) => (
+                                    <option key={val} value={val}>{label}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-bold uppercase text-slate-500 ml-1">Observações</label>
+                        <Textarea value={formData.descricao} onChange={e => setFormData({ ...formData, descricao: e.target.value })} placeholder="Notas..." className="resize-none rounded-xl border-slate-200 min-h-[60px]" />
+                    </div>
+                    <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                        <Button type="button" variant="ghost" onClick={onClose} className="rounded-full">Cancelar</Button>
+                        <Button type="submit" disabled={mutation.isPending} className="rounded-full px-8 bg-[#940707] hover:bg-[#7a0606] text-white">
+                            {mutation.isPending ? 'Salvando...' : 'Registrar'}
+                        </Button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+}
+
+
 
 // ------------------------------------------------------------------
 // DETAIL VIEW COMPONENT
