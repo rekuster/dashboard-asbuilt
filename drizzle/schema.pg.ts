@@ -1,5 +1,36 @@
-import { pgTable, serial, text, integer, timestamp } from "drizzle-orm/pg-core";
-import { sql } from "drizzle-orm";
+import { pgTable, serial, text, integer, timestamp, uuid } from "drizzle-orm/pg-core";
+
+/**
+ * Projects table - each project represents one construction site / obra
+ */
+export const projects = pgTable("projects", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    code: text("code").notNull().unique(),              // Contract code e.g. "NEO-23001"
+    name: text("name").notNull(),                       // Project name e.g. "SuperNova"
+    description: text("description"),
+    client: text("client"),                             // Client name
+    location: text("location"),                         // Project location
+    ownerId: text("ownerId").notNull(),                 // Supabase Auth user ID
+    startDate: timestamp("startDate"),
+    endDate: timestamp("endDate"),
+    imageUrl: text("imageUrl"),
+    status: text("status").default("ativo").notNull(),  // 'ativo' | 'concluido' | 'arquivado'
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+
+/**
+ * Project Members table - maps users to projects with roles
+ */
+export const projectMembers = pgTable("projectMembers", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("projectId").notNull().references(() => projects.id, { onDelete: 'cascade' }),
+    userId: text("userId").notNull(),                   // Supabase Auth user ID
+    email: text("email").notNull(),
+    role: text("role").default("viewer").notNull(),     // 'owner' | 'editor' | 'viewer'
+    invitedAt: timestamp("invitedAt").defaultNow().notNull(),
+    acceptedAt: timestamp("acceptedAt"),
+});
 
 /**
  * Core user table backing auth flow.
@@ -21,6 +52,7 @@ export const users = pgTable("users", {
  */
 export const salas = pgTable("salas", {
     id: serial("id").primaryKey(),
+    projectId: uuid("projectId").references(() => projects.id, { onDelete: 'cascade' }),
     edificacao: text("edificacao").notNull(),
     pavimento: text("pavimento").notNull(),
     setor: text("setor").notNull(),
@@ -49,6 +81,7 @@ export const salas = pgTable("salas", {
  */
 export const apontamentos = pgTable("apontamentos", {
     id: serial("id").primaryKey(),
+    projectId: uuid("projectId").references(() => projects.id, { onDelete: 'cascade' }),
     numeroApontamento: integer("numeroApontamento").notNull(),
     data: timestamp("data").notNull(),
     edificacao: text("edificacao").notNull(),
@@ -70,6 +103,7 @@ export const apontamentos = pgTable("apontamentos", {
  */
 export const uploads = pgTable("uploads", {
     id: serial("id").primaryKey(),
+    projectId: uuid("projectId").references(() => projects.id, { onDelete: 'cascade' }),
     fileName: text("fileName").notNull(),
     fileSize: integer("fileSize").notNull(),
     uploadedBy: integer("uploadedBy").notNull(),
@@ -84,6 +118,7 @@ export const uploads = pgTable("uploads", {
  */
 export const ifcFiles = pgTable("ifcFiles", {
     id: serial("id").primaryKey(),
+    projectId: uuid("projectId").references(() => projects.id, { onDelete: 'cascade' }),
     fileName: text("fileName").notNull(),
     filePath: text("filePath").notNull(),
     edificacao: text("edificacao"),
@@ -97,12 +132,13 @@ export const ifcFiles = pgTable("ifcFiles", {
  */
 export const escopoAsBuilt = pgTable("escopoAsBuilt", {
     id: serial("id").primaryKey(),
+    projectId: uuid("projectId").references(() => projects.id, { onDelete: 'cascade' }),
     empresa: text("empresa").notNull(),           // "Ocle", "AeB"
     disciplina: text("disciplina").notNull(),      // "Hidrossanitário", "Elétrica"
     edificacao: text("edificacao").notNull(),       // "Bloco A"
     nomeModelo: text("nomeModelo").notNull(),       // "Hidro_BlocoA.rvt"
+    nomeModeloFinal: text("nomeModeloFinal"),       // The expected final delivery model name
     descricao: text("descricao"),
-    periodicidadeDias: integer("periodicidadeDias").default(15),
     ativo: integer("ativo").default(1).notNull(),   // 1=ativo, 0=encerrado
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().notNull(),
@@ -113,6 +149,7 @@ export const escopoAsBuilt = pgTable("escopoAsBuilt", {
  */
 export const entregasAsBuilt = pgTable("entregasAsBuilt", {
     id: serial("id").primaryKey(),
+    projectId: uuid("projectId").references(() => projects.id, { onDelete: 'cascade' }),
     escopoId: integer("escopoId").references(() => escopoAsBuilt.id, { onDelete: 'set null' }),
     nomeDocumento: text("nomeDocumento").notNull(),
     tipoDocumento: text("tipoDocumento").notNull(), // 'relatorio' | 'dwg' | 'rvt'
@@ -144,5 +181,9 @@ export const entregasHistorico = pgTable("entregasHistorico", {
     createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
+export type Project = typeof projects.$inferSelect;
+export type InsertProject = typeof projects.$inferInsert;
+export type ProjectMember = typeof projectMembers.$inferSelect;
+export type InsertProjectMember = typeof projectMembers.$inferInsert;
 export type EntregaHistorico = typeof entregasHistorico.$inferSelect;
 export type InsertEntregaHistorico = typeof entregasHistorico.$inferInsert;

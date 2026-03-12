@@ -157,6 +157,18 @@ export default function DataHubTab() {
         return Array.from(new Set(filteredByBuilding.map((s: any) => s.pavimento))).sort();
     }, [salas, filterEdificacao]);
 
+    // Checklist progress stats (for Mapeamento Salas tab)
+    const checklistStats = useMemo(() => {
+        const total = sortedSalas.length;
+        if (total === 0) return { total: 0, planta: 0, augin: 0, tracker: 0, qr: 0, liberado: 0 };
+        const planta = sortedSalas.filter((s: any) => !!s.imagemPlantaUrl).length;
+        const augin = sortedSalas.filter((s: any) => !!s.augin).length;
+        const tracker = sortedSalas.filter((s: any) => !!s.trackerPosicionado).length;
+        const qr = sortedSalas.filter((s: any) => !!s.qrCodePlastificado).length;
+        const liberado = sortedSalas.filter((s: any) => (s.statusRA || '').toUpperCase().includes('LIBERADO')).length;
+        return { total, planta, augin, tracker, qr, liberado };
+    }, [sortedSalas]);
+
     const sortedApontamentos = useMemo(() => {
         const filtered = (apontamentos || []).filter((a: any) => {
             const searchLower = (search || "").toLowerCase();
@@ -172,7 +184,7 @@ export default function DataHubTab() {
         });
 
         return [...filtered].sort((a, b) => {
-            return new Date(b.data || 0).getTime() - new Date(a.data || 0).getTime() || (b.numeroApontamento - a.numeroApontamento);
+            return (b.numeroApontamento || 0) - (a.numeroApontamento || 0);
         });
     }, [apontamentos, search, responsavelFilter, filterDisciplina]);
 
@@ -257,6 +269,38 @@ export default function DataHubTab() {
                                             <TableHead className="text-center font-bold">Tracker?</TableHead>
                                             <TableHead className="text-center font-bold">QR Plast.?</TableHead>
                                             <TableHead className="font-bold">Status RA</TableHead>
+                                        </TableRow>
+                                        {/* Progress summary row */}
+                                        <TableRow className="bg-slate-100/80 border-b-2 border-[#940707]/20">
+                                            <TableCell colSpan={4} className="text-right text-xs font-bold text-slate-600 py-1.5">
+                                                Progresso ({checklistStats.total} salas):
+                                            </TableCell>
+                                            {[
+                                                { done: checklistStats.planta, label: 'Planta' },
+                                                { done: checklistStats.augin, label: 'Augin' },
+                                                { done: checklistStats.tracker, label: 'Tracker' },
+                                                { done: checklistStats.qr, label: 'QR' },
+                                            ].map((col) => {
+                                                const pct = checklistStats.total > 0 ? Math.round((col.done / checklistStats.total) * 100) : 0;
+                                                const color = pct === 100 ? 'text-emerald-700 bg-emerald-50' : pct > 0 ? 'text-amber-700 bg-amber-50' : 'text-slate-500 bg-slate-50';
+                                                return (
+                                                    <TableCell key={col.label} className="text-center py-1.5">
+                                                        <div className={`inline-flex flex-col items-center rounded-md px-2 py-0.5 ${color}`}>
+                                                            <span className="text-[11px] font-bold">{pct}%</span>
+                                                            <span className="text-[9px] opacity-70">{col.done}/{checklistStats.total}</span>
+                                                        </div>
+                                                    </TableCell>
+                                                );
+                                            })}
+                                            <TableCell className="text-center py-1.5">
+                                                <div className={`inline-flex flex-col items-center rounded-md px-2 py-0.5 ${checklistStats.liberado === checklistStats.total && checklistStats.total > 0
+                                                        ? 'text-emerald-700 bg-emerald-50'
+                                                        : checklistStats.liberado > 0 ? 'text-amber-700 bg-amber-50' : 'text-slate-500 bg-slate-50'
+                                                    }`}>
+                                                    <span className="text-[11px] font-bold">{checklistStats.total > 0 ? Math.round((checklistStats.liberado / checklistStats.total) * 100) : 0}%</span>
+                                                    <span className="text-[9px] opacity-70">{checklistStats.liberado}/{checklistStats.total}</span>
+                                                </div>
+                                            </TableCell>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>

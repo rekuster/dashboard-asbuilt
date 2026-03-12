@@ -18,7 +18,7 @@ export async function handleExcelUpload(fileBuffer: Buffer, fileName: string = '
         // Backup existing IFC mappings (linking nome -> ifcExpressId)
         const existingSalas = await db.select({ nome: salas.nome, ifcExpressId: salas.ifcExpressId }).from(salas);
         const mappingBackup = new Map<string, string>();
-        existingSalas.forEach(s => {
+        existingSalas.forEach((s: any) => {
             if (s.ifcExpressId && s.nome) {
                 mappingBackup.set(s.nome, s.ifcExpressId);
             }

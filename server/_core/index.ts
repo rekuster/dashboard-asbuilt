@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { sql } from 'drizzle-orm';
 import express from 'express';
 import { createExpressMiddleware } from '@trpc/server/adapters/express';
 import path from 'path';
@@ -82,15 +83,15 @@ app.post('/api/upload-image', upload.single('image'), async (req, res) => {
 });
 
 // Health Check
-app.get('/api/health', async (req, res) => {
+app.get('/api/health', async (_req, res) => {
     try {
         const { getDb, users, salas } = await import('../db');
         const db = await getDb();
         if (!db) throw new Error('DB Connection failed (db is null)');
 
-        // Diagnostic counts
-        const rUsers = await db.select({ count: sql`count(*)` }).from(users).catch((e: any) => ({ error: e.message }));
-        const rSalas = await db.select({ count: sql`count(*)` }).from(salas).catch((e: any) => ({ error: e.message }));
+        // Diagnostic counts using count()
+        const [rUsers] = await db.select({ count: sql`count(*)` }).from(users).catch((e: any) => [{ count: e.message }]);
+        const [rSalas] = await db.select({ count: sql`count(*)` }).from(salas).catch((e: any) => [{ count: e.message }]);
 
         // Return sensitive info masked for debugging
         const dbUrl = process.env.DATABASE_URL || 'NOT_SET';
@@ -116,18 +117,35 @@ app.get('/api/health', async (req, res) => {
     }
 });
 
-import { sql } from 'drizzle-orm';
-
 // tRPC endpoint
 app.use(
     '/api/trpc',
     createExpressMiddleware({
         router: appRouter,
-        createContext: ({ req, res }): Context => ({
-            req,
-            res,
-            user: undefined, // Add auth logic here if needed
-        }),
+        createContext: ({ req, res }): Context => {
+            // Extract user ID from Supabase Auth JWT
+            let userId: string | undefined;
+            const authHeader = req.headers.authorization;
+            if (authHeader?.startsWith('Bearer ')) {
+                try {
+                    const token = authHeader.slice(7);
+                    // Decode JWT payload (base64url) without verification 
+                    // (Supabase handles token validation)
+                    const payload = JSON.parse(
+                        Buffer.from(token.split('.')[1], 'base64url').toString()
+                    );
+                    userId = payload.sub;
+                } catch (e) {
+                    // Invalid token, userId remains undefined
+                }
+            }
+            return {
+                req,
+                res,
+                user: undefined,
+                userId,
+            };
+        },
     })
 );
 
@@ -154,3 +172,4 @@ if (!process.env.VERCEL) {
 export default app;
 
 // Trigger Vercel deploy: Final fix for static files
+ 

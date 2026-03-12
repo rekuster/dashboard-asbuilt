@@ -2,8 +2,11 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 import { defineConfig } from "vite";
-
 import fs from "fs";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Custom plugin to copy WASM files
 const wasmCopyPlugin = () => ({
@@ -22,7 +25,7 @@ const wasmCopyPlugin = () => ({
 });
 
 export default defineConfig({
-    plugins: [react(), tailwindcss(), wasmCopyPlugin()],
+    plugins: [react(), tailwindcss()],
     resolve: {
         alias: {
             "@": path.resolve(__dirname, "client", "src"),
@@ -34,14 +37,6 @@ export default defineConfig({
     build: {
         outDir: path.resolve(__dirname, "dist"),
         emptyOutDir: true,
-        rollupOptions: {
-            output: {
-                manualChunks: {
-                    three: ['three'],
-                    'web-ifc': ['web-ifc', 'web-ifc-three']
-                }
-            }
-        }
     },
     server: {
         host: true,

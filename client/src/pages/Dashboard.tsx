@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useParams, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import {
     Loader2,
@@ -8,7 +9,9 @@ import {
     Box,
     FileSpreadsheet,
     Info,
-    Smartphone
+    Smartphone,
+    ArrowLeft,
+    Settings
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -32,8 +35,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
 export default function Dashboard() {
+    const { id: projectId } = useParams<{ id: string }>();
+    const [, setLocation] = useLocation();
     const [selectedEdificacao, setSelectedEdificacao] = useState<string | null>(null);
     const [activeModelUrl, setActiveModelUrl] = useState<string | undefined>();
+
+    const { data: project } = trpc.projects.getById.useQuery(
+        { id: projectId! },
+        { enabled: !!projectId }
+    );
 
     const downloadBase64 = (base64: string, fileName: string, contentType: string) => {
         const byteCharacters = atob(base64);
@@ -107,6 +117,13 @@ export default function Dashboard() {
                 {/* Header Section */}
                 <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 border-b pb-8">
                     <div className="flex items-start gap-6">
+                        <button
+                            onClick={() => setLocation('/')}
+                            className="flex items-center gap-1 text-muted-foreground hover:text-primary transition-colors mt-1"
+                        >
+                            <ArrowLeft className="w-5 h-5" />
+                        </button>
+
                         <img
                             src="/logos_stecla/versao_horizontal@4x.png"
                             alt="Stecla Engenharia"
@@ -117,20 +134,30 @@ export default function Dashboard() {
                         <div className="w-1.5 h-12 bg-primary rounded-full hidden md:block" />
 
                         <div>
-                            <h1 className="text-2xl font-bold tracking-tight text-primary uppercase">
-                                ACOMPANHAMENTO DE PROJETOS
+                            <p className="text-[10px] font-bold text-primary uppercase tracking-widest">
+                                {project?.code || 'PROJETO'}
+                            </p>
+                            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+                                {project?.name || 'ACOMPANHAMENTO DE PROJETOS'}
                             </h1>
                             <p className="text-slate-500 text-sm font-medium">
-                                Dashboard As Built | Neodent
+                                Dashboard As Built {project?.client ? `| ${project.client}` : ''}
                             </p>
                         </div>
                     </div>
 
-                    <div className="flex flex-col md:items-end gap-2">
+                    <div className="flex items-center gap-3">
                         <EdificacaoSelector
                             selectedEdificacao={selectedEdificacao}
                             onSelect={setSelectedEdificacao}
                         />
+                        <button
+                            onClick={() => setLocation(`/project/${projectId}/settings`)}
+                            className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/5 transition-all"
+                            title="Configurações do Projeto"
+                        >
+                            <Settings className="w-5 h-5" />
+                        </button>
                     </div>
                 </div>
 

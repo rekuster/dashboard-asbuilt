@@ -20,12 +20,17 @@ export default function IfcViewer({ modelUrl }: IfcViewerProps) {
         isLoaded,
         selectedRoom,
         setSelectedRoom,
-        xRay,
-        setXRay,
         mappingMode,
-        setMappingMode
+        setMappingMode,
+        floors,
+        clipAtElevation,
+        resetClip,
+        xRay,
+        setXRay
     } = useIfcViewer();
     const [searchTerm, setSearchTerm] = useState("");
+    const [selectedFloor, setSelectedFloor] = useState<number | null>(null);
+    const [clippingEnabled, setClippingEnabled] = useState(false);
 
     const utils = trpc.useUtils();
     const { data: allSalas } = trpc.dashboard.getSalas.useQuery();
@@ -135,13 +140,41 @@ export default function IfcViewer({ modelUrl }: IfcViewerProps) {
                     >
                         <Edit3 className="w-4 h-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-300 hover:text-white hover:bg-slate-700">
-                        <Box className="w-4 h-4" />
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-300 hover:text-white hover:bg-slate-700" onClick={() => {
+                        setClippingEnabled(!clippingEnabled);
+                        if (clippingEnabled) resetClip();
+                        else if (selectedFloor !== null) clipAtElevation(selectedFloor);
+                    }} title="Ativar/Desativar Plano de Corte">
+                        <Box className={`w-4 h-4 ${clippingEnabled ? 'text-blue-400' : ''}`} />
                     </Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-300 hover:text-white hover:bg-slate-700">
                         <Maximize className="w-4 h-4" />
                     </Button>
                 </div>
+
+                {/* Floor Selector Dropdown */}
+                {floors.length > 0 && (
+                    <div className="bg-slate-800/90 backdrop-blur-md px-3 py-1 rounded-lg border border-slate-700 shadow-lg flex items-center gap-2">
+                        <Layers className="w-3 h-3 text-slate-400" />
+                        <select 
+                            className="bg-transparent text-xs text-white border-none focus:ring-0 cursor-pointer outline-none"
+                            value={selectedFloor ?? ""}
+                            onChange={(e) => {
+                                const val = e.target.value === "" ? null : Number(e.target.value);
+                                setSelectedFloor(val);
+                                if (val !== null && clippingEnabled) clipAtElevation(val);
+                                else resetClip();
+                            }}
+                        >
+                            <option value="" className="bg-slate-800">Ver Prédio Todo</option>
+                            {floors.map((f, i) => (
+                                <option key={i} value={f.elevation} className="bg-slate-800">
+                                    {f.name}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                )}
             </div>
 
             {/* Color Legend (Bottom Left) */}

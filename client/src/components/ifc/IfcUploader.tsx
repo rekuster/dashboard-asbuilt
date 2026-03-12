@@ -44,6 +44,12 @@ export default function IfcUploader() {
     const handleUpload = async () => {
         if (!file) return;
 
+        const extension = file.name.slice((file.name.lastIndexOf(".") - 1 >>> 0) + 2).toLowerCase();
+        if (!['ifc', 'ifczip', 'glb'].includes(extension)) {
+            toast.error("Formato de arquivo não suportado. Use .ifc, .ifczip ou .glb");
+            return;
+        }
+
         setIsUploading(true);
         const reader = new FileReader();
         reader.onload = async () => {
@@ -65,7 +71,7 @@ export default function IfcUploader() {
                         <FileBox className="w-5 h-5 text-blue-600" />
                         Upload de Modelo IFC 3D
                     </CardTitle>
-                    <CardDescription>Envie arquivos .ifc para visualizar o status das salas em 3D.</CardDescription>
+                    <CardDescription>Envie arquivos .ifc, .ifczip ou .glb para visualizar o status das salas em 3D.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <div className="flex flex-col space-y-2">
@@ -86,7 +92,7 @@ export default function IfcUploader() {
                         <input
                             id="ifc-upload"
                             type="file"
-                            accept=".ifc"
+                            accept=".ifc,.ifczip,.glb"
                             className="hidden"
                             onChange={handleFileChange}
                         />
@@ -98,7 +104,7 @@ export default function IfcUploader() {
                         ) : (
                             <div className="flex flex-col items-center">
                                 <Upload className="w-8 h-8 text-slate-400 mb-2" />
-                                <span className="text-xs text-slate-500">Clique para selecionar o arquivo .ifc</span>
+                                <span className="text-xs text-slate-500">Clique para selecionar o modelo (.ifc, .ifczip, .glb)</span>
                             </div>
                         )}
                     </div>

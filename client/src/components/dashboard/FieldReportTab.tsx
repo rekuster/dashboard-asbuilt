@@ -18,7 +18,11 @@ import {
     PlusCircle,
     ChevronRight,
     Camera,
-    X
+    X,
+    Trash2,
+    Send,
+    CalendarDays,
+    List
 } from "lucide-react";
 
 import { toast } from "sonner";
@@ -38,6 +42,41 @@ interface QueuedApontamento {
     data: string;
 }
 
+interface ApontamentoItem {
+    id: string;
+    disciplina: string;
+    disciplinaLabel: string;
+    divergencia: string;
+    fotoRA: File | null;
+    fotoRAPreview: string | null;
+    fotoReal: File | null;
+    fotoRealPreview: string | null;
+}
+
+const DISCIPLINA_LABELS: Record<string, string> = {
+    ARQ: "ARQ - Arquitetura",
+    FORRO: "FORRO",
+    EST: "EST - Estrutura",
+    HID: "HID - Hidráulica",
+    PCI: "PCI - Incêndio",
+    ELE: "ELE - Elétrica",
+    CLI: "CLI - Climatização",
+    MET: "MET - Metálica",
+    LOG: "LOG - Lógica",
+    ELEMT: "ELEMT - Barramento e Média Tensão",
+    SDAI: "SDAI - Detecção e Alarme",
+    SPDA: "SPDA - Para-raios",
+    UTI: "UTI - Utilidades",
+};
+
+function getTodayString(): string {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const d = String(now.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+}
+
 export default function FieldReportTab() {
     const [selectedEdificacao, setSelectedEdificacao] = useState<string>("");
     const [selectedPavimento, setSelectedPavimento] = useState<string>("");
@@ -45,11 +84,18 @@ export default function FieldReportTab() {
     const [disciplina, setDisciplina] = useState("");
     const [divergencia, setDivergencia] = useState("");
 
+    // Date of verification
+    const [dataVerificacao, setDataVerificacao] = useState(getTodayString());
+
     // Multiple Photos (RA + Real)
     const [fotoRA, setFotoRA] = useState<File | null>(null);
     const [fotoRAPreview, setFotoRAPreview] = useState<string | null>(null);
     const [fotoReal, setFotoReal] = useState<File | null>(null);
     const [fotoRealPreview, setFotoRealPreview] = useState<string | null>(null);
+
+    // Batch apontamentos list
+    const [apontamentosList, setApontamentosList] = useState<ApontamentoItem[]>([]);
+    const [isSavingAll, setIsSavingAll] = useState(false);
 
     const [offlineQueue, setOfflineQueue] = useState<QueuedApontamento[]>([]);
     const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -59,15 +105,11 @@ export default function FieldReportTab() {
     // Mutations
     const createApontamento = trpc.dashboard.createApontamento.useMutation({
         onSuccess: () => {
-            toast.success("Apontamento registrado com sucesso!");
-            setDisciplina("");
-            setDivergencia("");
             utils.dashboard.getKPIs.invalidate();
             utils.dashboard.getApontamentos.invalidate();
         },
         onError: (err) => {
             console.error("Error creating appointment:", err);
-            toast.error("Erro ao salvar. O item foi para a fila offline.");
         }
     });
 
@@ -110,9 +152,7 @@ export default function FieldReportTab() {
 
         for (const item of offlineQueue) {
             try {
-                // Generate a "fake" number for now or handle on backend
                 await createApontamento.mutateAsync({
-                    numeroApontamento: Math.floor(Math.random() * 100000),
                     data: item.data,
                     edificacao: item.edificacao,
                     pavimento: item.pavimento,
@@ -174,61 +214,134 @@ export default function FieldReportTab() {
         }
     };
 
-    const handleAddApontamento = async () => {
+    // Add item to the local batch list (does NOT save to backend yet)
+    const handleAddToList = () => {
         if (!selectedSala || !disciplina || !divergencia) {
             toast.error("Preencha todos os campos obrigatórios.");
             return;
         }
 
-        let finalFotoUrl = undefined;
-        let finalFotoReferenciaUrl = undefined;
-
-        if (isOnline && fotoRA) {
-            toast.info("Subindo foto Referência/RA...");
-            const url = await uploadImage(fotoRA);
-            if (url) finalFotoReferenciaUrl = url;
-        }
-        if (isOnline && fotoReal) {
-            toast.info("Subindo foto Real...");
-            const url = await uploadImage(fotoReal);
-            if (url) finalFotoUrl = url;
-        }
-
-        const newApontamento = {
-            numeroApontamento: Math.floor(Math.random() * 100000),
-            data: new Date().toISOString(),
-            edificacao: selectedSala.edificacao,
-            pavimento: selectedSala.pavimento,
-            setor: selectedSala.setor,
-            sala: selectedSala.nome,
+        const newItem: ApontamentoItem = {
+            id: crypto.randomUUID(),
             disciplina,
+            disciplinaLabel: DISCIPLINA_LABELS[disciplina] || disciplina,
             divergencia,
-            fotoUrl: finalFotoUrl,
-            fotoReferenciaUrl: finalFotoReferenciaUrl
+            fotoRA,
+            fotoRAPreview,
+            fotoReal,
+            fotoRealPreview,
         };
 
-        if (isOnline) {
-            createApontamento.mutate(newApontamento);
-            setFotoRA(null); setFotoRAPreview(null);
-            setFotoReal(null); setFotoRealPreview(null);
-            setDisciplina("");
-            setDivergencia("");
-        } else {
-            const queued: QueuedApontamento = {
-                id: crypto.randomUUID(),
-                salaId: selectedSala.id,
-                ...newApontamento,
-                fotoBase64: fotoRAPreview || fotoRealPreview || undefined
-            };
-            const updatedQueue = [...offlineQueue, queued];
-            setOfflineQueue(updatedQueue);
-            localStorage.setItem('field_report_queue', JSON.stringify(updatedQueue));
-            toast.warning("Sem conexão. Item salvo localmente.");
-            setDisciplina("");
-            setDivergencia("");
-            setFotoRA(null); setFotoRAPreview(null);
-            setFotoReal(null); setFotoRealPreview(null);
+        setApontamentosList(prev => [...prev, newItem]);
+        toast.success("Apontamento adicionado à lista!");
+
+        // Clear form fields but keep sala selected and date
+        setDisciplina("");
+        setDivergencia("");
+        setFotoRA(null);
+        setFotoRAPreview(null);
+        setFotoReal(null);
+        setFotoRealPreview(null);
+    };
+
+    const handleRemoveFromList = (id: string) => {
+        setApontamentosList(prev => prev.filter(item => item.id !== id));
+    };
+
+    // Save ALL accumulated items to the backend
+    const handleSaveAll = async () => {
+        if (apontamentosList.length === 0) {
+            toast.error("Nenhum apontamento na lista.");
+            return;
         }
+
+        setIsSavingAll(true);
+        let successCount = 0;
+        const dataISO = new Date(dataVerificacao + "T12:00:00").toISOString();
+
+        for (const item of apontamentosList) {
+            let finalFotoUrl: string | undefined = undefined;
+            let finalFotoReferenciaUrl: string | undefined = undefined;
+
+            // Upload photos if online
+            if (isOnline && item.fotoRA) {
+                const url = await uploadImage(item.fotoRA);
+                if (url) finalFotoReferenciaUrl = url;
+            }
+            if (isOnline && item.fotoReal) {
+                const url = await uploadImage(item.fotoReal);
+                if (url) finalFotoUrl = url;
+            }
+
+            const payload = {
+                data: dataISO,
+                edificacao: selectedSala.edificacao,
+                pavimento: selectedSala.pavimento,
+                setor: selectedSala.setor,
+                sala: selectedSala.nome,
+                disciplina: item.disciplina,
+                divergencia: item.divergencia,
+                fotoUrl: finalFotoUrl,
+                fotoReferenciaUrl: finalFotoReferenciaUrl,
+            };
+
+            if (isOnline) {
+                try {
+                    await createApontamento.mutateAsync(payload);
+                    successCount++;
+                } catch (e) {
+                    console.error("Error saving apontamento:", e);
+                    // Queue for offline
+                    const queued: QueuedApontamento = {
+                        id: crypto.randomUUID(),
+                        salaId: selectedSala.id,
+                        ...payload,
+                        fotoBase64: item.fotoRAPreview || item.fotoRealPreview || undefined,
+                    };
+                    const updatedQueue = [...offlineQueue, queued];
+                    setOfflineQueue(updatedQueue);
+                    localStorage.setItem('field_report_queue', JSON.stringify(updatedQueue));
+                }
+            } else {
+                const queued: QueuedApontamento = {
+                    id: crypto.randomUUID(),
+                    salaId: selectedSala.id,
+                    ...payload,
+                    fotoBase64: item.fotoRAPreview || item.fotoRealPreview || undefined,
+                };
+                const updatedQueue = [...offlineQueue, queued];
+                setOfflineQueue(updatedQueue);
+                localStorage.setItem('field_report_queue', JSON.stringify(updatedQueue));
+                successCount++;
+            }
+        }
+
+        setIsSavingAll(false);
+
+        if (isOnline) {
+            if (successCount === apontamentosList.length) {
+                toast.success(`${successCount} apontamento(s) salvo(s) com sucesso!`);
+            } else {
+                toast.warning(`${successCount} salvo(s), ${apontamentosList.length - successCount} enviado(s) para fila offline.`);
+            }
+        } else {
+            toast.warning(`Sem conexão. ${successCount} item(ns) salvo(s) localmente.`);
+        }
+
+        // Clear the list but keep the sala and date selected
+        setApontamentosList([]);
+    };
+
+    // Warn if switching sala with pending items
+    const handleSalaChange = (sala: any) => {
+        if (apontamentosList.length > 0) {
+            const confirmed = window.confirm(
+                `Você tem ${apontamentosList.length} apontamento(s) não salvo(s) para "${selectedSala?.nome}". Deseja descartar e trocar de sala?`
+            );
+            if (!confirmed) return;
+            setApontamentosList([]);
+        }
+        setSelectedSala(sala);
     };
 
     return (
@@ -271,7 +384,7 @@ export default function FieldReportTab() {
                                 onChange={(e) => {
                                     setSelectedEdificacao(e.target.value);
                                     setSelectedPavimento("");
-                                    setSelectedSala(null);
+                                    handleSalaChange(null);
                                 }}
                             >
                                 <option value="">Selecione...</option>
@@ -285,7 +398,7 @@ export default function FieldReportTab() {
                                 value={selectedPavimento}
                                 onChange={(e) => {
                                     setSelectedPavimento(e.target.value);
-                                    setSelectedSala(null);
+                                    handleSalaChange(null);
                                 }}
                                 disabled={!selectedEdificacao}
                             >
@@ -306,7 +419,7 @@ export default function FieldReportTab() {
                                     key={sala.id}
                                     variant={selectedSala?.id === sala.id ? "default" : "outline"}
                                     className="justify-between h-auto py-3 px-4 font-normal"
-                                    onClick={() => setSelectedSala(sala)}
+                                    onClick={() => handleSalaChange(sala)}
                                 >
                                     <div className="text-left">
                                         <div className="font-bold">{sala.nome}</div>
@@ -334,6 +447,20 @@ export default function FieldReportTab() {
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
+                            {/* Date of verification */}
+                            <div className="space-y-2">
+                                <Label className="flex items-center gap-1.5">
+                                    <CalendarDays className="w-4 h-4" />
+                                    Data da Verificação
+                                </Label>
+                                <input
+                                    type="date"
+                                    className="w-full p-2 rounded-md border text-sm bg-background"
+                                    value={dataVerificacao}
+                                    onChange={(e) => setDataVerificacao(e.target.value)}
+                                />
+                            </div>
+
                             <div className="space-y-2">
                                 <Label>Disciplina</Label>
                                 <select
@@ -342,14 +469,9 @@ export default function FieldReportTab() {
                                     onChange={(e) => setDisciplina(e.target.value)}
                                 >
                                     <option value="">Selecione...</option>
-                                    <option value="ARQ">Arquitetura</option>
-                                    <option value="EST">Estrutura</option>
-                                    <option value="HID">Hidráulica</option>
-                                    <option value="ELE">Elétrica</option>
-                                    <option value="CLI">Climatização</option>
-                                    <option value="MET">Metálica</option>
-                                    <option value="PCI">Incêndio</option>
-                                    <option value="GAS">Gás</option>
+                                    {Object.entries(DISCIPLINA_LABELS).map(([key, label]) => (
+                                        <option key={key} value={key}>{label}</option>
+                                    ))}
                                 </select>
                             </div>
 
@@ -425,14 +547,82 @@ export default function FieldReportTab() {
                             </div>
 
                             <Button
-                                className="w-full h-12 text-lg"
-                                onClick={handleAddApontamento}
-                                disabled={createApontamento.isPending}
+                                className="w-full h-12 text-lg gap-2"
+                                variant="outline"
+                                onClick={handleAddToList}
                             >
-                                {createApontamento.isPending ? "Salvando..." : "Salvar Apontamento"}
+                                <PlusCircle className="w-5 h-5" />
+                                Adicionar à Lista
                             </Button>
                         </CardContent>
                     </Card>
+
+                    {/* Accumulated Items List */}
+                    {apontamentosList.length > 0 && (
+                        <Card className="shadow-md border-primary/20 animate-in slide-in-from-bottom-4 duration-300">
+                            <CardHeader className="pb-3">
+                                <CardTitle className="text-lg flex items-center gap-2">
+                                    <List className="w-5 h-5 text-primary" />
+                                    Lista de Apontamentos
+                                    <span className="ml-auto text-sm font-normal bg-primary/10 text-primary px-2.5 py-0.5 rounded-full">
+                                        {apontamentosList.length}
+                                    </span>
+                                </CardTitle>
+                                <CardDescription>
+                                    Sala: <strong>{selectedSala.nome}</strong> · Data: <strong>{dataVerificacao.split('-').reverse().join('/')}</strong>
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-3">
+                                {apontamentosList.map((item, index) => (
+                                    <div
+                                        key={item.id}
+                                        className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 border border-muted group"
+                                    >
+                                        <div className="flex-shrink-0 w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
+                                            {index + 1}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 mb-0.5">
+                                                <span className="text-xs font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+                                                    {item.disciplinaLabel}
+                                                </span>
+                                                {(item.fotoRAPreview || item.fotoRealPreview) && (
+                                                    <Camera className="w-3.5 h-3.5 text-muted-foreground" />
+                                                )}
+                                            </div>
+                                            <p className="text-sm text-foreground/80 line-clamp-2">{item.divergencia}</p>
+                                        </div>
+                                        <Button
+                                            size="icon"
+                                            variant="ghost"
+                                            className="flex-shrink-0 h-7 w-7 opacity-50 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive"
+                                            onClick={() => handleRemoveFromList(item.id)}
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </Button>
+                                    </div>
+                                ))}
+
+                                <Button
+                                    className="w-full h-12 text-lg gap-2 mt-2"
+                                    onClick={handleSaveAll}
+                                    disabled={isSavingAll}
+                                >
+                                    {isSavingAll ? (
+                                        <>
+                                            <RefreshCcw className="w-5 h-5 animate-spin" />
+                                            Salvando...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Send className="w-5 h-5" />
+                                            Salvar Todos ({apontamentosList.length} apontamento{apontamentosList.length > 1 ? 's' : ''})
+                                        </>
+                                    )}
+                                </Button>
+                            </CardContent>
+                        </Card>
+                    )}
                 </div>
             )}
         </div>

@@ -41,11 +41,16 @@ export async function handleIfcUpload(
 
         console.log(`[IFC Upload] Uploading to Supabase Storage: ${filePath}`);
 
+        // Determine Content-Type
+        let contentType = 'application/x-step'; // Default IFC
+        if (fileName.toLowerCase().endsWith('.glb')) contentType = 'model/gltf-binary';
+        if (fileName.toLowerCase().endsWith('.ifczip')) contentType = 'application/zip';
+
         // Upload to Supabase Storage
         const { data, error } = await supabase.storage
             .from('ifc-files')
             .upload(filePath, fileBuffer, {
-                contentType: 'application/x-step', // Standard MIME type for IFC
+                contentType,
                 upsert: false
             });
 

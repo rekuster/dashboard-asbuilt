@@ -404,8 +404,8 @@ function EscopoForm({ escopo, selectedEdificacao, onClose }: { escopo?: any, sel
         disciplina: escopo?.disciplina || "",
         edificacao: escopo?.edificacao || selectedEdificacao || "",
         nomeModelo: escopo?.nomeModelo || "",
+        nomeModeloFinal: escopo?.nomeModeloFinal || "",
         descricao: escopo?.descricao || "",
-        periodicidadeDias: escopo?.periodicidadeDias || 15,
     });
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -435,8 +435,8 @@ function EscopoForm({ escopo, selectedEdificacao, onClose }: { escopo?: any, sel
                             <Input required value={formData.edificacao} onChange={e => setFormData({ ...formData, edificacao: e.target.value })} placeholder="Ex: Bloco A" className="rounded-xl border-slate-200" />
                         </div>
                         <div className="space-y-1.5">
-                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Periodicidade (dias)</label>
-                            <Input type="number" value={formData.periodicidadeDias} onChange={e => setFormData({ ...formData, periodicidadeDias: parseInt(e.target.value) || 15 })} className="rounded-xl border-slate-200" />
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Nome do Modelo Final</label>
+                            <Input value={formData.nomeModeloFinal} onChange={e => setFormData({ ...formData, nomeModeloFinal: e.target.value })} placeholder="Ex: Hidro_BlocoA_AsBuilt.rvt" className="rounded-xl border-slate-200" />
                         </div>
                         <div className="space-y-1.5 col-span-2">
                             <label className="text-xs font-bold uppercase text-slate-500 ml-1">Nome do Modelo Base *</label>
@@ -493,8 +493,14 @@ function TimelineParciais({ escopo, onBack }: { escopo: any, onBack: () => void 
                                 <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-xs font-bold">{escopo.disciplina}</span>
                                 <span className="text-sm text-slate-400">•</span>
                                 <span className="text-sm text-slate-500 font-medium">{escopo.edificacao}</span>
-                                <span className="text-sm text-slate-400">•</span>
-                                <span className="text-sm text-slate-400">A cada {escopo.periodicidadeDias} dias</span>
+                                {escopo.nomeModeloFinal && (
+                                    <>
+                                        <span className="text-sm text-slate-400">•</span>
+                                        <span className="text-sm text-slate-500 font-medium whitespace-nowrap overflow-hidden text-ellipsis max-w-[250px]" title={`Modelo Final: ${escopo.nomeModeloFinal}`}>
+                                            Final: {escopo.nomeModeloFinal}
+                                        </span>
+                                    </>
+                                )}
                             </div>
                         </div>
                         <div className="flex gap-4 text-center">

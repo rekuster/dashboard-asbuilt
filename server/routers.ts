@@ -37,6 +37,15 @@ import {
     getDb,
     salas,
     apontamentos,
+    listProjects,
+    createProject,
+    getProjectById,
+    updateProject,
+    saveMasterList,
+    getSalasByProjectId,
+    updateSala,
+    deleteSala,
+    renumberSalasInEdificacao,
 } from './db';
 import { eq } from "drizzle-orm";
 import { handleExcelUpload } from './uploadHandler';
@@ -52,6 +61,138 @@ import { z } from 'zod';
 export const appRouter = router({
     auth: router({
         me: publicProcedure.query(opts => opts.ctx.user),
+    }),
+
+    // =========================================================================
+    // PROJECTS ROUTER
+    // =========================================================================
+    projects: router({
+        list: publicProcedure
+            .query(async ({ ctx }) => {
+                // For now, use a dummy ownerId until auth middleware passes the real user
+                const userId = (ctx as any).userId || 'anonymous';
+                return await listProjects(userId);
+            }),
+
+        create: publicProcedure
+            .input(z.object({
+                code: z.string().min(1),
+                name: z.string().min(1),
+                client: z.string().optional(),
+                description: z.string().optional(),
+                location: z.string().optional(),
+                startDate: z.string().optional(),
+                endDate: z.string().optional(),
+            }))
+            .mutation(async ({ input, ctx }) => {
+                const userId = (ctx as any).userId || 'anonymous';
+                return await createProject({
+                    code: input.code,
+                    name: input.name,
+                    client: input.client || null,
+                    description: input.description || null,
+                    location: input.location || null,
+                    startDate: input.startDate ? new Date(input.startDate) : null,
+                    endDate: input.endDate ? new Date(input.endDate) : null,
+                    ownerId: userId,
+                    status: 'ativo',
+                } as any);
+            }),
+
+        getById: publicProcedure
+            .input(z.object({ id: z.string() }))
+            .query(async ({ input }) => {
+                return await getProjectById(input.id);
+            }),
+
+        update: publicProcedure
+            .input(z.object({
+                id: z.string(),
+                code: z.string().optional(),
+                name: z.string().optional(),
+                client: z.string().optional(),
+                description: z.string().optional(),
+                location: z.string().optional(),
+                startDate: z.string().optional(),
+                endDate: z.string().optional(),
+                status: z.string().optional(),
+            }))
+            .mutation(async ({ input }) => {
+                const { id, ...data } = input;
+                const updateData: any = { ...data };
+                if (data.startDate) updateData.startDate = new Date(data.startDate);
+                if (data.endDate) updateData.endDate = new Date(data.endDate);
+                return await updateProject(id, updateData);
+            }),
+
+        saveMasterList: publicProcedure
+            .input(z.object({
+                projectId: z.string(),
+                salas: z.array(z.object({
+                    edificacao: z.string(),
+                    pavimento: z.string(),
+                    setor: z.string(),
+                    nome: z.string(),
+                    numeroSala: z.string(),
+                })),
+            }))
+            .mutation(async ({ input }) => {
+                return await saveMasterList(input.projectId, input.salas);
+            }),
+
+        getSalasByProject: publicProcedure
+            .input(z.object({ projectId: z.string() }))
+            .query(async ({ input }) => {
+                return await getSalasByProjectId(input.projectId);
+            }),
+
+        updateSalaInProject: publicProcedure
+            .input(z.object({
+                id: z.number(),
+                nome: z.string().optional(),
+                numeroSala: z.string().optional(),
+                edificacao: z.string().optional(),
+                pavimento: z.string().optional(),
+                setor: z.string().optional(),
+            }))
+            .mutation(async ({ input }) => {
+                const { id, ...data } = input;
+                return await updateSala(id, data);
+            }),
+
+        deleteSalaFromProject: publicProcedure
+            .input(z.object({ id: z.number() }))
+            .mutation(async ({ input }) => {
+                return await deleteSala(input.id);
+            }),
+
+        insertSalaWithRenumber: publicProcedure
+            .input(z.object({
+                projectId: z.string(),
+                edificacao: z.string(),
+                pavimento: z.string(),
+                setor: z.string(),
+                nome: z.string(),
+                numeroSala: z.string(),
+            }))
+            .mutation(async ({ input }) => {
+                const targetNum = parseInt(input.numeroSala, 10);
+                // 1. Renumber: shift all rooms in this edificação with numero >= targetNum
+                const shifted = await renumberSalasInEdificacao(
+                    input.projectId,
+                    input.edificacao,
+                    targetNum
+                );
+                // 2. Insert the new room at the target number
+                const result = await saveMasterList(input.projectId, [{
+                    edificacao: input.edificacao,
+                    pavimento: input.pavimento,
+                    setor: input.setor,
+                    nome: input.nome,
+                    numeroSala: input.numeroSala,
+                }]);
+                return { shifted, created: result.created };
+            }),
     }),
 
     dashboard: router({
@@ -229,8 +370,8 @@ export const appRouter = router({
                 disciplina: z.string(),
                 edificacao: z.string(),
                 nomeModelo: z.string(),
+                nomeModeloFinal: z.string().optional(),
                 descricao: z.string().nullish(),
-                periodicidadeDias: z.number().optional(),
                 ativo: z.number().optional(),
             }))
             .mutation(async ({ input }) => {
@@ -262,7 +403,7 @@ export const appRouter = router({
         // Field Report Mutations
         createApontamento: publicProcedure
             .input(z.object({
-                numeroApontamento: z.number(),
+                numeroApontamento: z.number().optional(),
                 data: z.date().or(z.string()),
                 edificacao: z.string(),
                 pavimento: z.string(),
@@ -280,7 +421,6 @@ export const appRouter = router({
                     responsavel: assignResponsavel(input.disciplina),
                     status: 'PENDENTE'
                 };
-                return await createApontamento(data as any);
                 return await createApontamento(data as any);
             }),
 

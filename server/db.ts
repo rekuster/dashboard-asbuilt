@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { eq, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc } from "drizzle-orm";
 // import { drizzle as drizzleSqlite } from "drizzle-orm/better-sqlite3"; // REMOVED STATIC IMPORT
 import { drizzle as drizzlePg } from "drizzle-orm/postgres-js";
 // import Database from "better-sqlite3"; // REMOVED STATIC IMPORT
@@ -12,13 +12,14 @@ import * as pgSchema from "../drizzle/schema.pg.ts";
 const isPostgres = true; // Hardcoded for production stability as we removed SQLite
 const activeSchema = pgSchema;
 
-export const { users, salas, apontamentos, ifcFiles, uploads, escopoAsBuilt, entregasAsBuilt, entregasHistorico } = activeSchema as any;
-// export type InsertUser = typeof sqliteSchema.users.$inferInsert; // Use PG types or generic
+export const { users, salas, apontamentos, ifcFiles, uploads, escopoAsBuilt, entregasAsBuilt, entregasHistorico, projects, projectMembers } = activeSchema as any;
 
 // Temporary type alignment (since we used to export from sqliteSchema)
 export type InsertUser = typeof pgSchema.users.$inferInsert;
 export type InsertApontamento = typeof pgSchema.apontamentos.$inferInsert;
 export type InsertSala = typeof pgSchema.salas.$inferInsert;
+export type InsertProject = typeof pgSchema.projects.$inferInsert;
+export type Project = typeof pgSchema.projects.$inferSelect;
 
 let _db: any = null;
 let _client: any = null;
@@ -547,7 +548,12 @@ export async function upsertEntrega(data: any) {
     const db = await getDb();
     if (!db) return null;
 
-    const { id, comentario, ...values } = data; // Extract comment if present
+    const { id, comentario, ...rawValues } = data; // Extract comment if present
+
+    // Remove undefined values to prevent Drizzle parameter mismatch
+    const values = Object.fromEntries(
+        Object.entries(rawValues).filter(([_, v]) => v !== undefined)
+    ) as any;
 
     // Convert string dates to Date objects setting time to Noon to avoid timezone shifts
     if (values.dataPrevista && typeof values.dataPrevista === 'string') {
@@ -673,7 +679,12 @@ export async function upsertEscopo(data: any) {
     const db = await getDb();
     if (!db) return null;
 
-    const { id, ...values } = data;
+    const { id, ...rawValues } = data;
+
+    // Remove undefined values to prevent Drizzle parameter mismatch
+    const values = Object.fromEntries(
+        Object.entries(rawValues).filter(([_, v]) => v !== undefined)
+    ) as any;
 
     if (id) {
         const result = await db.update(escopoAsBuilt)
@@ -745,9 +756,15 @@ export async function createApontamento(data: InsertApontamento) {
     const db = await getDb();
     if (!db) return null;
 
-    // Ensure data is current
+    // Auto-generate sequential numeroApontamento
+    const [maxResult] = await db.select({
+        maxNum: sql<number>`COALESCE(MAX(${apontamentos.numeroApontamento}), 0)`
+    }).from(apontamentos);
+    const nextNum = (Number(maxResult?.maxNum) || 0) + 1;
+
     const values = {
         ...data,
+        numeroApontamento: nextNum,
         createdAt: new Date(),
         updatedAt: new Date()
     };
@@ -766,4 +783,138 @@ export async function updateSalaStatus(id: number, data: Partial<InsertSala>) {
         })
         .where(eq(salas.id, id))
         .returning();
+}
+
+// ============================================================================
+// PROJECT FUNCTIONS
+// ============================================================================
+
+export async function listProjects(ownerId: string) {
+    const db = await getDb();
+    if (!db) return [];
+    return db.select().from(projects).where(eq(projects.ownerId, ownerId)).orderBy(desc(projects.createdAt));
+}
+
+export async function createProject(data: InsertProject) {
+    const db = await getDb();
+    if (!db) return null;
+    const result = await db.insert(projects).values({
+        ...data,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+    }).returning();
+    return result[0];
+}
+
+export async function getProjectById(id: string) {
+    const db = await getDb();
+    if (!db) return null;
+    const result = await db.select().from(projects).where(eq(projects.id, id)).limit(1);
+    return result.length > 0 ? result[0] : null;
+}
+
+export async function updateProject(id: string, data: Partial<InsertProject>) {
+    const db = await getDb();
+    if (!db) return null;
+    const result = await db.update(projects)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(projects.id, id))
+        .returning();
+    return result[0];
+}
+
+export async function saveMasterList(projectId: string, salasList: Array<{
+    edificacao: string;
+    pavimento: string;
+    setor: string;
+    nome: string;
+    numeroSala: string;
+}>) {
+    const db = await getDb();
+    if (!db) return { created: 0 };
+
+    let created = 0;
+    for (const sala of salasList) {
+        await db.insert(salas).values({
+            projectId,
+            edificacao: sala.edificacao,
+            pavimento: sala.pavimento,
+            setor: sala.setor,
+            nome: sala.nome,
+            numeroSala: sala.numeroSala,
+            status: 'PENDENTE',
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        });
+        created++;
+    }
+
+    return { created };
+}
+
+export async function getSalasByProjectId(projectId: string) {
+    const db = await getDb();
+    if (!db) return [];
+    return db.select().from(salas)
+        .where(eq(salas.projectId, projectId))
+        .orderBy(salas.edificacao, sql`CAST(${salas.numeroSala} AS INTEGER)`);
+}
+
+export async function updateSala(id: number, data: {
+    nome?: string;
+    numeroSala?: string;
+    edificacao?: string;
+    pavimento?: string;
+    setor?: string;
+}) {
+    const db = await getDb();
+    if (!db) return null;
+    const result = await db.update(salas)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(salas.id, id))
+        .returning();
+    return result[0];
+}
+
+export async function deleteSala(id: number) {
+    const db = await getDb();
+    if (!db) return false;
+    await db.delete(salas).where(eq(salas.id, id));
+    return true;
+}
+
+/**
+ * Renumber rooms in an edificação: increment numeroSala by +1 for all rooms
+ * where CAST(numeroSala AS INTEGER) >= fromNumber.
+ * This is used when inserting/splitting a room — it opens a "slot" at fromNumber.
+ */
+export async function renumberSalasInEdificacao(
+    projectId: string,
+    edificacao: string,
+    fromNumber: number
+) {
+    const db = await getDb();
+    if (!db) return 0;
+
+    // Get all rooms in this edificação with numero >= fromNumber, ordered DESC
+    // (must update from highest to lowest to avoid unique conflicts)
+    const roomsToShift = await db.select()
+        .from(salas)
+        .where(
+            and(
+                eq(salas.projectId, projectId),
+                eq(salas.edificacao, edificacao),
+                sql`CAST(${salas.numeroSala} AS INTEGER) >= ${fromNumber}`
+            )
+        )
+        .orderBy(sql`CAST(${salas.numeroSala} AS INTEGER) DESC`);
+
+    for (const room of roomsToShift) {
+        const currentNum = parseInt(room.numeroSala, 10);
+        await db.update(salas)
+            .set({ numeroSala: String(currentNum + 1), updatedAt: new Date() })
+            .where(eq(salas.id, room.id));
+    }
+
+    return roomsToShift.length;
 }

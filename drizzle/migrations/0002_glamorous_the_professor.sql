@@ -1,0 +1,1 @@
+ALTER TABLE "escopoAsBuilt" DROP COLUMN "periodicidadeDias";
