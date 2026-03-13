@@ -1,10 +1,9 @@
 import { Button } from "@/components/ui/button";
 import {
     RotateCcw,
-    Selection,
+    Section,
     Layers,
     Eye,
-    EyeOff,
     ZoomIn,
     Settings2
 } from "lucide-react";
@@ -18,7 +17,7 @@ import {
 export default function IfcControls() {
     const controls = [
         { icon: RotateCcw, label: "Resetar Câmera", action: () => { } },
-        { icon: Selection, label: "Seleção de Sala", action: () => { } },
+        { icon: Section, label: "Seleção de Sala", action: () => { } },
         { icon: ZoomIn, label: "Focar Tudo", action: () => { } },
         { icon: Layers, label: "Camadas", action: () => { } },
         { icon: Settings2, label: "Configurações", action: () => { } },

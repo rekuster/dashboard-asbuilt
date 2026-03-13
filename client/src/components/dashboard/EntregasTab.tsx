@@ -1,8 +1,17 @@
+/*
+ * ESTE ARQUIVO É A GESTÃO DE ENTREGAS AS-BUILT.
+ * Aqui é onde você registra cada pacote de documentos ou modelos que os fornecedores (Thá, Ocle, AeB) enviam.
+ * O sistema compara o que foi entregue com o "Escopo" (os 108 modelos) para te dizer o que falta.
+ * Quando você valida uma entrega aqui, o Dashboard de Status é atualizado automaticamente.
+ */
+
 import React, { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -22,9 +31,11 @@ import {
     Building2,
     Layers,
     Briefcase,
+    ClipboardCheck,
 } from "lucide-react";
 import dayjs from "dayjs";
 import KPICard from "./KPICard";
+import ValidationTab from "./ValidationTab";
 
 const STATUS_LABELS: Record<string, { label: string, color: string, icon: any }> = {
     'AGUARDANDO': { label: 'Aguardando', color: 'bg-amber-100 text-amber-700 border-amber-200', icon: Clock },
@@ -44,6 +55,7 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
     const [searchTerm, setSearchTerm] = useState("");
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingEntrega, setEditingEntrega] = useState<any>(null);
+    const [isBatchFormOpen, setIsBatchFormOpen] = useState(false);
     const [viewingDetail, setViewingDetail] = useState<any>(null);
     const [activeTab, setActiveTab] = useState("list");
 
@@ -108,7 +120,7 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid grid-cols-2 w-full max-w-md bg-slate-100 p-1 rounded-xl mb-6">
+                <TabsList className="grid grid-cols-3 w-full max-w-2xl bg-slate-100 p-1 rounded-xl mb-6">
                     <TabsTrigger value="list" className="rounded-lg data-[state=active]:bg-[#940707] data-[state=active]:text-white">
                         <FileText className="w-4 h-4 mr-2" />
                         Lista de Entregas
@@ -116,6 +128,10 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
                     <TabsTrigger value="scope" className="rounded-lg data-[state=active]:bg-[#940707] data-[state=active]:text-white">
                         <Layers className="w-4 h-4 mr-2" />
                         Gestão de Escopo
+                    </TabsTrigger>
+                    <TabsTrigger value="validation" className="rounded-lg data-[state=active]:bg-[#940707] data-[state=active]:text-white">
+                        <ClipboardCheck className="w-4 h-4 mr-2" />
+                        Validação por Sala
                     </TabsTrigger>
                 </TabsList>
 
@@ -137,7 +153,15 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
                                     />
                                 </div>
                                 <Button
-                                    className="rounded-full gap-2 shadow-lg shadow-primary/20"
+                                    variant="outline"
+                                    className="rounded-full gap-2 border-slate-200 hover:bg-slate-50"
+                                    onClick={() => setIsBatchFormOpen(true)}
+                                >
+                                    <Layers className="w-4 h-4 text-[#940707]" />
+                                    Registrar em Lote
+                                </Button>
+                                <Button
+                                    className="rounded-full gap-2 shadow-lg shadow-primary/20 bg-[#940707] hover:bg-[#7a0606] text-white"
                                     onClick={() => {
                                         setEditingEntrega(null);
                                         setIsFormOpen(true);
@@ -225,6 +249,10 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
                     </Card>
                 </TabsContent>
 
+                <TabsContent value="validation">
+                    <ValidationTab />
+                </TabsContent>
+
                 <TabsContent value="scope">
                     <ScopeManagementView entregas={entregas} selectedEdificacao={selectedEdificacao} />
                 </TabsContent>
@@ -234,6 +262,13 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
                 <EntregaForm
                     onClose={() => setIsFormOpen(false)}
                     entrega={editingEntrega}
+                    selectedEdificacao={selectedEdificacao}
+                />
+            )}
+
+            {isBatchFormOpen && (
+                <BatchEntregaForm
+                    onClose={() => setIsBatchFormOpen(false)}
                     selectedEdificacao={selectedEdificacao}
                 />
             )}
@@ -311,7 +346,10 @@ function ScopeManagementView({ entregas, selectedEdificacao }: { entregas: any[]
                                     <TableHead className="font-bold uppercase text-[10px] tracking-wider">Empresa</TableHead>
                                     <TableHead className="font-bold uppercase text-[10px] tracking-wider">Disciplina</TableHead>
                                     <TableHead className="font-bold uppercase text-[10px] tracking-wider">Edificação</TableHead>
-                                    <TableHead className="font-bold uppercase text-[10px] tracking-wider">Modelo Base</TableHead>
+                                    <TableHead className="font-bold uppercase text-[10px] tracking-wider">Modelo Base (Projeto)</TableHead>
+                                    <TableHead className="font-bold uppercase text-[10px] tracking-wider">Modelo Final (As-Built)</TableHead>
+                                    <TableHead className="font-bold uppercase text-[10px] tracking-wider">RVT Nativo?</TableHead>
+                                    <TableHead className="font-bold uppercase text-[10px] tracking-wider">Ação RVT (Se não nativo)</TableHead>
                                     <TableHead className="text-center font-bold uppercase text-[10px] tracking-wider">Parciais</TableHead>
                                     <TableHead className="text-center font-bold uppercase text-[10px] tracking-wider">Verificados</TableHead>
                                     <TableHead className="text-center font-bold uppercase text-[10px] tracking-wider">Progresso</TableHead>
@@ -339,7 +377,14 @@ function ScopeManagementView({ entregas, selectedEdificacao }: { entregas: any[]
                                                 <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-bold">{esc.disciplina}</span>
                                             </TableCell>
                                             <TableCell className="font-medium text-slate-600">{esc.edificacao}</TableCell>
-                                            <TableCell className="text-sm text-slate-500">{esc.nomeModelo}</TableCell>
+                                            <TableCell className="text-xs font-medium text-slate-500 max-w-[180px] truncate" title={esc.nomeModelo}>{esc.nomeModelo || "-"}</TableCell>
+                                            <TableCell className="text-sm font-bold text-[#940707] max-w-[180px] truncate" title={esc.nomeModeloFinal}>{esc.nomeModeloFinal || "-"}</TableCell>
+                                            <TableCell>
+                                                <Badge variant={esc.temRvtOriginal ? "secondary" : "outline"} className={esc.temRvtOriginal ? "bg-blue-100 text-blue-700 border-none" : "bg-amber-100 text-amber-700 border-none"}>
+                                                    {esc.temRvtOriginal ? "Sim" : "Não"}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell className="text-xs text-slate-500 max-w-[200px] truncate">{esc.pendenciaRvt || "-"}</TableCell>
                                             <TableCell className="text-center font-bold">{counts.total}</TableCell>
                                             <TableCell className="text-center font-bold text-emerald-600">{counts.validados}</TableCell>
                                             <TableCell>
@@ -405,6 +450,8 @@ function EscopoForm({ escopo, selectedEdificacao, onClose }: { escopo?: any, sel
         edificacao: escopo?.edificacao || selectedEdificacao || "",
         nomeModelo: escopo?.nomeModelo || "",
         nomeModeloFinal: escopo?.nomeModeloFinal || "",
+        temRvtOriginal: escopo?.temRvtOriginal || 0,
+        pendenciaRvt: escopo?.pendenciaRvt || "",
         descricao: escopo?.descricao || "",
     });
 
@@ -439,11 +486,31 @@ function EscopoForm({ escopo, selectedEdificacao, onClose }: { escopo?: any, sel
                             <Input value={formData.nomeModeloFinal} onChange={e => setFormData({ ...formData, nomeModeloFinal: e.target.value })} placeholder="Ex: Hidro_BlocoA_AsBuilt.rvt" className="rounded-xl border-slate-200" />
                         </div>
                         <div className="space-y-1.5 col-span-2">
-                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Nome do Modelo Base *</label>
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Caminho / Modelo Base (Projeto) *</label>
                             <Input required value={formData.nomeModelo} onChange={e => setFormData({ ...formData, nomeModelo: e.target.value })} placeholder="Ex: Hidro_BlocoA.rvt" className="rounded-xl border-slate-200" />
                         </div>
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Possui Revit Projetista? *</label>
+                            <select 
+                                className="flex h-10 w-full rounded-xl border border-slate-200 bg-background px-3 py-2 text-sm"
+                                value={formData.temRvtOriginal}
+                                onChange={e => setFormData({ ...formData, temRvtOriginal: parseInt(e.target.value) })}
+                            >
+                                <option value={1}>Sim (RVT Nativo)</option>
+                                <option value={0}>Não (IFC ou Outro)</option>
+                            </select>
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Ação/Pendência RVT</label>
+                            <Input 
+                                value={formData.pendenciaRvt} 
+                                onChange={e => setFormData({ ...formData, pendenciaRvt: e.target.value })} 
+                                placeholder="Ex: Gerar via IFC" 
+                                className="rounded-xl border-slate-200" 
+                            />
+                        </div>
                         <div className="space-y-1.5 col-span-2">
-                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Descrição</label>
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Observações Gerais</label>
                             <Textarea value={formData.descricao} onChange={e => setFormData({ ...formData, descricao: e.target.value })} placeholder="Observações sobre este escopo..." className="resize-none rounded-xl border-slate-200 min-h-[80px]" />
                         </div>
                     </div>
@@ -991,17 +1058,19 @@ function EntregaDetailView({ entrega, onBack, onUpdate, onEdit, onDelete }: any)
 // ------------------------------------------------------------------
 function EntregaForm({ onClose, entrega, selectedEdificacao }: any) {
     const utils = trpc.useUtils();
+    const { data: escopos = [] } = trpc.dashboard.getEscopos.useQuery();
+    
     const mutation = trpc.dashboard.upsertEntrega.useMutation({
         onSuccess: () => {
             utils.dashboard.getEntregas.invalidate();
             utils.dashboard.getEntregasStats.invalidate();
-            onClose();
         },
         onError: (error) => alert("Erro ao salvar: " + error.message)
     });
 
     const [formData, setFormData] = useState({
         id: entrega?.id,
+        escopoId: entrega?.escopoId || null,
         nomeDocumento: entrega?.nomeDocumento || "",
         tipoDocumento: entrega?.tipoDocumento || "relatorio",
         edificacao: entrega?.edificacao || selectedEdificacao || "",
@@ -1013,9 +1082,43 @@ function EntregaForm({ onClose, entrega, selectedEdificacao }: any) {
         descricao: entrega?.descricao || "",
     });
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const [selectedEscopoIds, setSelectedEscopoIds] = useState<number[]>(entrega?.escopoId ? [entrega.escopoId] : []);
+    const isNew = !entrega?.id;
+
+    // Filter scope items by current building
+    const relevantEscopos = useMemo(() => {
+        if (!formData.edificacao) return [];
+        return escopos.filter((e: any) => e.edificacao.toLowerCase().includes(formData.edificacao.toLowerCase()));
+    }, [escopos, formData.edificacao]);
+
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        mutation.mutate({ ...formData, dataRecebimento: formData.dataRecebimento || null });
+        
+        try {
+            if (isNew && selectedEscopoIds.length > 1) {
+                // Batch create
+                for (const escId of selectedEscopoIds) {
+                    const esc = escopos.find((e: any) => e.id === escId);
+                    await mutation.mutateAsync({ 
+                        ...formData, 
+                        escopoId: escId,
+                        disciplina: esc?.disciplina || formData.disciplina,
+                        empresaResponsavel: esc?.empresa || formData.empresaResponsavel,
+                        dataRecebimento: formData.dataRecebimento || null 
+                    });
+                }
+            } else {
+                // Single create/update
+                await mutation.mutateAsync({ 
+                    ...formData, 
+                    escopoId: selectedEscopoIds[0] || null,
+                    dataRecebimento: formData.dataRecebimento || null 
+                });
+            }
+            onClose();
+        } catch (err) {
+            // Error already handled by mutation onError
+        }
     };
 
     return (
@@ -1053,9 +1156,34 @@ function EntregaForm({ onClose, entrega, selectedEdificacao }: any) {
                             <label className="text-xs font-bold uppercase text-slate-500 ml-1">Edificação</label>
                             <Input value={formData.edificacao} onChange={e => setFormData({ ...formData, edificacao: e.target.value })} placeholder="Ex: Bloco A" className="rounded-xl border-slate-200" />
                         </div>
+
+                        {isNew && relevantEscopos.length > 0 && (
+                            <div className="space-y-2 md:col-span-2 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                                <label className="text-xs font-bold uppercase text-[#940707] ml-1">Vincular a Disciplinas (Lote) *</label>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                                    {relevantEscopos.map((esc: any) => (
+                                        <div key={esc.id} className="flex items-center gap-2 bg-white p-2 rounded-xl border border-slate-100">
+                                            <Checkbox 
+                                                id={`esc-${esc.id}`}
+                                                checked={selectedEscopoIds.includes(esc.id)}
+                                                onCheckedChange={(checked: boolean) => {
+                                                    if (checked) setSelectedEscopoIds([...selectedEscopoIds, esc.id]);
+                                                    else setSelectedEscopoIds(selectedEscopoIds.filter(id => id !== esc.id));
+                                                }}
+                                            />
+                                            <label htmlFor={`esc-${esc.id}`} className="text-xs font-medium text-slate-600 cursor-pointer">
+                                                {esc.disciplina} ({esc.empresa})
+                                            </label>
+                                        </div>
+                                    ))}
+                                </div>
+                                <p className="text-[10px] text-slate-400 mt-2 italic">Selecione uma ou mais disciplinas para registrar a entrega em lote.</p>
+                            </div>
+                        )}
+
                         <div className="space-y-2">
                             <label className="text-xs font-bold uppercase text-slate-500 ml-1">Disciplina</label>
-                            <Input value={formData.disciplina} onChange={e => setFormData({ ...formData, disciplina: e.target.value })} placeholder="Ex: Arquitetura" className="rounded-xl border-slate-200" />
+                            <Input value={formData.disciplina} onChange={e => setFormData({ ...formData, disciplina: e.target.value })} placeholder="Ex: Arquitetura" className="rounded-xl border-slate-200" disabled={isNew && selectedEscopoIds.length > 0} />
                         </div>
                         <div className="space-y-2">
                             <label className="text-xs font-bold uppercase text-slate-500 ml-1">Empreiteiro *</label>
@@ -1074,6 +1202,207 @@ function EntregaForm({ onClose, entrega, selectedEdificacao }: any) {
                         <Button type="button" variant="ghost" onClick={onClose} className="rounded-full">Cancelar</Button>
                         <Button type="submit" disabled={mutation.isPending} className="rounded-full px-8 shadow-lg shadow-primary/20 bg-[#940707] hover:bg-[#7a0606] text-white">
                             {mutation.isPending ? 'Salvando...' : (entrega ? 'Salvar Alterações' : 'Criar Entrega')}
+                        </Button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+}
+
+// ------------------------------------------------------------------
+// BATCH DELIVERY FORM MODAL
+// ------------------------------------------------------------------
+function BatchEntregaForm({ selectedEdificacao, onClose }: { selectedEdificacao?: string, onClose: () => void }) {
+    const utils = trpc.useUtils();
+    const { data: escopos = [] } = trpc.dashboard.getEscopos.useQuery();
+    
+    const [selectedEmpresa, setSelectedEmpresa] = useState("");
+    const [selectedEscopoIds, setSelectedEscopoIds] = useState<number[]>([]);
+    const [formData, setFormData] = useState({
+        nomeDocumento: "",
+        tipoDocumento: "rvt",
+        dataRecebimento: dayjs().format('YYYY-MM-DD'),
+        descricao: "",
+        status: "RECEBIDO"
+    });
+
+    const empresas = useMemo(() => {
+        const set = new Set(escopos.map((e: any) => e.empresa));
+        return Array.from(set).sort();
+    }, [escopos]);
+
+    const filteredEscopos = useMemo(() => {
+        return escopos.filter((e: any) => 
+            e.empresa === selectedEmpresa && 
+            (!selectedEdificacao || e.edificacao === selectedEdificacao)
+        );
+    }, [escopos, selectedEmpresa, selectedEdificacao]);
+
+    const mutation = trpc.dashboard.upsertEntrega.useMutation({
+        onSuccess: () => {
+            utils.dashboard.getEntregas.invalidate();
+            utils.dashboard.getEntregasStats.invalidate();
+            onClose();
+        },
+        onError: (err) => alert("Erro ao salvar: " + err.message)
+    });
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (selectedEscopoIds.length === 0) {
+            alert("Selecione ao menos um modelo.");
+            return;
+        }
+        mutation.mutate({
+            ...formData,
+            escopoIds: selectedEscopoIds,
+            empresaResponsavel: selectedEmpresa,
+            edificacao: selectedEdificacao || "Geral",
+            disciplina: "Múltiplas",
+            dataPrevista: formData.dataRecebimento // Default to same as receiving
+        } as any);
+    };
+
+    const toggleEscopo = (id: number) => {
+        setSelectedEscopoIds(prev => 
+            prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+        );
+    };
+
+    return (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                <div className="bg-[#940707] p-6 text-white shrink-0">
+                    <h2 className="text-xl font-bold">Registrar Entrega de Lote</h2>
+                    <p className="text-white/70 text-sm">Vincule múltiplos modelos a um mesmo recebimento</p>
+                </div>
+                
+                <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Empresa Fornecedora *</label>
+                            <select 
+                                className="flex h-10 w-full rounded-xl border border-slate-200 bg-background px-3 py-2 text-sm"
+                                value={selectedEmpresa}
+                                onChange={e => {
+                                    setSelectedEmpresa(e.target.value);
+                                    setSelectedEscopoIds([]);
+                                }}
+                                required
+                            >
+                                <option value="">Selecione a empresa...</option>
+                                {empresas.map(emp => <option key={emp} value={emp}>{emp}</option>)}
+                            </select>
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Pasta/Referência da Entrega *</label>
+                            <Input 
+                                required 
+                                value={formData.nomeDocumento} 
+                                onChange={e => setFormData({ ...formData, nomeDocumento: e.target.value })} 
+                                placeholder="Ex: SM 47 - Modelos Consolidados" 
+                                className="rounded-xl border-slate-200" 
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Data de Recebimento *</label>
+                            <Input 
+                                type="date" 
+                                required 
+                                value={formData.dataRecebimento} 
+                                onChange={e => setFormData({ ...formData, dataRecebimento: e.target.value })} 
+                                className="rounded-xl border-slate-200" 
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Status Inicial *</label>
+                            <select 
+                                className="flex h-10 w-full rounded-xl border border-slate-200 bg-background px-3 py-2 text-sm"
+                                value={formData.status}
+                                onChange={e => setFormData({ ...formData, status: e.target.value })}
+                            >
+                                <option value="RECEBIDO">Recebido</option>
+                                <option value="EM_REVISAO">Em Revisão</option>
+                                <option value="VALIDADO">Validado</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="space-y-3">
+                        <label className="text-xs font-bold uppercase text-slate-500 ml-1 flex items-center justify-between">
+                            <span>Selecionar Modelos Entregues ({selectedEscopoIds.length})</span>
+                            {selectedEmpresa && (
+                                <Button 
+                                    type="button" 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className="h-6 text-[10px] font-bold text-primary"
+                                    onClick={() => setSelectedEscopoIds(filteredEscopos.map((e: any) => e.id))}
+                                >
+                                    Selecionar Todos
+                                </Button>
+                            )}
+                        </label>
+                        
+                        <div className="border rounded-2xl overflow-hidden bg-slate-50/50">
+                            {!selectedEmpresa ? (
+                                <div className="p-10 text-center text-slate-400 italic text-sm">
+                                    Selecione uma empresa para listar os modelos do escopo.
+                                </div>
+                            ) : filteredEscopos.length === 0 ? (
+                                <div className="p-10 text-center text-slate-400 italic text-sm">
+                                    Nenhum modelo encontrado no escopo desta empresa para {selectedEdificacao || 'esta edificação'}.
+                                </div>
+                            ) : (
+                                <div className="max-h-[300px] overflow-y-auto">
+                                    <Table>
+                                        <TableBody>
+                                            {filteredEscopos.map((esc: any) => (
+                                                <TableRow 
+                                                    key={esc.id} 
+                                                    className="hover:bg-white cursor-pointer group"
+                                                    onClick={() => toggleEscopo(esc.id)}
+                                                >
+                                                    <TableCell className="w-10">
+                                                        <Checkbox checked={selectedEscopoIds.includes(esc.id)} />
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <div className="flex flex-col">
+                                                            <span className="font-bold text-slate-700 text-sm">{esc.nomeModelo}</span>
+                                                            <div className="flex items-center gap-2 mt-0.5">
+                                                                <span className="text-[10px] bg-slate-200 px-1.5 py-0.5 rounded text-slate-600 font-bold uppercase">{esc.disciplina}</span>
+                                                                <span className="text-[10px] text-slate-400">{esc.edificacao}</span>
+                                                            </div>
+                                                        </div>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-bold uppercase text-slate-500 ml-1">Observações da Entrega</label>
+                        <Textarea 
+                            value={formData.descricao} 
+                            onChange={e => setFormData({ ...formData, descricao: e.target.value })} 
+                            placeholder="Ex: Entregue via link Nextcloud, contendo revisões R03 dos modelos citados." 
+                            className="resize-none rounded-xl border-slate-200 min-h-[80px]" 
+                        />
+                    </div>
+
+                    <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 shrink-0">
+                        <Button type="button" variant="ghost" onClick={onClose} className="rounded-full">Cancelar</Button>
+                        <Button 
+                            type="submit" 
+                            disabled={mutation.isPending || !selectedEmpresa || selectedEscopoIds.length === 0} 
+                            className="rounded-full px-8 shadow-lg shadow-primary/20 bg-[#940707] hover:bg-[#7a0606] text-white"
+                        >
+                            {mutation.isPending ? 'Registrando...' : `Registrar ${selectedEscopoIds.length} Entregas`}
                         </Button>
                     </div>
                 </form>

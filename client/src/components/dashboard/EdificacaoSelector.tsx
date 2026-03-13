@@ -18,7 +18,7 @@ export default function EdificacaoSelector({ selectedEdificacao, onSelect }: Edi
                 onChange={(e) => onSelect(e.target.value || null)}
             >
                 <option value="">Todas as Edificações</option>
-                {edificacoes?.map((ed) => (
+                {edificacoes?.map((ed: string) => (
                     <option key={ed} value={ed}>
                         {ed}
                     </option>

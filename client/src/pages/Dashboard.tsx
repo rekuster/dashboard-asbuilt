@@ -1,3 +1,9 @@
+/*
+ * ESTE ARQUIVO É A TELA PRINCIPAL (PAINEL GERAL).
+ * Ele organiza as abas que você vê na tela. 
+ * Eu adicionei a nova aba "Status As-Built" para que você possa alternar entre o controle de obra e o controle de entrega de modelos.
+ */
+
 import { useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
@@ -11,6 +17,7 @@ import {
     Info,
     Smartphone,
     ArrowLeft,
+    CheckCircle,
     Settings
 } from "lucide-react";
 import { toast } from "sonner";
@@ -28,6 +35,7 @@ import DataIntegrityAlert from "@/components/dashboard/DataIntegrityAlert";
 import IfcUploader from "@/components/ifc/IfcUploader";
 import PresentationTab from "@/components/dashboard/PresentationTab";
 import EntregasTab from "@/components/dashboard/EntregasTab";
+import AsBuiltDashboard from "@/components/dashboard/AsBuiltDashboard";
 import FieldReportTab from "@/components/dashboard/FieldReportTab";
 import { ErrorBoundary } from "@/components/dashboard/ErrorBoundary";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -183,6 +191,10 @@ export default function Dashboard() {
                             <Smartphone className="w-4 h-4 mr-2" />
                             Relato de Campo
                         </TabsTrigger>
+                        <TabsTrigger value="asbuilt" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                            <CheckCircle className="w-4 h-4 mr-2" />
+                            Status As-Built
+                        </TabsTrigger>
                         <TabsTrigger value="entregas" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                             <FileText className="w-4 h-4 mr-2" />
                             Entregas As-Built
@@ -193,8 +205,16 @@ export default function Dashboard() {
                         </TabsTrigger>
                     </TabsList>
 
+                    <TabsContent value="data" className="animate-in fade-in duration-500">
+                        <DataHubTab />
+                    </TabsContent>
+
                     <TabsContent value="field" className="animate-in fade-in duration-500">
                         <FieldReportTab />
+                    </TabsContent>
+
+                    <TabsContent value="asbuilt" className="animate-in fade-in duration-500">
+                        <AsBuiltDashboard />
                     </TabsContent>
 
                     <TabsContent value="overview" className="space-y-8 animate-in fade-in duration-500">
@@ -259,10 +279,6 @@ export default function Dashboard() {
                                 onSelectModel={setActiveModelUrl}
                             />
                         </ErrorBoundary>
-                    </TabsContent>
-
-                    <TabsContent value="data" className="animate-in fade-in duration-500">
-                        <DataHubTab />
                     </TabsContent>
 
                     <TabsContent value="entregas" className="animate-in fade-in duration-500">

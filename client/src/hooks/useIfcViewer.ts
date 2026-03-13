@@ -8,7 +8,7 @@ import { toast } from "sonner";
 export function useIfcViewer() {
     const componentsRef = useRef<OBC.Components | null>(null);
     const fragmentsRef = useRef<OBC.FragmentsManager | null>(null);
-    const loaderRef = useRef<OBC.FragmentIfcLoader | null>(null);
+    const loaderRef = useRef<OBC.IfcLoader | null>(null);
     const highlighterRef = useRef<OBCF.Highlighter | null>(null);
     const worldRef = useRef<OBC.SimpleWorld<OBC.SimpleScene, OBC.SimpleCamera, OBC.SimpleRenderer> | null>(null);
     const clipperRef = useRef<OBC.Clipper | null>(null);
@@ -17,11 +17,11 @@ export function useIfcViewer() {
     const [isLoaded, setIsLoaded] = useState(false);
     const [isModelLoaded, setIsModelLoaded] = useState(false);
     const [selectedRoom, setSelectedRoom] = useState<any>(null);
-    const [floors, setFloors] = useState<{ name: string, elevation: number }[]>([]);
+    const [floors] = useState<{ name: string, elevation: number }[]>([]);
     const [xRay, setXRay] = useState(false);
     const [mappingMode, setMappingMode] = useState(false);
     
-    const utils = trpc.useUtils();
+    
     const { data: roomColors } = trpc.ifc.getRoomsWithColors.useQuery();
 
     const init = useCallback((container: HTMLDivElement) => {
@@ -48,7 +48,7 @@ export function useIfcViewer() {
 
         // Fragments & IFC Loader
         const fragments = components.get(OBC.FragmentsManager);
-        if (!fragments.initialized) fragments.init(); 
+        // In v3 components are initialized by calling components.init() which init all plugins
         fragmentsRef.current = fragments;
 
         const loader = components.get(OBC.IfcLoader);
@@ -127,7 +127,7 @@ export function useIfcViewer() {
             const buffer = new Uint8Array(data);
             
             const model = await loaderRef.current.load(buffer, true, "model");
-            worldRef.current.scene.three.add(model);
+            worldRef.current.scene.three.add((model as any).mesh);
             
             toast.success("Modelo IFC carregado com sucesso!");
             setIsModelLoaded(true);
@@ -178,25 +178,25 @@ export function useIfcViewer() {
                     side: THREE.DoubleSide,
                     depthTest: true
                 });
-                highlighterRef.current.add(styleName, material as any);
+                (highlighterRef.current as any).add(styleName, material as any);
             }
 
             // Map IDs to FragmentIdMap
-            const fragmentMap: OBC.FragmentIdMap = {};
-            const fragmentList = fragmentsRef.current.list;
+            const fragmentMap: any = {};
+            const fragmentList = (fragmentsRef.current as any).list;
             
             // In v3, list is a DataMap, iterate or check keys
-            fragmentList.forEach((fragment) => {
-                if (!fragment || !fragment.ids) return;
-                const fragmentIds = Array.from(fragment.ids);
+            fragmentList.forEach((fragment: any) => {
+                if (!fragment) return;
+                const fragmentIds = Array.from((fragment as any).ids || []);
                 const matchingIds = ids.filter(id => fragmentIds.includes(id));
                 if (matchingIds.length > 0) {
-                    fragmentMap[fragment.uniqueID] = new Set(matchingIds);
+                    fragmentMap[(fragment as any).uniqueID] = new Set(matchingIds);
                 }
             });
 
             if (Object.keys(fragmentMap).length > 0) {
-                highlighterRef.current.highlightByID(styleName, fragmentMap, true, false);
+                (highlighterRef.current as any).highlightByID(styleName, fragmentMap, true, false);
             }
         }
     }, [roomColors]);
@@ -209,12 +209,14 @@ export function useIfcViewer() {
 
     useEffect(() => {
         if (!isModelLoaded || !fragmentsRef.current) return;
-        const fragmentList = fragmentsRef.current.list;
+        const fragmentList = (fragmentsRef.current as any).list;
         
-        fragmentList.forEach((fragment) => {
-            if (!fragment || !fragment.mesh) return;
-            const materials = Array.isArray(fragment.mesh.material) ? fragment.mesh.material : [fragment.mesh.material];
-            materials.forEach(material => {
+        fragmentList.forEach((fragment: any) => {
+            if (!fragment) return;
+            const mesh = (fragment as any).mesh;
+            if (!mesh) return;
+            const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+            materials.forEach((material: any) => {
                 if (material) {
                     material.transparent = xRay || mappingMode;
                     material.opacity = (xRay || mappingMode) ? 0.2 : 1.0;
@@ -230,10 +232,10 @@ export function useIfcViewer() {
         clipperRef.current.deleteAll();
         
         const plane = clipperRef.current.create(worldRef.current);
-        if (plane) {
-            plane.three.position.y = elevation + 1.1;
-            plane.three.rotation.x = -Math.PI / 2;
-            plane.enabled = true;
+        if (plane && (plane as any).three) {
+            (plane as any).three.position.y = elevation + 1.1;
+            (plane as any).three.rotation.x = -Math.PI / 2;
+            (plane as any).enabled = true;
         }
     }, []);
 

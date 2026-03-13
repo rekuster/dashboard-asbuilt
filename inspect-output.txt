@@ -1,0 +1,32 @@
+--- ROWS ---
+Row 6:  |  |  |  |  |  |  |  | 
+Row 8:  | Escopo contratado | Escopo contratado | Escopo contratado | Escopo contratado |  |  |  | Data atualização
+Row 9:  | RFP 025 - Obra Civil | RFP 025 - Obra Civil | RFP 025 - Obra Civil | RFP 025 - Obra Civil |  |  |  | "2026-03-06T00:00:00.000Z"
+Row 13:  | Entregas do Mês | Área | Modelo Base | Status | Arquivo recebido As Built  | Extenção de entrega do arquivo | Empresa | Observações - THA
+Row 14:  | "2025-12-05T00:00:00.000Z" | PRÉDIO PRODUÇÃO | NEO-23001-PE-00-MET-MO-001-R16.rvt | POSTADO | NEO-23001-AS-ZEN-0001-PROJ. ZENITAL-R02 (Engepoli).rvt | .RVT | ENGEPOLI | POSTADO
+Row 15:  | "2025-12-05T00:00:00.000Z" | IMPLANTAÇÃO | NEO-23001-PE-DRE-001-MOD STC DRENAGEM-R02.rvt | POSTADO | NEO-23001-AS-DRE-001-MOD STC DRENAGEM-R02 (Schumar).rvt | .RVT | SCHUMAR | POSTADO
+Row 16:  | "2025-12-05T00:00:00.000Z" | PRÉDIO PRODUÇÃO | NEO-23001-PE-EST-101-MOD CONTENÇÃO PROD-R00.rvt | POSTADO | NEO-23001-AS-EST-101-MOD CONTENÇÃO PROD-R00.rvt | .RVT | LABRES | POSTADO
+Row 17:  | "2026-01-19T00:00:00.000Z" | PRÉDIO PRODUÇÃO | NEO-23001-PE-00-ARQ-MO-PROD1-R07.rvt | POSTADO | NEO-23001-AS-00-ARQ-MO-PROD1-R07 (MBP).rvt | .RVT | MBP | FORNECEDOR COMENTA QUE QUANDO RECEBOU O PROJETO, CONSTRUÍRAM O AS BUILT COM AS MESMAS COORDENADAS QUE JÁ ESTVAM CONFIGURADAS. NÃO FIZERAM ALGUM TIPO DE ALTERAÇÃO DAS COORDENADAS. - POSTADO
+Row 18:  | "2025-03-05T00:00:00.000Z" | PRÉDIO PRODUÇÃO | NEO-23001-PE-00-MET-MO-001-R15.rvt | POSTADO | NEO-23001-AS-00-MET-MO-001-R16 (Februce).rvt | .RVT | FEBRUCE |  05/03/2026:  fornecedor comenta que no software que utilizam não é possível a alteração das cores descritas no BEP, só conseguem adicionar aos elementos cores primárias. Mas todo o As Built foi feito e finalizado. - POSTADO 
+Row 19:  | "2025-03-05T00:00:00.000Z" | PRÉDIO PRODUÇÃO | NEO-23001-PE-16-HID-MO-001-R20.rvt | POSTADO | NEO-23001-AS-16-HID-MO-002-R18 (Elco).rvt
+NEO-23001-AS-16-HID-DE-025.R12-PLANTA 3º PAVIMENTO (SETOR C).ÁGUA (elco) | .RVT | ELCO | 05/03/2026: repassado para Elco correções. Retornaram para nós o .dwg. Na sequência (próxima entrega) será encaminhado para o SteclaCloud o Revit no modelo correto. - POSTADO
+Row 20:  | "2026-01-27T00:00:00.000Z" | IMPLANTAÇÃO | NEO-23001-PAV-001-MOD STC PAVIMENTAÇÃO-R00.rvt | POSTADO | NEO-23001-AS-PAV-001-PAVIM-R00.rvt | .RVT | SCHUMAR | POSTADO
+Row 21:  | "2026-01-27T00:00:00.000Z" | PRÉDIO PRODUÇÃO | NEO-23001-PE-00-ARQ-MO-PROD1-R06.rvt | POSTADO | NEO-23001-PE-INT-104-FORRO-R00
+SPN.ARQ.02.PE.018.R07-Paginação Forro-Pav Térreo
+SPN.ARQ.02.PE.019.R07-Paginação Forro-2 Pav (SETOR C)
+SPN.ARQ.02.PE.020.021.022.R07-Paginação Forro-3 Pav (SETORES A-B-C)
+SPN.ARQ.02.PE.023.R07-Paginação Forro-4 Pav (SETOR C)
+NEO-23001-PE-INT-403.01-FORRO PAV.TÉRREO-R04
+NEO-23001-PE-INT-403.02-FORRO 2º PAV-R05
+NEO-23001-PE-INT-403.03-FORRO 3º PAV-R04 | .RVT | THA | POSTADO
+Row 22:  | "2026-03-05T00:00:00.000Z" | CENTRAL DE UTILIDADES | NEO-23001-PE-16-HID-DE-301.R03-PLANTA PAVIMENTO TÉRREO.PLUVIAL | POSTADO | NEO-23001-AS-16-HID-MO-003-R06.rvt | .RVT | SCHUMAR | Alteração do trecho da drenagem que liga PV90 ao PV94 - POSTADO
+Row 23:  | "2026-03-05T00:00:00.000Z" | CENTRAL DE UTILIDADES | NEO-23001-PE-16-HID-DE-301.R03-PLANTA PAVIMENTO TÉRREO.PLUVIAL | POSTADO | NEO-23001-AS-16-HID-MO-003-R06.rvt | .RVT | THA | Alteração na posição das caixas hidráulicas 1 e 6 - POSTADO
+Row 24:  | "2026-04-05T00:00:00.000Z" | PRÉDIO PRODUÇÃO | NEO-23001-PE-00-ARQ-MO-PROD1-R06.rvt | EM ANDAMENTO  | - | .RVT | THA | Verificar construção de shaft - Vest. Fem. 2º pvto 
++
+Mudança na Posição /Diminuição de esquadria no 3º pvto - Sala Controlada
+Row 25:  | "2026-04-05T00:00:00.000Z" | PRÉDIO PRODUÇÃO |  | EM ANDAMENTO  | - | .RVT | THA | Alteração no layout da área "Reserva" no 4º pvto do Prédio de Produção 
+Row 26:  | CONFIRMAR DATA | CENTRAL DE UTILIDADES | - | EM ANDAMENTO  | - | .RVT | THA | Alteração na posição das caixas hidráulicas 9 (Execuatda) e 10 (Não executada ainda) (email Isack 03/02) 
+Row 27:  | CONFIRMAR DATA | PRÉDIO SUPORTE | NEO-23001-PE-00-ARQ-MO-SUPO1-R05 (1).rvt | AS BUILT FUTURO | - | .RVT | THA | Mudança no nível do piso do 2º pvto (parte descoberta) + adição de grelha no Prédio Suporte (SERVIÇO NÃO EXECUTADO AINDA)
+Row 28:  | CONFIRMAR DATA | IMPLANTAÇÃO | - | AS BUILT FUTURO | - | .RVT | THA | Alteção da altura da contenção vizinhos e contenção Prédio Produção 
+Row 29:  | CONFIRMAR DATA | PRÉDIO SUPORTE | NEO-23001-PE-16-HID-MO-004-R07.rvt | AS BUILT FUTURO | - | .RVT | ELCO | -
+Row 30:  | "2026-04-05T00:00:00.000Z" | CENTRAL DE UTILIDADES | - | AS BUILT FUTURO | - | .RVT | LABRES + CASSOL | Juntar  projetos in-loco + pré-moldado 

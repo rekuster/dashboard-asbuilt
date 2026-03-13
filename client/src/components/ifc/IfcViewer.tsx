@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useIfcViewer } from "@/hooks/useIfcViewer";
 import { Loader2, Box, Maximize, Info, Layers, Edit3, X, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";

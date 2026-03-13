@@ -46,7 +46,7 @@ export default function ApontamentosPorSalaChart({ data }: ApontamentosPorSalaCh
                             }}
                         />
                         <Bar dataKey="count" radius={[0, 4, 4, 0]}>
-                            {data.map((entry, index) => (
+                            {data.map((_entry, index) => (
                                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                             ))}
                         </Bar>

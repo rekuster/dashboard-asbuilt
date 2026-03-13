@@ -1,3 +1,9 @@
+/*
+ * ESTE ARQUIVO É O "CÉREBRO" DO BANCO DE DADOS.
+ * Ele contém todas as funções que salvam e buscam informações (como as fotos dos relatórios e os dados dos modelos).
+ * Eu adicionei aqui a lógica para calcular as porcentagens de entrega que você vê no Dashboard.
+ */
+
 import "dotenv/config";
 import { eq, and, sql, desc } from "drizzle-orm";
 // import { drizzle as drizzleSqlite } from "drizzle-orm/better-sqlite3"; // REMOVED STATIC IMPORT
@@ -12,7 +18,7 @@ import * as pgSchema from "../drizzle/schema.pg.ts";
 const isPostgres = true; // Hardcoded for production stability as we removed SQLite
 const activeSchema = pgSchema;
 
-export const { users, salas, apontamentos, ifcFiles, uploads, escopoAsBuilt, entregasAsBuilt, entregasHistorico, projects, projectMembers } = activeSchema as any;
+export const { users, salas, apontamentos, ifcFiles, uploads, escopoAsBuilt, entregasAsBuilt, entregasHistorico, projects, projectMembers, verificacaoModelo } = activeSchema as any;
 
 // Temporary type alignment (since we used to export from sqliteSchema)
 export type InsertUser = typeof pgSchema.users.$inferInsert;
@@ -570,6 +576,43 @@ export async function upsertEntrega(data: any) {
     }
 
     let result;
+    const { escopoIds, ...commonValues } = values;
+
+    if (escopoIds && Array.isArray(escopoIds)) {
+        // BATCH MODE: Create multiple entries for a single delivery action
+        return await db.transaction(async (tx: any) => {
+            const batchResults = [];
+            for (const escId of escopoIds) {
+                // Fetch scope details to fill in missing info
+                const [esc] = await tx.select().from(escopoAsBuilt).where(eq(escopoAsBuilt.id, escId)).limit(1);
+                if (!esc) continue;
+
+                const newRecord = await tx.insert(entregasAsBuilt)
+                    .values({
+                        ...commonValues,
+                        escopoId: escId,
+                        edificacao: commonValues.edificacao || esc.edificacao,
+                        disciplina: commonValues.disciplina || esc.disciplina,
+                        empresaResponsavel: commonValues.empresaResponsavel || esc.empresa,
+                        createdAt: new Date(),
+                        updatedAt: new Date()
+                    })
+                    .returning();
+
+                if (newRecord && newRecord.length > 0) {
+                    batchResults.push(newRecord[0]);
+                    await tx.insert(entregasHistorico).values({
+                        entregaId: newRecord[0].id,
+                        acao: 'CRIADO',
+                        descricao: `Entrega em lote criada: ${commonValues.nomeDocumento}`,
+                        usuario: 'Usuário',
+                        createdAt: new Date()
+                    });
+                }
+            }
+            return batchResults;
+        });
+    }
 
     if (id) {
         // Retrieve current state for comparison
@@ -662,6 +705,36 @@ export async function getEntregasStats(edificacao?: string) {
             e.status === 'AGUARDANDO' &&
             new Date(e.dataPrevista) < now
         ).length,
+    };
+}
+
+export async function getAsBuiltStatus() {
+    const db = await getDb();
+    if (!db) return null;
+
+    const escopos = await db.select().from(escopoAsBuilt);
+    const entregas = await db.select().from(entregasAsBuilt);
+
+    const totalModelos = escopos.length;
+    const comRvt = escopos.filter((e: any) => e.temRvtOriginal === 1).length;
+    const semRvt = totalModelos - comRvt;
+
+    // A model is considered covered if there's at least one VALIDATED delivery for it
+    const validadosIds = new Set(entregas.filter((e: any) => e.status === 'VALIDADO').map((e: any) => e.escopoId));
+    const modelosValidados = escopos.filter((e: any) => validadosIds.has(e.id)).length;
+
+    // A model is received if there's at least one RECEBIDO or VALIDADO delivery
+    const recebidosIds = new Set(entregas.filter((e: any) => ['RECEBIDO', 'VALIDADO', 'EM_REVISAO'].includes(e.status)).map((e: any) => e.escopoId));
+    const modelosRecebidos = escopos.filter((e: any) => recebidosIds.has(e.id)).length;
+
+    return {
+        totalModelos,
+        modelosValidados,
+        modelosRecebidos,
+        modelosPendentes: totalModelos - modelosRecebidos,
+        comRvt,
+        semRvt,
+        percentualCobertura: totalModelos > 0 ? (modelosValidados / totalModelos) * 100 : 0
     };
 }
 
@@ -917,4 +990,40 @@ export async function renumberSalasInEdificacao(
     }
 
     return roomsToShift.length;
+}
+
+// ============================================================================
+// AS-BUILT VERIFICATION FUNCTIONS
+// ============================================================================
+
+export async function getVerificacoes(salaId: number) {
+    const db = await getDb();
+    if (!db) return [];
+    return db.select().from(verificacaoModelo).where(eq(verificacaoModelo.salaId, salaId));
+}
+
+export async function upsertVerificacao(salaId: number, disciplina: string, status: string, observacao?: string | null) {
+    const db = await getDb();
+    if (!db) return null;
+
+    const existing = await db.select().from(verificacaoModelo)
+        .where(and(eq(verificacaoModelo.salaId, salaId), eq(verificacaoModelo.disciplina, disciplina)))
+        .limit(1);
+
+    if (existing.length > 0) {
+        return await db.update(verificacaoModelo)
+            .set({ status, observacao: observacao || null, updatedAt: new Date() })
+            .where(eq(verificacaoModelo.id, existing[0].id))
+            .returning();
+    } else {
+        return await db.insert(verificacaoModelo)
+            .values({
+                salaId,
+                disciplina,
+                status,
+                observacao: observacao || null,
+                updatedAt: new Date()
+            })
+            .returning();
+    }
 }

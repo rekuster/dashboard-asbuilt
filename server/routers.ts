@@ -1,3 +1,9 @@
+/*
+ * ESTE ARQUIVO É O "CARTEIRO" (ROTAS DA API).
+ * Ele organiza como as informações viajam entre o banco de dados e a tela que você vê.
+ * Se você pedir para ver o status dos modelos, este arquivo "pergunta" ao banco de dados e "entrega" a resposta para a tela.
+ */
+
 import { publicProcedure, router } from './_core/trpc';
 import {
     getKPIs,
@@ -26,6 +32,7 @@ import {
     deleteEntrega,
     getEntregasStats,
     getEntregasHistorico,
+    getAsBuiltStatus,
     getEscopos,
     upsertEscopo,
     deleteEscopo,
@@ -46,6 +53,8 @@ import {
     updateSala,
     deleteSala,
     renumberSalasInEdificacao,
+    getVerificacoes,
+    upsertVerificacao,
 } from './db';
 import { eq } from "drizzle-orm";
 import { handleExcelUpload } from './uploadHandler';
@@ -323,6 +332,7 @@ export const appRouter = router({
             .input(z.object({
                 id: z.number().optional(),
                 escopoId: z.number().nullable().optional(),
+                escopoIds: z.array(z.number()).optional(), // For batch registration
                 nomeDocumento: z.string(),
                 tipoDocumento: z.string(),
                 edificacao: z.string(),
@@ -357,6 +367,10 @@ export const appRouter = router({
             .query(async ({ input }) => {
                 return await getEntregasStats(input?.edificacao);
             }),
+
+        getAsBuiltStatus: publicProcedure.query(async () => {
+            return await getAsBuiltStatus();
+        }),
 
         // Escopo As-Built (Lista Mestra)
         getEscopos: publicProcedure.query(async () => {
@@ -504,6 +518,23 @@ export const appRouter = router({
 
                     return result[0];
                 });
+            }),
+
+        getVerificacoes: publicProcedure
+            .input(z.object({ salaId: z.number() }))
+            .query(async ({ input }) => {
+                return await getVerificacoes(input.salaId);
+            }),
+
+        upsertVerificacao: publicProcedure
+            .input(z.object({
+                salaId: z.number(),
+                disciplina: z.string(),
+                status: z.string(),
+                observacao: z.string().nullish(),
+            }))
+            .mutation(async ({ input }) => {
+                return await upsertVerificacao(input.salaId, input.disciplina, input.status, input.observacao);
             }),
     }),
 

@@ -23,12 +23,13 @@ export function ImageUpload({ bucketName, folderPath, onUploadComplete, currentI
 
             setUploading(true);
 
-            // Sanitize filename
+            // Sanitize filename and path
+            const sanitize = (str: string) => str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-0\/\._-]/g, '_');
             const fileExt = file.name.split('.').pop();
             const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
-            const filePath = `${folderPath}/${fileName}`;
+            const filePath = sanitize(`${folderPath}/${fileName}`);
 
-            const { data, error: uploadError } = await supabase.storage
+            const { error: uploadError } = await supabase.storage
                 .from(bucketName)
                 .upload(filePath, file);
 

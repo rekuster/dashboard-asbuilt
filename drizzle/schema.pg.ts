@@ -139,6 +139,8 @@ export const escopoAsBuilt = pgTable("escopoAsBuilt", {
     nomeModelo: text("nomeModelo").notNull(),       // "Hidro_BlocoA.rvt"
     nomeModeloFinal: text("nomeModeloFinal"),       // The expected final delivery model name
     descricao: text("descricao"),
+    temRvtOriginal: integer("temRvtOriginal").default(0), // 1=possui rvt de projeto, 0=não possui
+    pendenciaRvt: text("pendenciaRvt"),              // "Pedir ao projetista", "Gerar via IFC", etc.
     ativo: integer("ativo").default(1).notNull(),   // 1=ativo, 0=encerrado
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().notNull(),
@@ -179,6 +181,18 @@ export const entregasHistorico = pgTable("entregasHistorico", {
     descricao: text("descricao").notNull(), // The actual log message or comment
     usuario: text("usuario").default("Sistema").notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+/**
+ * As-Built Model Verification per room and discipline
+ */
+export const verificacaoModelo = pgTable("verificacaoModelo", {
+    id: serial("id").primaryKey(),
+    salaId: integer("salaId").notNull().references(() => salas.id, { onDelete: 'cascade' }),
+    disciplina: text("disciplina").notNull(),
+    status: text("status").default("PENDENTE").notNull(), // 'OK', 'PENDENTE', 'NAO_APLICAVEL'
+    observacao: text("observacao"),
+    updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type Project = typeof projects.$inferSelect;

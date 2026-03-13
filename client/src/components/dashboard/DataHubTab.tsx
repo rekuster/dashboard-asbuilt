@@ -1,3 +1,10 @@
+/*
+ * ESTE ARQUIVO GERENCIA O "DATAHUB" (CENTRAL DE DADOS).
+ * Aqui é onde você faz o controle sala por sala. 
+ * Eu adicionei uma nova coluna chamada "Modelos Req." que mostra quais disciplinas são obrigatórias para aquela sala específica.
+ * Isso ajuda você a saber o que precisa conferir no modelo 3D antes de liberar a sala.
+ */
+
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import {
@@ -41,7 +48,7 @@ export default function DataHubTab() {
     const utils = trpc.useUtils();
 
     // Data Fetching
-    const { data: salas = [], isLoading: salasLoading } = trpc.dashboard.getSalas.useQuery();
+    const { data: salas = [] } = trpc.dashboard.getSalas.useQuery();
     const { data: apontamentos = [] } = trpc.dashboard.getApontamentos.useQuery();
 
     // Mutations
@@ -191,7 +198,7 @@ export default function DataHubTab() {
     const uniqueDisciplinas = useMemo(() => Array.from(new Set(apontamentos.map((a: any) => a.disciplina))).sort() as string[], [apontamentos]);
     const uniqueResponsaveis = useMemo(() => Array.from(new Set(apontamentos.map((a: any) => a.responsavel))).filter(Boolean).sort() as string[], [apontamentos]);
 
-    if (salasLoading && salas.length === 0) {
+    if (salas.length === 0) {
         return <div className="p-8 text-center text-muted-foreground">Carregando tabelas pela primeira vez...</div>;
     }
 
@@ -260,15 +267,15 @@ export default function DataHubTab() {
                                 <Table>
                                     <TableHeader className="bg-slate-50">
                                         <TableRow>
-                                            <TableHead className="font-bold">Edificação</TableHead>
-                                            <TableHead className="font-bold">Pavimento</TableHead>
-                                            <TableHead className="font-bold">Setor</TableHead>
+                                            <TableHead className="font-bold w-[120px]">Edificação</TableHead>
+                                            <TableHead className="font-bold w-[100px]">Pavimento</TableHead>
+                                            <TableHead className="font-bold w-[70px]">Setor</TableHead>
                                             <TableHead className="font-bold">Sala</TableHead>
-                                            <TableHead className="text-center font-bold">Planta</TableHead>
-                                            <TableHead className="text-center font-bold">Augin?</TableHead>
-                                            <TableHead className="text-center font-bold">Tracker?</TableHead>
-                                            <TableHead className="text-center font-bold">QR Plast.?</TableHead>
-                                            <TableHead className="font-bold">Status RA</TableHead>
+                                            <TableHead className="text-center font-bold w-[60px]">Planta</TableHead>
+                                            <TableHead className="text-center font-bold w-[60px]">Augin?</TableHead>
+                                            <TableHead className="text-center font-bold w-[60px]">Tracker?</TableHead>
+                                            <TableHead className="text-center font-bold w-[80px]">QR Plast.?</TableHead>
+                                            <TableHead className="text-center font-bold w-[100px]">Status RA</TableHead>
                                         </TableRow>
                                         {/* Progress summary row */}
                                         <TableRow className="bg-slate-100/80 border-b-2 border-[#940707]/20">
@@ -370,10 +377,10 @@ export default function DataHubTab() {
                                                         </label>
                                                     </div>
                                                 </TableCell>
-                                                <TableCell>
-                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${sala.statusRA === 'LIBERADO PARA OBRA' ? 'bg-[#10b981] text-white' : 'bg-slate-100 text-slate-500'
+                                                <TableCell className="text-center">
+                                                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold tracking-tighter ${sala.statusRA === 'LIBERADO PARA OBRA' ? 'bg-[#10b981] text-white' : 'bg-slate-100 text-slate-500'
                                                         }`}>
-                                                        {sala.statusRA || 'PENDENTE'}
+                                                        {sala.statusRA ? (sala.statusRA === 'LIBERADO PARA OBRA' ? 'LIBERADO' : sala.statusRA) : 'PENDENTE'}
                                                     </span>
                                                 </TableCell>
                                             </TableRow>

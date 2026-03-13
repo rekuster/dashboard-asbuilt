@@ -35,7 +35,7 @@ export default function DataIntegrityAlert() {
                     <div className="mt-4 bg-background/50 rounded p-4 max-h-[300px] overflow-auto">
                         <h4 className="text-xs font-bold uppercase mb-2">Salas não encontradas no mapeamento:</h4>
                         <ul className="space-y-1">
-                            {validacao.apontamentosNaoMapeados.map((item, idx) => (
+                            {validacao.apontamentosNaoMapeados.map((item: any, idx: number) => (
                                 <li key={idx} className="text-xs flex justify-between border-b border-destructive/10 pb-1">
                                     <span>{item.sala} ({item.edificacao})</span>
                                     <span className="font-mono font-bold">{item.totalApontamentos} apontamentos</span>
