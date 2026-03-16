@@ -693,27 +693,35 @@ export async function getEntregasStats(edificacao?: string) {
     const db = await getDb();
     if (!db) return null;
 
-    let query = db.select().from(entregasAsBuilt);
+    // 1. Get total from Master List (escopo)
+    let escopoQuery = db.select().from(escopoAsBuilt);
     if (edificacao) {
-        (query as any) = query.where(eq(entregasAsBuilt.edificacao, edificacao));
+        (escopoQuery as any) = escopoQuery.where(eq(escopoAsBuilt.edificacao, edificacao));
     }
+    const escopos = await escopoQuery;
 
-    const all = await query;
-    const now = new Date();
+    // 2. Get delivery log
+    let entregaQuery = db.select().from(entregasAsBuilt);
+    if (edificacao) {
+        (entregaQuery as any) = entregaQuery.where(eq(entregasAsBuilt.edificacao, edificacao));
+    }
+    const entregas = await entregaQuery;
+    
+    // 3. Calculate "Mapeado" (Aguardando)
+    // It's the total models minus those that have at least one delivery recorded or validated
+    const deliveredEscopoIds = new Set(entregas.map((e: any) => e.escopoId).filter(Boolean));
+    const aguardando = escopos.length - deliveredEscopoIds.size;
 
     return {
-        total: all.length,
-        aguardando: all.filter((e: any) => e.status === 'AGUARDANDO').length,
-        recebidos: all.filter((e: any) => e.status === 'RECEBIDO').length,
-        emRevisao: all.filter((e: any) => e.status === 'EM_REVISAO').length,
-        validados: all.filter((e: any) => e.status === 'VALIDADO').length,
-        validadosParcial: all.filter((e: any) => e.status === 'VALIDADO_PARCIAL').length,
-        validadosRessalva: all.filter((e: any) => e.status === 'VALIDADO_RESSALVA').length,
-        rejeitados: all.filter((e: any) => e.status === 'REJEITADO').length,
-        atrasados: all.filter((e: any) =>
-            e.status === 'AGUARDANDO' &&
-            new Date(e.dataPrevista) < now
-        ).length,
+        total: escopos.length,
+        aguardando: aguardando,
+        recebidos: entregas.length, // Log entries
+        emRevisao: entregas.filter((e: any) => e.status === 'EM_REVISAO').length,
+        validados: entregas.filter((e: any) => e.status === 'VALIDADO').length,
+        validadosParcial: entregas.filter((e: any) => e.status === 'VALIDADO_PARCIAL').length,
+        validadosRessalva: entregas.filter((e: any) => e.status === 'VALIDADO_RESSALVA').length,
+        rejeitados: entregas.filter((e: any) => e.status === 'REJEITADO').length,
+        atrasados: 0 // Removed as requested
     };
 }
 
