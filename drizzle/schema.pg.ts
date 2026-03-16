@@ -169,6 +169,7 @@ export const entregasAsBuilt = pgTable("entregasAsBuilt", {
     descricao: text("descricao"),
     
     // Novas colunas para coordenação avançada
+    numeroEntrega: integer("numeroEntrega"),
     identificadorEntrega: text("identificadorEntrega"), // ex: "SM 10", "3ª Entrega"
     formato: text("formato"),                         // "rvt", "ifc", "dwg", "pdf"
     isModelo: integer("isModelo").default(0),           // 1=Sim, 0=Não

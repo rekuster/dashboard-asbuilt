@@ -1,0 +1,1 @@
+ALTER TABLE "entregasAsBuilt" ADD COLUMN "numeroEntrega" integer;

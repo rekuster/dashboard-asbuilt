@@ -203,12 +203,13 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
                             <Table>
                                 <TableHeader>
                                     <TableRow className="hover:bg-transparent border-slate-100 uppercase text-[10px] font-bold tracking-wider text-slate-500 italic">
+                                        <TableHead className="w-[50px]">Nº</TableHead>
                                         <TableHead className="w-[120px]">Data de Entrega</TableHead>
                                         <TableHead className="w-[120px]">Pacote / SM</TableHead>
                                         <TableHead>Responsável</TableHead>
                                         <TableHead>Edificação</TableHead>
                                         <TableHead>Disciplina</TableHead>
-                                        <TableHead className="w-[250px]">Documento Entregue</TableHead>
+                                        <TableHead className="w-[200px]">Documento Entregue</TableHead>
                                         <TableHead>Formato</TableHead>
                                         <TableHead>Modelo Base</TableHead>
                                         <TableHead>Ações pós Entrega</TableHead>
@@ -236,6 +237,9 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
                                                     className="hover:bg-slate-50/50 transition-colors border-slate-100 group cursor-pointer h-12"
                                                     onClick={() => handleViewDetail(entrega)}
                                                 >
+                                                    <TableCell className="text-[11px] font-bold text-slate-400">
+                                                        {entrega.numeroEntrega || "-"}
+                                                    </TableCell>
                                                     <TableCell className="text-[11px] font-bold text-slate-700">
                                                         {entrega.dataRecebimento ? dayjs(entrega.dataRecebimento).format('DD/MM/YYYY') : "-"}
                                                     </TableCell>
@@ -987,22 +991,10 @@ function EntregaDetailView({ entrega, onBack, onUpdate, onEdit, onDelete }: any)
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-6">
-                        <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
                             <div className="space-y-1">
-                                <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1"><Layers className="w-3 h-3" /> Modelo Base</span>
-                                <p className="font-semibold text-[#940707]">{entrega.modeloBaseReferencia || "-"}</p>
-                            </div>
-                            <div className="space-y-1">
-                                <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1"><Building2 className="w-3 h-3" /> Edificação</span>
-                                <p className="font-semibold text-slate-700">{entrega.edificacao}</p>
-                            </div>
-                            <div className="space-y-1">
-                                <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1"><Layers className="w-3 h-3" /> Disciplina</span>
-                                <p className="font-semibold text-slate-700">{entrega.disciplina}</p>
-                            </div>
-                            <div className="space-y-1">
-                                <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1"><Briefcase className="w-3 h-3" /> Fornecedor</span>
-                                <p className="font-semibold text-slate-700">{entrega.empresaResponsavel}</p>
+                                <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1">Nº Controle</span>
+                                <p className="font-bold text-[#940707]">{entrega.numeroEntrega || "-"}</p>
                             </div>
                             <div className="space-y-1">
                                 <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1"><FileText className="w-3 h-3" /> Pacote / SM</span>
@@ -1015,6 +1007,25 @@ function EntregaDetailView({ entrega, onBack, onUpdate, onEdit, onDelete }: any)
                             <div className="space-y-1">
                                 <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1"><Calendar className="w-3 h-3" /> Data de Entrega</span>
                                 <p className="font-semibold text-slate-700">{entrega.dataRecebimento ? dayjs(entrega.dataRecebimento).format('DD/MM/YYYY') : "Faltando"}</p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
+                            <div className="space-y-1">
+                                <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1"><Layers className="w-3 h-3" /> Modelo Base</span>
+                                <p className="font-semibold text-slate-700 truncate" title={entrega.modeloBaseReferencia}>{entrega.modeloBaseReferencia || "-"}</p>
+                            </div>
+                            <div className="space-y-1">
+                                <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1"><Building2 className="w-3 h-3" /> Edificação</span>
+                                <p className="font-semibold text-slate-700">{entrega.edificacao}</p>
+                            </div>
+                            <div className="space-y-1">
+                                <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1"><Layers className="w-3 h-3" /> Disciplina</span>
+                                <p className="font-semibold text-slate-700">{entrega.disciplina}</p>
+                            </div>
+                            <div className="space-y-1">
+                                <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1"><Briefcase className="w-3 h-3" /> Fornecedor</span>
+                                <p className="font-semibold text-slate-700">{entrega.empresaResponsavel}</p>
                             </div>
                         </div>
 
@@ -1166,6 +1177,7 @@ function EntregaForm({ onClose, entrega, selectedEdificacao }: any) {
         status: entrega?.status || "RECEBIDO",
         descricao: entrega?.descricao || "",
         // New coordination fields
+        numeroEntrega: entrega?.numeroEntrega || 0,
         identificadorEntrega: entrega?.identificadorEntrega || "",
         formato: entrega?.formato || "rvt",
         isModelo: entrega?.isModelo ?? (entrega?.tipoDocumento === 'rvt' ? 1 : 0),
@@ -1223,9 +1235,13 @@ function EntregaForm({ onClose, entrega, selectedEdificacao }: any) {
                     </div>
                 </div>
                 <form onSubmit={handleSubmit} className="p-8 space-y-6 overflow-y-auto flex-1 custom-scrollbar">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-2 md:col-span-2">
-                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Nome do Documento *</label>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Nº Controle</label>
+                            <Input type="number" value={formData.numeroEntrega} onChange={e => setFormData({ ...formData, numeroEntrega: parseInt(e.target.value) })} placeholder="0" className="rounded-xl border-slate-200" />
+                        </div>
+                        <div className="space-y-2 md:col-span-3">
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Nome do Documento / Arquivo *</label>
                             <Input required value={formData.nomeDocumento} onChange={e => setFormData({ ...formData, nomeDocumento: e.target.value })} placeholder="Ex: Planta de execução Nível 1" className="rounded-xl border-slate-200" />
                         </div>
                         <div className="space-y-2">

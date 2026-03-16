@@ -350,6 +350,7 @@ export const appRouter = router({
                 comentario: z.string().optional(),
                 
                 // Novos campos
+                numeroEntrega: z.number().optional(),
                 identificadorEntrega: z.string().optional(),
                 formato: z.string().optional(),
                 isModelo: z.number().optional(),
