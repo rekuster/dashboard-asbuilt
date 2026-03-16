@@ -360,65 +360,71 @@ export async function getApontamentosPorSemana(edificacao?: string) {
         ? sql<string>`to_char(${col}, 'IYYY-"W"IW')`
         : sql<string>`strftime('%Y-W%W', ${col} / 1000, 'unixepoch')`;
 
-    // 3. Query Appointments
-    let aQuery: any = db.select({
+    // 3. Query Appointments (count findings)
+    const weeklyApontamentos = await db.select({
         semana: weekFormat,
         count: sql<number>`count(*)`
-    }).from(apontamentos);
-    if (edificacao) aQuery = aQuery.where(eq(apontamentos.edificacao, edificacao));
-    const weeklyApontamentos = await aQuery.groupBy(weekFormat).orderBy(weekFormat);
+    }).from(apontamentos)
+        .where(edificacao ? eq(apontamentos.edificacao, edificacao) : sql`TRUE`)
+        .groupBy(weekFormat);
 
-    // 4. Query Verified Rooms (strictly from dataVerificada column H AND dataVerificacao2)
-    // We use a subquery with UNION ALL to count both verification dates as separate events
-    const v1Sub = db.select({
+    // 4. Query Verified Rooms - Date 1 (dataVerificada)
+    const weeklyV1 = await db.select({
         semana: getWeekFormat(salas.dataVerificada),
-    }).from(salas).where(and(
-        sql`${salas.dataVerificada} IS NOT NULL`,
-        edificacao ? eq(salas.edificacao, edificacao) : sql`TRUE`
-    ));
+        count: sql<number>`count(*)`
+    }).from(salas)
+        .where(and(
+            sql`${salas.dataVerificada} IS NOT NULL`,
+            edificacao ? eq(salas.edificacao, edificacao) : sql`TRUE`
+        ))
+        .groupBy(getWeekFormat(salas.dataVerificada));
 
-    const v2Sub = db.select({
+    // 5. Query Verified Rooms - Date 2 (dataVerificacao2)
+    const weeklyV2 = await db.select({
         semana: getWeekFormat(salas.dataVerificacao2),
-    }).from(salas).where(and(
-        sql`${salas.dataVerificacao2} IS NOT NULL`,
-        edificacao ? eq(salas.edificacao, edificacao) : sql`TRUE`
-    ));
+        count: sql<number>`count(*)`
+    }).from(salas)
+        .where(and(
+            sql`${salas.dataVerificacao2} IS NOT NULL`,
+            edificacao ? eq(salas.edificacao, edificacao) : sql`TRUE`
+        ))
+        .groupBy(getWeekFormat(salas.dataVerificacao2));
 
-    // Combine them
-    const combinedVerificacoes = await db.execute(sql`
-        SELECT semana, COUNT(*) as count
-        FROM (
-            ${v1Sub}
-            UNION ALL
-            ${v2Sub}
-        ) t
-        GROUP BY semana
-    `);
-
-    // Normalize result (Postgres results from execute are slightly different)
-    const weeklyVerificacoes = (combinedVerificacoes as any).map((r: any) => ({
-        semana: r.semana,
-        count: Number(r.count)
-    }));
-
-    // 5. Merge results
+    // 6. Merge results
     const weeksMap = new Map<string, { semana: string; count: number; verifiedRooms: number }>();
 
+    // Add appointments
     weeklyApontamentos.forEach((a: any) => {
         weeksMap.set(a.semana, { semana: a.semana, count: Number(a.count), verifiedRooms: 0 });
     });
 
-    weeklyVerificacoes.forEach((v: any) => {
+    // Add V1 verifications
+    weeklyV1.forEach((v: any) => {
         const existing = weeksMap.get(v.semana);
         if (existing) {
-            existing.verifiedRooms = Number(v.count);
+            existing.verifiedRooms += Number(v.count);
+        } else {
+            weeksMap.set(v.semana, { semana: v.semana, count: 0, verifiedRooms: Number(v.count) });
+        }
+    });
+
+    // Add V2 verifications
+    weeklyV2.forEach((v: any) => {
+        const existing = weeksMap.get(v.semana);
+        if (existing) {
+            existing.verifiedRooms += Number(v.count);
         } else {
             weeksMap.set(v.semana, { semana: v.semana, count: 0, verifiedRooms: Number(v.count) });
         }
     });
 
     return Array.from(weeksMap.values())
-        .map(w => ({ ...w, count: Number(w.count), verifiedRooms: Number(w.verifiedRooms) }))
+        .map(w => ({
+            semana: w.semana || 'Sem Data',
+            count: Number(w.count),
+            verifiedRooms: Number(w.verifiedRooms)
+        }))
+        .filter(w => w.semana !== 'Sem Data')
         .sort((a, b) => a.semana.localeCompare(b.semana));
 }
 
