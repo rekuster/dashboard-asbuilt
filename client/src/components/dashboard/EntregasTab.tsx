@@ -233,29 +233,27 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
                                             return (
                                                 <TableRow
                                                     key={entrega.id}
-                                                    className="hover:bg-slate-50/50 transition-colors border-slate-100 group cursor-pointer text-xs"
+                                                    className="hover:bg-slate-50/50 transition-colors border-slate-100 group cursor-pointer h-12"
                                                     onClick={() => handleViewDetail(entrega)}
                                                 >
-                                                    <TableCell className="font-semibold text-slate-700">
+                                                    <TableCell className="text-[11px] font-bold text-slate-700">
                                                         {entrega.dataRecebimento ? dayjs(entrega.dataRecebimento).format('DD/MM/YYYY') : "-"}
                                                     </TableCell>
-                                                    <TableCell className="font-bold text-[#940707]">
+                                                    <TableCell className="text-[11px] font-bold text-[#940707]">
                                                         {entrega.identificadorEntrega || "-"}
                                                     </TableCell>
-                                                    <TableCell className="text-slate-600 font-medium">{entrega.empresaResponsavel}</TableCell>
-                                                    <TableCell className="text-slate-600">{entrega.edificacao}</TableCell>
-                                                    <TableCell className="text-slate-600">{entrega.disciplina}</TableCell>
-                                                    <TableCell className="font-semibold text-slate-700">{entrega.nomeDocumento}</TableCell>
-                                                    <TableCell>
-                                                        <span className="text-[10px] text-slate-400 uppercase tracking-tighter italic">
-                                                            {DOC_TYPES[entrega.formato] || entrega.formato || entrega.tipoDocumento}
-                                                        </span>
+                                                    <TableCell className="text-[11px] font-bold text-slate-700">{entrega.empresaResponsavel}</TableCell>
+                                                    <TableCell className="text-[11px] font-bold text-slate-700">{entrega.edificacao}</TableCell>
+                                                    <TableCell className="text-[11px] font-bold text-slate-700">{entrega.disciplina}</TableCell>
+                                                    <TableCell className="text-[11px] font-bold text-slate-700">{entrega.nomeDocumento}</TableCell>
+                                                    <TableCell className="text-[11px] font-bold text-slate-400 italic">
+                                                        {DOC_TYPES[entrega.formato] || entrega.formato || entrega.tipoDocumento}
                                                     </TableCell>
-                                                    <TableCell className="text-xs text-slate-500 truncate max-w-[120px]">{entrega.modeloBaseReferencia || "-"}</TableCell>
-                                                    <TableCell className="text-xs text-rose-500 font-bold">{entrega.acoesNecessarias || "-"}</TableCell>
+                                                    <TableCell className="text-[11px] font-bold text-slate-700 truncate max-w-[120px]">{entrega.modeloBaseReferencia || "-"}</TableCell>
+                                                    <TableCell className="text-[11px] font-bold text-rose-500">{entrega.acoesNecessarias || "-"}</TableCell>
                                                     <TableCell>
-                                                        <div className={`px-3 py-1 rounded-full border text-[9px] font-bold uppercase flex items-center gap-1.5 w-fit ${statusInfo.color}`}>
-                                                            <StatusIcon className="w-3 h-3" />
+                                                        <div className={`px-2 py-0.5 rounded-full border text-[9px] font-black uppercase flex items-center gap-1 w-fit ${statusInfo.color}`}>
+                                                            <StatusIcon className="w-2.5 h-2.5" />
                                                             {statusInfo.label}
                                                         </div>
                                                     </TableCell>
@@ -399,16 +397,16 @@ function ScopeManagementView({ entregas, selectedEdificacao }: { entregas: any[]
                                     const counts = entregasPerEscopo[esc.id] || { total: 0, validados: 0, conformes: 0 };
                                     const progress = counts.total > 0 ? Math.round((counts.validados / counts.total) * 100) : 0;
                                     return (
-                                        <TableRow key={esc.id} className="hover:bg-slate-50/50 cursor-pointer group text-xs" onClick={() => setSelectedEscopo(esc)}>
-                                            <TableCell className="font-semibold text-slate-500">01/06/2026</TableCell>
-                                            <TableCell className="font-bold text-[#940707] max-w-[300px] truncate" title={esc.nomeModeloFinal}>{esc.nomeModeloFinal || "SEM NOME DEFINIDO"}</TableCell>
-                                            <TableCell className="font-semibold text-slate-700">{esc.empresa}</TableCell>
-                                            <TableCell className="font-medium text-slate-600">{esc.edificacao}</TableCell>
+                                        <TableRow key={esc.id} className="hover:bg-slate-50/50 cursor-pointer group h-12" onClick={() => setSelectedEscopo(esc)}>
+                                            <TableCell className="text-[11px] font-bold text-slate-500">01/06/2026</TableCell>
+                                            <TableCell className="text-[11px] font-bold text-[#940707] max-w-[300px] truncate" title={esc.nomeModeloFinal}>{esc.nomeModeloFinal || "SEM NOME DEFINIDO"}</TableCell>
+                                            <TableCell className="text-[11px] font-bold text-slate-700">{esc.empresa}</TableCell>
+                                            <TableCell className="text-[11px] font-bold text-slate-700">{esc.edificacao}</TableCell>
                                             <TableCell>
-                                                <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-bold">{esc.disciplina}</span>
+                                                <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[9px] font-black uppercase">{esc.disciplina}</span>
                                             </TableCell>
                                             <TableCell className="text-center">
-                                                <Badge variant={progress === 100 ? "secondary" : "outline"} className={progress === 100 ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}>
+                                                <Badge variant={progress === 100 ? "secondary" : "outline"} className={`text-[9px] font-black px-2 py-0.5 ${progress === 100 ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-400 border-slate-200"}`}>
                                                     {progress === 100 ? "VALIDADO" : "PENDENTE"}
                                                 </Badge>
                                             </TableCell>
