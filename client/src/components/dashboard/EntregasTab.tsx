@@ -42,13 +42,16 @@ const STATUS_LABELS: Record<string, { label: string, color: string, icon: any }>
     'RECEBIDO': { label: 'Recebido', color: 'bg-blue-100 text-blue-700 border-blue-200', icon: FileText },
     'EM_REVISAO': { label: 'Em Revisão', color: 'bg-purple-100 text-purple-700 border-purple-200', icon: Search },
     'VALIDADO': { label: 'Validado', color: 'bg-emerald-100 text-emerald-700 border-emerald-200', icon: CheckCircle2 },
+    'VALIDADO_RESSALVA': { label: 'Validado c/ Ressalva', color: 'bg-emerald-50 text-emerald-600 border-emerald-100', icon: ClipboardCheck },
     'REJEITADO': { label: 'Rejeitado', color: 'bg-rose-100 text-rose-700 border-rose-200', icon: XCircle },
 };
 
 const DOC_TYPES: Record<string, string> = {
     'relatorio': 'Relatório',
     'dwg': 'DWG',
-    'rvt': 'Revit (RVT)'
+    'rvt': 'Revit (RVT)',
+    'ifc': 'IFC',
+    'pdf': 'PDF'
 };
 
 export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao?: string }) {
@@ -58,6 +61,7 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
     const [isBatchFormOpen, setIsBatchFormOpen] = useState(false);
     const [viewingDetail, setViewingDetail] = useState<any>(null);
     const [activeTab, setActiveTab] = useState("list");
+    const [viewMode, setViewMode] = useState<"table" | "packets">("table");
 
     const utils = trpc.useUtils();
     const { data: entregas = [], isLoading } = trpc.dashboard.getEntregas.useQuery();
@@ -114,26 +118,49 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
                 <KPICard title="Total Previsto" value={stats?.total || 0} subtitle="Documentos mapeados" />
                 <KPICard title="Aguardando" value={stats?.aguardando || 0} subtitle="Ainda não recebidos" className="border-amber-200 bg-amber-50/50" />
                 <KPICard title="Recebidos" value={stats?.recebidos || 0} subtitle="Aguardando revisão" className="border-blue-200 bg-blue-50/50" />
-                <KPICard title="Validados" value={stats?.validados || 0} subtitle="Aprovados final" className="border-emerald-200 bg-emerald-50/50" />
+                <KPICard title="Validados" value={(stats?.validados || 0) + (stats?.validadosRessalva || 0)} subtitle="Aprovados (Total)" className="border-emerald-200 bg-emerald-50/50" />
                 <KPICard title="Rejeitados" value={stats?.rejeitados || 0} subtitle="Necessitam correção" className="border-rose-200 bg-rose-50/50" />
                 <KPICard title="Atrasados" value={stats?.atrasados || 0} subtitle="Prazo expirado" className="border-rose-100 bg-rose-50/30 text-rose-600" />
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid grid-cols-3 w-full max-w-2xl bg-slate-100 p-1 rounded-xl mb-6">
-                    <TabsTrigger value="list" className="rounded-lg data-[state=active]:bg-[#940707] data-[state=active]:text-white">
-                        <FileText className="w-4 h-4 mr-2" />
-                        Lista de Entregas
-                    </TabsTrigger>
-                    <TabsTrigger value="scope" className="rounded-lg data-[state=active]:bg-[#940707] data-[state=active]:text-white">
-                        <Layers className="w-4 h-4 mr-2" />
-                        Gestão de Escopo
-                    </TabsTrigger>
-                    <TabsTrigger value="validation" className="rounded-lg data-[state=active]:bg-[#940707] data-[state=active]:text-white">
-                        <ClipboardCheck className="w-4 h-4 mr-2" />
-                        Validação por Sala
-                    </TabsTrigger>
-                </TabsList>
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                    <TabsList className="grid grid-cols-3 w-full max-w-2xl bg-slate-100 p-1 rounded-xl">
+                        <TabsTrigger value="list" className="rounded-lg data-[state=active]:bg-[#940707] data-[state=active]:text-white">
+                            <FileText className="w-4 h-4 mr-2" />
+                            Lista de Entregas
+                        </TabsTrigger>
+                        <TabsTrigger value="scope" className="rounded-lg data-[state=active]:bg-[#940707] data-[state=active]:text-white">
+                            <Layers className="w-4 h-4 mr-2" />
+                            Gestão de Escopo
+                        </TabsTrigger>
+                        <TabsTrigger value="validation" className="rounded-lg data-[state=active]:bg-[#940707] data-[state=active]:text-white">
+                            <ClipboardCheck className="w-4 h-4 mr-2" />
+                            Validação por Sala
+                        </TabsTrigger>
+                    </TabsList>
+
+                    {activeTab === "list" && (
+                        <div className="flex bg-slate-100 p-1 rounded-lg self-end">
+                            <Button 
+                                variant={viewMode === "table" ? "ghost" : "ghost"} 
+                                className={`h-8 px-3 rounded-md text-xs font-medium transition-all ${viewMode === "table" ? "bg-white shadow-sm text-[#940707]" : "text-slate-500"}`}
+                                onClick={() => setViewMode("table")}
+                            >
+                                <Layers className="w-3.5 h-3.5 mr-1.5" />
+                                Individual
+                            </Button>
+                            <Button 
+                                variant={viewMode === "packets" ? "ghost" : "ghost"} 
+                                className={`h-8 px-3 rounded-md text-xs font-medium transition-all ${viewMode === "packets" ? "bg-white shadow-sm text-[#940707]" : "text-slate-500"}`}
+                                onClick={() => setViewMode("packets")}
+                            >
+                                <Briefcase className="w-3.5 h-3.5 mr-1.5" />
+                                Por Pacote (SM)
+                            </Button>
+                        </div>
+                    )}
+                </div>
 
                 <TabsContent value="list" className="space-y-4">
                     <Card className="border-none shadow-xl bg-white/70 backdrop-blur-md">
@@ -972,7 +999,7 @@ function EntregaDetailView({ entrega, onBack, onUpdate, onEdit, onDelete }: any)
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-6">
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
                             <div className="space-y-1">
                                 <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1"><Building2 className="w-3 h-3" /> Edificação</span>
                                 <p className="font-semibold text-slate-700">{entrega.edificacao}</p>
@@ -982,17 +1009,83 @@ function EntregaDetailView({ entrega, onBack, onUpdate, onEdit, onDelete }: any)
                                 <p className="font-semibold text-slate-700">{entrega.disciplina}</p>
                             </div>
                             <div className="space-y-1">
-                                <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1"><Briefcase className="w-3 h-3" /> Empreiteiro</span>
+                                <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1"><Briefcase className="w-3 h-3" /> Fornecedor</span>
                                 <p className="font-semibold text-slate-700">{entrega.empresaResponsavel}</p>
                             </div>
                             <div className="space-y-1">
-                                <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1"><Calendar className="w-3 h-3" /> Data Prevista</span>
-                                <p className="font-semibold text-slate-700">{dayjs(entrega.dataPrevista).format('DD/MM/YYYY')}</p>
+                                <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1"><FileText className="w-3 h-3" /> Identificador / SM</span>
+                                <p className="font-semibold text-[#940707]">{entrega.identificadorEntrega || "-"}</p>
+                            </div>
+                            <div className="space-y-1">
+                                <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1"><History className="w-3 h-3" /> Formato</span>
+                                <Badge variant="outline" className="font-bold uppercase bg-slate-50">{entrega.formato || "-"}</Badge>
+                            </div>
+                            <div className="space-y-1">
+                                <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1"><Calendar className="w-3 h-3" /> Recebido em</span>
+                                <p className="font-semibold text-slate-700">{entrega.dataRecebimento ? dayjs(entrega.dataRecebimento).format('DD/MM/YYYY') : "Pendente"}</p>
                             </div>
                         </div>
+
+                        {entrega.isModelo === 1 && (
+                            <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-2xl space-y-3">
+                                <h4 className="text-xs font-bold text-blue-700 uppercase flex items-center gap-2">
+                                    <Layers className="w-4 h-4" /> Coordenação Técnica (BEP)
+                                </h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase">Modelo Base Referência</span>
+                                        <p className="text-sm font-medium text-slate-600 line-clamp-1" title={entrega.modeloBaseReferencia}>{entrega.modeloBaseReferencia || "Não informado"}</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase">Ações Necessárias</span>
+                                        <p className="text-sm font-bold text-rose-600">{entrega.acoesNecessarias || "Nenhuma ação pendente"}</p>
+                                    </div>
+                                </div>
+                                
+                                <div className="pt-2">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase">Checklist BEP as-built</span>
+                                        <span className="text-[10px] font-bold text-blue-600">
+                                            {(() => {
+                                                try {
+                                                    const cb = JSON.parse(entrega.checkpointBep || '{}');
+                                                    const total = 5;
+                                                    const checked = Object.values(cb).filter(v => v === true).length;
+                                                    return `${checked}/${total} itens ok`;
+                                                } catch (e) { return "0/5 itens ok"; }
+                                            })()}
+                                        </span>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        {[
+                                            { id: 'geo', label: 'Georreferenciamento ok' },
+                                            { id: 'param', label: 'Parâmetros preenchidos' },
+                                            { id: 'naming', label: 'Nomenclatura BEP' },
+                                            { id: 'lod', label: 'LOD 500 (As-Built)' },
+                                            { id: 'clash', label: 'Coordenação s/ Interferências' }
+                                        ].map(item => {
+                                            let isChecked = false;
+                                            try {
+                                                const cb = JSON.parse(entrega.checkpointBep || '{}');
+                                                isChecked = cb[item.id] === true;
+                                            } catch (e) {}
+                                            return (
+                                                <div key={item.id} className="flex items-center gap-2 text-xs">
+                                                    {isChecked ? <CheckCircle2 className="w-3 h-3 text-emerald-500" /> : <Clock className="w-3 h-3 text-slate-300" />}
+                                                    <span className={isChecked ? "text-slate-700" : "text-slate-400 italic"}>{item.label}</span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         <div className="pt-4 border-t border-slate-100 space-y-2">
-                            <span className="text-xs font-bold text-slate-400 uppercase">Descrição / Notas</span>
-                            <p className="text-sm text-slate-600 leading-relaxed bg-slate-50 p-4 rounded-xl">{entrega.descricao || "Nenhuma descrição fornecida."}</p>
+                            <span className="text-xs font-bold text-slate-400 uppercase">Observações / Notas do Agente</span>
+                            <p className="text-sm text-slate-600 leading-relaxed bg-slate-50 p-4 rounded-xl italic">
+                                {entrega.descricao || "Nenhuma descrição fornecida."}
+                            </p>
                         </div>
                     </CardContent>
                 </Card>
@@ -1077,9 +1170,16 @@ function EntregaForm({ onClose, entrega, selectedEdificacao }: any) {
         disciplina: entrega?.disciplina || "",
         empresaResponsavel: entrega?.empresaResponsavel || "",
         dataPrevista: entrega?.dataPrevista ? dayjs(entrega.dataPrevista).format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD'),
-        dataRecebimento: entrega?.dataRecebimento ? dayjs(entrega.dataRecebimento).format('YYYY-MM-DD') : "",
-        status: entrega?.status || "AGUARDANDO",
+        dataRecebimento: entrega?.dataRecebimento ? dayjs(entrega.dataRecebimento).format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD'),
+        status: entrega?.status || "RECEBIDO",
         descricao: entrega?.descricao || "",
+        // New coordination fields
+        identificadorEntrega: entrega?.identificadorEntrega || "",
+        formato: entrega?.formato || "rvt",
+        isModelo: entrega?.isModelo ?? (entrega?.tipoDocumento === 'rvt' ? 1 : 0),
+        modeloBaseReferencia: entrega?.modeloBaseReferencia || "",
+        acoesNecessarias: entrega?.acoesNecessarias || "",
+        checkpointBep: entrega?.checkpointBep || JSON.stringify({ geo: false, param: false, naming: false, lod: false, clash: false }),
     });
 
     const [selectedEscopoIds, setSelectedEscopoIds] = useState<number[]>(entrega?.escopoId ? [entrega.escopoId] : []);
@@ -1156,6 +1256,76 @@ function EntregaForm({ onClose, entrega, selectedEdificacao }: any) {
                             <label className="text-xs font-bold uppercase text-slate-500 ml-1">Edificação</label>
                             <Input value={formData.edificacao} onChange={e => setFormData({ ...formData, edificacao: e.target.value })} placeholder="Ex: Bloco A" className="rounded-xl border-slate-200" />
                         </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Identificador / SM</label>
+                            <Input value={formData.identificadorEntrega} onChange={e => setFormData({ ...formData, identificadorEntrega: e.target.value })} placeholder="Ex: SM 10" className="rounded-xl border-slate-200" />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Formato</label>
+                            <select className="flex h-10 w-full rounded-xl border border-slate-200 bg-background px-3 py-2 text-sm" value={formData.formato} onChange={e => setFormData({ ...formData, formato: e.target.value })}>
+                                <option value="rvt">Revit (RVT)</option>
+                                <option value="ifc">IFC</option>
+                                <option value="dwg">DWG</option>
+                                <option value="pdf">PDF</option>
+                            </select>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">É um Modelo BIM? *</label>
+                            <select 
+                                className="flex h-10 w-full rounded-xl border border-slate-200 bg-background px-3 py-2 text-sm"
+                                value={formData.isModelo}
+                                onChange={e => setFormData({ ...formData, isModelo: parseInt(e.target.value) })}
+                            >
+                                <option value={1}>Sim</option>
+                                <option value={0}>Não</option>
+                            </select>
+                        </div>
+
+                        {formData.isModelo === 1 && (
+                            <div className="md:col-span-2 p-4 bg-blue-50/50 border border-blue-100 rounded-2xl space-y-4">
+                                <h4 className="text-xs font-bold text-blue-700 uppercase flex items-center gap-2">
+                                    <Layers className="w-4 h-4" /> Coordenação Técnica (BEP)
+                                </h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Modelo Base Referência</label>
+                                        <Input value={formData.modeloBaseReferencia} onChange={e => setFormData({ ...formData, modeloBaseReferencia: e.target.value })} placeholder="Ex: Nome do RVT no Projeto" className="rounded-xl border-slate-200 bg-white" />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Ações Necessárias (RVT)</label>
+                                        <Input value={formData.acoesNecessarias} onChange={e => setFormData({ ...formData, acoesNecessarias: e.target.value })} placeholder="Ex: Pedir RVT nativo" className="rounded-xl border-slate-200 bg-white" />
+                                    </div>
+                                </div>
+                                
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Checklist Técnico BEP</label>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-white p-3 rounded-xl border border-slate-100">
+                                        {[
+                                            { id: 'geo', label: 'Georreferenciamento ok' },
+                                            { id: 'param', label: 'Parâmetros preenchidos' },
+                                            { id: 'naming', label: 'Nomenclatura BEP' },
+                                            { id: 'lod', label: 'LOD 500 (As-Built)' },
+                                            { id: 'clash', label: 'Coordenação s/ Interferências' }
+                                        ].map(item => {
+                                            const cb = JSON.parse(formData.checkpointBep);
+                                            return (
+                                                <div key={item.id} className="flex items-center gap-2">
+                                                    <Checkbox 
+                                                        id={`check-${item.id}`}
+                                                        checked={cb[item.id] === true}
+                                                        onCheckedChange={(checked: boolean) => {
+                                                            const newCb = { ...cb, [item.id]: checked };
+                                                            setFormData({ ...formData, checkpointBep: JSON.stringify(newCb) });
+                                                        }}
+                                                    />
+                                                    <label htmlFor={`check-${item.id}`} className="text-xs text-slate-600 cursor-pointer">{item.label}</label>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                         {isNew && relevantEscopos.length > 0 && (
                             <div className="space-y-2 md:col-span-2 bg-slate-50 p-4 rounded-2xl border border-slate-100">
@@ -1227,12 +1397,12 @@ function BatchEntregaForm({ selectedEdificacao, onClose }: { selectedEdificacao?
         status: "RECEBIDO"
     });
 
-    const empresas = useMemo(() => {
+    const empresas = useMemo<string[]>(() => {
         const set = new Set(escopos.map((e: any) => e.empresa));
-        return Array.from(set).sort();
+        return Array.from(set).sort() as string[];
     }, [escopos]);
 
-    const filteredEscopos = useMemo(() => {
+    const filteredEscopos = useMemo<any[]>(() => {
         return escopos.filter((e: any) => 
             e.empresa === selectedEmpresa && 
             (!selectedEdificacao || e.edificacao === selectedEdificacao)
@@ -1292,7 +1462,7 @@ function BatchEntregaForm({ selectedEdificacao, onClose }: { selectedEdificacao?
                                 required
                             >
                                 <option value="">Selecione a empresa...</option>
-                                {empresas.map(emp => <option key={emp} value={emp}>{emp}</option>)}
+                                {empresas.map((emp: string) => <option key={emp} value={emp}>{emp}</option>)}
                             </select>
                         </div>
                         <div className="space-y-1.5">

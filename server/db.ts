@@ -594,6 +594,13 @@ export async function upsertEntrega(data: any) {
                         edificacao: commonValues.edificacao || esc.edificacao,
                         disciplina: commonValues.disciplina || esc.disciplina,
                         empresaResponsavel: commonValues.empresaResponsavel || esc.empresa,
+                        identificadorEntrega: commonValues.identificadorEntrega || null,
+                        formato: commonValues.formato || null,
+                        isModelo: commonValues.isModelo ?? 0,
+                        modeloBaseReferencia: commonValues.modeloBaseReferencia || null,
+                        acoesNecessarias: commonValues.acoesNecessarias || null,
+                        checkpointBep: commonValues.checkpointBep || null,
+                        avancoFisico: commonValues.avancoFisico || null,
                         createdAt: new Date(),
                         updatedAt: new Date()
                     })
@@ -700,6 +707,7 @@ export async function getEntregasStats(edificacao?: string) {
         recebidos: all.filter((e: any) => e.status === 'RECEBIDO').length,
         emRevisao: all.filter((e: any) => e.status === 'EM_REVISAO').length,
         validados: all.filter((e: any) => e.status === 'VALIDADO').length,
+        validadosRessalva: all.filter((e: any) => e.status === 'VALIDADO_RESSALVA').length,
         rejeitados: all.filter((e: any) => e.status === 'REJEITADO').length,
         atrasados: all.filter((e: any) =>
             e.status === 'AGUARDANDO' &&

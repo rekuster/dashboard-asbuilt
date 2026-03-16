@@ -163,10 +163,20 @@ export const entregasAsBuilt = pgTable("entregasAsBuilt", {
     periodoInicio: timestamp("periodoInicio"),
     periodoFim: timestamp("periodoFim"),
     status: text("status").default("AGUARDANDO").notNull(),
-    resultado: text("resultado"),                   // 'CONFORME' | 'NAO_CONFORME' | null
+    resultado: text("resultado"),                   // 'CONFORME' | 'NAO_CONFORME' | 'VERIFICADA_RESSALVA' | null
     dataVerificacao: timestamp("dataVerificacao"),
     apontamentosVerificacao: text("apontamentosVerificacao"),
     descricao: text("descricao"),
+    
+    // Novas colunas para coordenação avançada
+    identificadorEntrega: text("identificadorEntrega"), // ex: "SM 10", "3ª Entrega"
+    formato: text("formato"),                         // "rvt", "ifc", "dwg", "pdf"
+    isModelo: integer("isModelo").default(0),           // 1=Sim, 0=Não
+    modeloBaseReferencia: text("modeloBaseReferencia"),
+    acoesNecessarias: text("acoesNecessarias"),         // pendências geradas (ex: "Pedir RVT")
+    checkpointBep: text("checkpointBep"),               // JSON string para checklist do BEP
+    avancoFisico: text("avancoFisico"),                 // Detalhamento de avanço por sala/pavimento
+    
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });

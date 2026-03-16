@@ -343,8 +343,20 @@ export const appRouter = router({
                 periodoInicio: z.string().or(z.date()).nullable().optional(),
                 periodoFim: z.string().or(z.date()).nullable().optional(),
                 status: z.string(),
+                resultado: z.string().nullable().optional(),
+                dataVerificacao: z.string().or(z.date()).nullable().optional(),
+                apontamentosVerificacao: z.string().nullable().optional(),
                 descricao: z.string().nullish(),
                 comentario: z.string().optional(),
+                
+                // Novos campos
+                identificadorEntrega: z.string().optional(),
+                formato: z.string().optional(),
+                isModelo: z.number().optional(),
+                modeloBaseReferencia: z.string().optional(),
+                acoesNecessarias: z.string().optional(),
+                checkpointBep: z.string().optional(),
+                avancoFisico: z.string().optional(),
             }))
             .mutation(async ({ input }) => {
                 return await upsertEntrega(input);
