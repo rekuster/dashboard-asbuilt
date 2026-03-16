@@ -355,10 +355,10 @@ export async function getApontamentosPorSemana(edificacao?: string) {
         ? sql<string>`to_char(${dayCol}, 'IYYY-"W"IW')`
         : sql<string>`strftime('%Y-W%W', ${dayCol}, 'unixepoch')`;
 
-    // 2. Verified Rooms Data and Weekly format (strictly dataVerificada column H)
-    const salasWeekFormat = isPostgres
-        ? sql<string>`to_char(${salas.dataVerificada}, 'IYYY-"W"IW')`
-        : sql<string>`strftime('%Y-W%W', ${salas.dataVerificada} / 1000, 'unixepoch')`;
+    // Helper for week format
+    const getWeekFormat = (col: any) => isPostgres
+        ? sql<string>`to_char(${col}, 'IYYY-"W"IW')`
+        : sql<string>`strftime('%Y-W%W', ${col} / 1000, 'unixepoch')`;
 
     // 3. Query Appointments
     let aQuery: any = db.select({
@@ -368,14 +368,38 @@ export async function getApontamentosPorSemana(edificacao?: string) {
     if (edificacao) aQuery = aQuery.where(eq(apontamentos.edificacao, edificacao));
     const weeklyApontamentos = await aQuery.groupBy(weekFormat).orderBy(weekFormat);
 
-    // 4. Query Verified Rooms (strictly from dataVerificada column H)
-    let sQuery: any = db.select({
-        semana: salasWeekFormat,
-        count: sql<number>`count(*)`
-    }).from(salas).where(sql`${salas.dataVerificada} IS NOT NULL`);
+    // 4. Query Verified Rooms (strictly from dataVerificada column H AND dataVerificacao2)
+    // We use a subquery with UNION ALL to count both verification dates as separate events
+    const v1Sub = db.select({
+        semana: getWeekFormat(salas.dataVerificada),
+    }).from(salas).where(and(
+        sql`${salas.dataVerificada} IS NOT NULL`,
+        edificacao ? eq(salas.edificacao, edificacao) : sql`TRUE`
+    ));
 
-    if (edificacao) sQuery = sQuery.where(eq(salas.edificacao, edificacao));
-    const weeklyVerificacoes = await sQuery.groupBy(salasWeekFormat).orderBy(salasWeekFormat);
+    const v2Sub = db.select({
+        semana: getWeekFormat(salas.dataVerificacao2),
+    }).from(salas).where(and(
+        sql`${salas.dataVerificacao2} IS NOT NULL`,
+        edificacao ? eq(salas.edificacao, edificacao) : sql`TRUE`
+    ));
+
+    // Combine them
+    const combinedVerificacoes = await db.execute(sql`
+        SELECT semana, COUNT(*) as count
+        FROM (
+            ${v1Sub}
+            UNION ALL
+            ${v2Sub}
+        ) t
+        GROUP BY semana
+    `);
+
+    // Normalize result (Postgres results from execute are slightly different)
+    const weeklyVerificacoes = (combinedVerificacoes as any).map((r: any) => ({
+        semana: r.semana,
+        count: Number(r.count)
+    }));
 
     // 5. Merge results
     const weeksMap = new Map<string, { semana: string; count: number; verifiedRooms: number }>();

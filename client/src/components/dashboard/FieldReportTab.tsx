@@ -345,7 +345,7 @@ export default function FieldReportTab() {
     };
 
     return (
-        <div className="space-y-6 max-w-lg mx-auto pb-20">
+        <div className="space-y-6 max-w-6xl mx-auto pb-20">
             {/* Status Bar */}
             <div className={`flex items-center justify-between p-3 rounded-xl border ${isOnline ? "bg-emerald-50 border-emerald-100 text-emerald-700" : "bg-orange-50 border-orange-100 text-orange-700"
                 }`}>
@@ -366,265 +366,310 @@ export default function FieldReportTab() {
                 )}
             </div>
 
-            {/* Room Selection */}
-            <Card className="shadow-sm">
-                <CardHeader className="pb-4">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                        <MapPin className="w-5 h-5 text-primary" />
-                        Localização
-                    </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label>Edificação</Label>
-                            <select
-                                className="w-full p-2 rounded-md border text-sm"
-                                value={selectedEdificacao}
-                                onChange={(e) => {
-                                    setSelectedEdificacao(e.target.value);
-                                    setSelectedPavimento("");
-                                    handleSalaChange(null);
-                                }}
-                            >
-                                <option value="">Selecione...</option>
-                                {edificacoes.map((ed: any) => <option key={ed} value={ed}>{ed}</option>)}
-                            </select>
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Pavimento</Label>
-                            <select
-                                className="w-full p-2 rounded-md border text-sm"
-                                value={selectedPavimento}
-                                onChange={(e) => {
-                                    setSelectedPavimento(e.target.value);
-                                    handleSalaChange(null);
-                                }}
-                                disabled={!selectedEdificacao}
-                            >
-                                <option value="">Selecione...</option>
-                                {pavimentos.map((p: string) => <option key={p} value={p}>{p}</option>)}
-                            </select>
-                        </div>
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label>Sala</Label>
-                        <div className="grid grid-cols-1 gap-2">
-                            {!selectedPavimento && (
-                                <p className="text-xs text-muted-foreground italic">Selecione prédio e andar primeiro</p>
-                            )}
-                            {filteredSalas.map((sala: any) => (
-                                <Button
-                                    key={sala.id}
-                                    variant={selectedSala?.id === sala.id ? "default" : "outline"}
-                                    className="justify-between h-auto py-3 px-4 font-normal"
-                                    onClick={() => handleSalaChange(sala)}
-                                >
-                                    <div className="text-left">
-                                        <div className="font-bold">{sala.nome}</div>
-                                        <div className="text-[10px] opacity-70 uppercase tracking-tighter">{sala.setor}</div>
-                                    </div>
-                                    <ChevronRight className="w-4 h-4 opacity-30" />
-                                </Button>
-                            ))}
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
-
-            {selectedSala && (
-                <div className="animate-in slide-in-from-bottom-4 duration-300 space-y-6">
-                    {/* New Finding Form */}
-                    <Card className="shadow-md">
-                        <CardHeader>
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+                {/* Left Column: Room Selection (Column Span 5) */}
+                <div className="md:col-span-5 space-y-6">
+                    <Card className="shadow-sm sticky top-6">
+                        <CardHeader className="pb-4">
                             <CardTitle className="text-lg flex items-center gap-2">
-                                <PlusCircle className="w-5 h-5 text-primary" />
-                                Adicionar Apontamento
+                                <MapPin className="w-5 h-5 text-primary" />
+                                Localização
                             </CardTitle>
-                            <CardDescription>
-                                Registre uma divergência encontrada na sala: <strong>{selectedSala.nome}</strong>
-                            </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            {/* Date of verification */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>Edificação</Label>
+                                    <select
+                                        className="w-full p-2 rounded-md border text-sm"
+                                        value={selectedEdificacao}
+                                        onChange={(e) => {
+                                            setSelectedEdificacao(e.target.value);
+                                            setSelectedPavimento("");
+                                            handleSalaChange(null);
+                                        }}
+                                    >
+                                        <option value="">Selecione...</option>
+                                        {edificacoes.map((ed: any) => <option key={ed} value={ed}>{ed}</option>)}
+                                    </select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Pavimento</Label>
+                                    <select
+                                        className="w-full p-2 rounded-md border text-sm"
+                                        value={selectedPavimento}
+                                        onChange={(e) => {
+                                            setSelectedPavimento(e.target.value);
+                                            handleSalaChange(null);
+                                        }}
+                                        disabled={!selectedEdificacao}
+                                    >
+                                        <option value="">Selecione...</option>
+                                        {pavimentos.map((p: string) => <option key={p} value={p}>{p}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+
                             <div className="space-y-2">
-                                <Label className="flex items-center gap-1.5">
-                                    <CalendarDays className="w-4 h-4" />
-                                    Data da Verificação
+                                <Label className="flex justify-between items-center">
+                                    <span>Sala</span>
+                                    {selectedPavimento && (
+                                        <span className="text-[10px] font-bold text-muted-foreground uppercase">{filteredSalas.length} Salas</span>
+                                    )}
                                 </Label>
-                                <input
-                                    type="date"
-                                    className="w-full p-2 rounded-md border text-sm bg-background"
-                                    value={dataVerificacao}
-                                    onChange={(e) => setDataVerificacao(e.target.value)}
-                                />
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label>Disciplina</Label>
-                                <select
-                                    className="w-full p-2 rounded-md border text-sm"
-                                    value={disciplina}
-                                    onChange={(e) => setDisciplina(e.target.value)}
-                                >
-                                    <option value="">Selecione...</option>
-                                    {Object.entries(DISCIPLINA_LABELS).map(([key, label]) => (
-                                        <option key={key} value={key}>{label}</option>
+                                <div className="grid grid-cols-1 gap-2 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+                                    {!selectedPavimento && (
+                                        <div className="py-10 text-center border-2 border-dashed border-slate-100 rounded-lg">
+                                            <p className="text-xs text-muted-foreground italic">Selecione prédio e andar primeiro</p>
+                                        </div>
+                                    )}
+                                    {filteredSalas.map((sala: any) => (
+                                        <Button
+                                            key={sala.id}
+                                            variant={selectedSala?.id === sala.id ? "default" : "outline"}
+                                            className={`justify-between h-auto py-3 px-4 font-normal transition-all ${
+                                                selectedSala?.id === sala.id ? "ring-2 ring-primary ring-offset-1" : "hover:border-primary/50"
+                                            }`}
+                                            onClick={() => handleSalaChange(sala)}
+                                        >
+                                            <div className="text-left">
+                                                <div className="font-bold">{sala.nome}</div>
+                                                <div className="text-[10px] opacity-70 uppercase tracking-tighter">{sala.setor}</div>
+                                            </div>
+                                            <ChevronRight className={`w-4 h-4 transition-transform ${selectedSala?.id === sala.id ? "translate-x-1" : "opacity-30"}`} />
+                                        </Button>
                                     ))}
-                                </select>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label>Divergência / Apontamento</Label>
-                                <Textarea
-                                    placeholder="Descreva o que foi encontrado em campo..."
-                                    className="min-h-[100px]"
-                                    value={divergencia}
-                                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDivergencia(e.target.value)}
-                                />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4 pt-2">
-                                {/* Foto Referência */}
-                                <div className="border-2 border-dashed rounded-lg p-2 bg-muted/30">
-                                    <div className="text-[10px] font-bold text-center uppercase tracking-wider text-primary mb-1">Referência (RA/Modelo)</div>
-                                    {fotoRAPreview ? (
-                                        <div className="relative aspect-square rounded-md overflow-hidden bg-black flex items-center justify-center">
-                                            <img src={fotoRAPreview} className="max-w-full max-h-full object-contain" alt="Referência" />
-                                            <Button
-                                                size="icon"
-                                                variant="destructive"
-                                                className="absolute top-1 right-1 h-6 w-6 rounded-full"
-                                                onClick={() => { setFotoRA(null); setFotoRAPreview(null); }}
-                                            >
-                                                <X className="w-3 h-3" />
-                                            </Button>
-                                        </div>
-                                    ) : (
-                                        <label className="flex flex-col items-center cursor-pointer py-3">
-                                            <Camera className="w-8 h-8 text-muted-foreground mb-1" />
-                                            <div className="text-[10px]">Referência</div>
-                                            <input
-                                                type="file"
-                                                className="hidden"
-                                                accept="image/*"
-                                                capture="environment"
-                                                onChange={(e) => handlePhotoChange('RA', e)}
-                                            />
-                                        </label>
-                                    )}
-                                </div>
-                                {/* Foto Real */}
-                                <div className="border-2 border-dashed rounded-lg p-2 bg-muted/30">
-                                    <div className="text-[10px] font-bold text-center uppercase tracking-wider text-emerald-600 mb-1">Foto Real (Campo)</div>
-                                    {fotoRealPreview ? (
-                                        <div className="relative aspect-square rounded-md overflow-hidden bg-black flex items-center justify-center">
-                                            <img src={fotoRealPreview} className="max-w-full max-h-full object-contain" alt="Real" />
-                                            <Button
-                                                size="icon"
-                                                variant="destructive"
-                                                className="absolute top-1 right-1 h-6 w-6 rounded-full"
-                                                onClick={() => { setFotoReal(null); setFotoRealPreview(null); }}
-                                            >
-                                                <X className="w-3 h-3" />
-                                            </Button>
-                                        </div>
-                                    ) : (
-                                        <label className="flex flex-col items-center cursor-pointer py-3">
-                                            <Camera className="w-8 h-8 text-muted-foreground mb-1" />
-                                            <div className="text-[10px]">Obra/Real</div>
-                                            <input
-                                                type="file"
-                                                className="hidden"
-                                                accept="image/*"
-                                                capture="environment"
-                                                onChange={(e) => handlePhotoChange('Real', e)}
-                                            />
-                                        </label>
-                                    )}
                                 </div>
                             </div>
-
-                            <Button
-                                className="w-full h-12 text-lg gap-2"
-                                variant="outline"
-                                onClick={handleAddToList}
-                            >
-                                <PlusCircle className="w-5 h-5" />
-                                Adicionar à Lista
-                            </Button>
                         </CardContent>
                     </Card>
+                </div>
 
-                    {/* Accumulated Items List */}
-                    {apontamentosList.length > 0 && (
-                        <Card className="shadow-md border-primary/20 animate-in slide-in-from-bottom-4 duration-300">
-                            <CardHeader className="pb-3">
-                                <CardTitle className="text-lg flex items-center gap-2">
-                                    <List className="w-5 h-5 text-primary" />
-                                    Lista de Apontamentos
-                                    <span className="ml-auto text-sm font-normal bg-primary/10 text-primary px-2.5 py-0.5 rounded-full">
-                                        {apontamentosList.length}
-                                    </span>
-                                </CardTitle>
-                                <CardDescription>
-                                    Sala: <strong>{selectedSala.nome}</strong> · Data: <strong>{dataVerificacao.split('-').reverse().join('/')}</strong>
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-3">
-                                {apontamentosList.map((item, index) => (
-                                    <div
-                                        key={item.id}
-                                        className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 border border-muted group"
-                                    >
-                                        <div className="flex-shrink-0 w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
-                                            {index + 1}
+                {/* Right Column: Form and List (Column Span 7) */}
+                <div className="md:col-span-7 space-y-6">
+                    {!selectedSala ? (
+                        <Card className="h-64 border-dashed flex flex-col items-center justify-center p-12 text-center bg-slate-50/50">
+                            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                                <MapPin className="w-8 h-8 text-primary opacity-40" />
+                            </div>
+                            <CardTitle className="text-slate-400">Nenhuma Sala Selecionada</CardTitle>
+                            <CardDescription className="max-w-[250px] mx-auto mt-2">
+                                Selecione uma sala à esquerda para começar a registrar apontamentos no campo.
+                            </CardDescription>
+                        </Card>
+                    ) : (
+                        <div className="animate-in fade-in zoom-in-95 duration-300 space-y-6">
+                            {/* New Finding Form */}
+                            <Card className="shadow-md border-t-4 border-t-primary">
+                                <CardHeader>
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <CardTitle className="text-lg flex items-center gap-2">
+                                                <PlusCircle className="w-5 h-5 text-primary" />
+                                                Adicionar Apontamento
+                                            </CardTitle>
+                                            <CardDescription>
+                                                Registrando em: <strong className="text-foreground">{selectedSala.nome}</strong>
+                                            </CardDescription>
                                         </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2 mb-0.5">
-                                                <span className="text-xs font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary/10 text-primary">
-                                                    {item.disciplinaLabel}
-                                                </span>
-                                                {(item.fotoRAPreview || item.fotoRealPreview) && (
-                                                    <Camera className="w-3.5 h-3.5 text-muted-foreground" />
-                                                )}
-                                            </div>
-                                            <p className="text-sm text-foreground/80 line-clamp-2">{item.divergencia}</p>
-                                        </div>
-                                        <Button
-                                            size="icon"
-                                            variant="ghost"
-                                            className="flex-shrink-0 h-7 w-7 opacity-50 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive"
-                                            onClick={() => handleRemoveFromList(item.id)}
-                                        >
-                                            <Trash2 className="w-4 h-4" />
+                                        <Button variant="ghost" size="icon" className="rounded-full" onClick={() => handleSalaChange(null)}>
+                                            <X className="w-4 h-4" />
                                         </Button>
                                     </div>
-                                ))}
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    {/* Date of verification */}
+                                    <div className="space-y-2">
+                                        <Label className="flex items-center gap-1.5">
+                                            <CalendarDays className="w-4 h-4 text-primary" />
+                                            Data da Verificação
+                                        </Label>
+                                        <input
+                                            type="date"
+                                            className="w-full p-2.5 rounded-md border text-sm bg-background focus:ring-2 focus:ring-primary/20 outline-none"
+                                            value={dataVerificacao}
+                                            onChange={(e) => setDataVerificacao(e.target.value)}
+                                        />
+                                    </div>
 
-                                <Button
-                                    className="w-full h-12 text-lg gap-2 mt-2"
-                                    onClick={handleSaveAll}
-                                    disabled={isSavingAll}
-                                >
-                                    {isSavingAll ? (
-                                        <>
-                                            <RefreshCcw className="w-5 h-5 animate-spin" />
-                                            Salvando...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Send className="w-5 h-5" />
-                                            Salvar Todos ({apontamentosList.length} apontamento{apontamentosList.length > 1 ? 's' : ''})
-                                        </>
-                                    )}
-                                </Button>
-                            </CardContent>
-                        </Card>
+                                    <div className="space-y-2">
+                                        <Label>Disciplina</Label>
+                                        <select
+                                            className="w-full p-2.5 rounded-md border text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+                                            value={disciplina}
+                                            onChange={(e) => setDisciplina(e.target.value)}
+                                        >
+                                            <option value="">Selecione...</option>
+                                            {Object.entries(DISCIPLINA_LABELS).map(([key, label]) => (
+                                                <option key={key} value={key}>{label}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label>Divergência / Apontamento</Label>
+                                        <Textarea
+                                            placeholder="Descreva o que foi encontrado em campo..."
+                                            className="min-h-[120px] resize-none"
+                                            value={divergencia}
+                                            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDivergencia(e.target.value)}
+                                        />
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4 pt-2">
+                                        {/* Foto Referência */}
+                                        <div className="border-2 border-dashed rounded-xl p-3 bg-muted/30 hover:bg-muted/50 transition-colors">
+                                            <div className="text-[10px] font-black text-center uppercase tracking-widest text-primary mb-2">Referência</div>
+                                            {fotoRAPreview ? (
+                                                <div className="relative aspect-square rounded-lg overflow-hidden bg-black flex items-center justify-center group">
+                                                    <img src={fotoRAPreview} className="max-w-full max-h-full object-contain" alt="Referência" />
+                                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                        <Button
+                                                            size="icon"
+                                                            variant="destructive"
+                                                            className="h-8 w-8 rounded-full"
+                                                            onClick={() => { setFotoRA(null); setFotoRAPreview(null); }}
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <label className="flex flex-col items-center cursor-pointer py-4">
+                                                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+                                                        <Camera className="w-6 h-6 text-primary" />
+                                                    </div>
+                                                    <div className="text-[10px] font-bold">Capturar RA</div>
+                                                    <input
+                                                        type="file"
+                                                        className="hidden"
+                                                        accept="image/*"
+                                                        capture="environment"
+                                                        onChange={(e) => handlePhotoChange('RA', e)}
+                                                    />
+                                                </label>
+                                            )}
+                                        </div>
+                                        {/* Foto Real */}
+                                        <div className="border-2 border-dashed rounded-xl p-3 bg-muted/30 hover:bg-muted/50 transition-colors">
+                                            <div className="text-[10px] font-black text-center uppercase tracking-widest text-emerald-600 mb-2">Foto Obra</div>
+                                            {fotoRealPreview ? (
+                                                <div className="relative aspect-square rounded-lg overflow-hidden bg-black flex items-center justify-center group">
+                                                    <img src={fotoRealPreview} className="max-w-full max-h-full object-contain" alt="Real" />
+                                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                        <Button
+                                                            size="icon"
+                                                            variant="destructive"
+                                                            className="h-8 w-8 rounded-full"
+                                                            onClick={() => { setFotoReal(null); setFotoRealPreview(null); }}
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <label className="flex flex-col items-center cursor-pointer py-4">
+                                                    <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center mb-2">
+                                                        <Camera className="w-6 h-6 text-emerald-600" />
+                                                    </div>
+                                                    <div className="text-[10px] font-bold">Foto Real</div>
+                                                    <input
+                                                        type="file"
+                                                        className="hidden"
+                                                        accept="image/*"
+                                                        capture="environment"
+                                                        onChange={(e) => handlePhotoChange('Real', e)}
+                                                    />
+                                                </label>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <Button
+                                        className="w-full h-14 text-lg gap-3 shadow-lg shadow-primary/10"
+                                        variant="default"
+                                        onClick={handleAddToList}
+                                    >
+                                        <PlusCircle className="w-6 h-6" />
+                                        ADICIONAR À LISTA
+                                    </Button>
+                                </CardContent>
+                            </Card>
+
+                            {/* Accumulated Items List */}
+                            {apontamentosList.length > 0 && (
+                                <Card className="shadow-md border-primary/20 bg-primary/[0.02] animate-in slide-in-from-bottom-4 duration-300">
+                                    <CardHeader className="pb-3 border-b border-primary/5">
+                                        <div className="flex justify-between items-center">
+                                            <CardTitle className="text-lg flex items-center gap-2">
+                                                <List className="w-5 h-5 text-primary" />
+                                                Itens para Salvar
+                                                <span className="ml-2 text-sm font-black bg-primary text-white px-2 py-0.5 rounded-full">
+                                                    {apontamentosList.length}
+                                                </span>
+                                            </CardTitle>
+                                            <Button variant="ghost" size="sm" className="text-rose-500 hover:text-rose-600 hover:bg-rose-50" onClick={() => setApontamentosList([])}>
+                                                Limpar
+                                            </Button>
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent className="p-0">
+                                        <div className="divide-y divide-primary/5">
+                                            {apontamentosList.map((item, index) => (
+                                                <div
+                                                    key={item.id}
+                                                    className="flex items-start gap-4 p-4 hover:bg-white transition-colors group"
+                                                >
+                                                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-black ring-4 ring-primary/5">
+                                                        {index + 1}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center gap-2 mb-1.5">
+                                                            <span className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md bg-primary text-white">
+                                                                {item.disciplinaLabel}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-sm text-slate-600 font-medium leading-relaxed">{item.divergencia}</p>
+                                                    </div>
+                                                    <Button
+                                                        size="icon"
+                                                        variant="ghost"
+                                                        className="flex-shrink-0 h-8 w-8 opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive transition-all"
+                                                        onClick={() => handleRemoveFromList(item.id)}
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </Button>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        <div className="p-4 bg-white border-t border-primary/5 rounded-b-xl">
+                                            <Button
+                                                className="w-full h-14 text-lg gap-3"
+                                                onClick={handleSaveAll}
+                                                disabled={isSavingAll}
+                                            >
+                                                {isSavingAll ? (
+                                                    <>
+                                                        <RefreshCcw className="w-6 h-6 animate-spin" />
+                                                        Salvando...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Send className="w-6 h-6" />
+                                                        SINCRONIZAR AGORA ({apontamentosList.length})
+                                                    </>
+                                                )}
+                                            </Button>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            )}
+                        </div>
                     )}
                 </div>
-            )}
+            </div>
         </div>
     );
 }
+
