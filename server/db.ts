@@ -707,6 +707,7 @@ export async function getEntregasStats(edificacao?: string) {
         recebidos: all.filter((e: any) => e.status === 'RECEBIDO').length,
         emRevisao: all.filter((e: any) => e.status === 'EM_REVISAO').length,
         validados: all.filter((e: any) => e.status === 'VALIDADO').length,
+        validadosParcial: all.filter((e: any) => e.status === 'VALIDADO_PARCIAL').length,
         validadosRessalva: all.filter((e: any) => e.status === 'VALIDADO_RESSALVA').length,
         rejeitados: all.filter((e: any) => e.status === 'REJEITADO').length,
         atrasados: all.filter((e: any) =>

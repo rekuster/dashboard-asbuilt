@@ -38,11 +38,12 @@ import KPICard from "./KPICard";
 import ValidationTab from "./ValidationTab";
 
 const STATUS_LABELS: Record<string, { label: string, color: string, icon: any }> = {
-    'AGUARDANDO': { label: 'Aguardando', color: 'bg-amber-100 text-amber-700 border-amber-200', icon: Clock },
+    'AGUARDANDO': { label: 'Mapeado', color: 'bg-slate-100 text-slate-600 border-slate-200', icon: Clock },
     'RECEBIDO': { label: 'Recebido', color: 'bg-blue-100 text-blue-700 border-blue-200', icon: FileText },
     'EM_REVISAO': { label: 'Em Revisão', color: 'bg-purple-100 text-purple-700 border-purple-200', icon: Search },
-    'VALIDADO': { label: 'Validado', color: 'bg-emerald-100 text-emerald-700 border-emerald-200', icon: CheckCircle2 },
-    'VALIDADO_RESSALVA': { label: 'Validado c/ Ressalva', color: 'bg-emerald-50 text-emerald-600 border-emerald-100', icon: ClipboardCheck },
+    'VALIDADO': { label: 'Validado (Final)', color: 'bg-emerald-100 text-emerald-700 border-emerald-200', icon: CheckCircle2 },
+    'VALIDADO_PARCIAL': { label: 'Validado (Parcial)', color: 'bg-emerald-50 text-emerald-600 border-emerald-100', icon: ClipboardCheck },
+    'VALIDADO_RESSALVA': { label: 'Validado c/ Ressalva', color: 'bg-amber-50 text-amber-600 border-amber-100', icon: ClipboardCheck },
     'REJEITADO': { label: 'Rejeitado', color: 'bg-rose-100 text-rose-700 border-rose-200', icon: XCircle },
 };
 
@@ -115,10 +116,10 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
         <div className="space-y-8 animate-in fade-in duration-500">
             {/* KPI Section */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
-                <KPICard title="Total Previsto" value={stats?.total || 0} subtitle="Documentos mapeados" />
-                <KPICard title="Aguardando" value={stats?.aguardando || 0} subtitle="Ainda não recebidos" className="border-amber-200 bg-amber-50/50" />
+                <KPICard title="Total Previsto" value={stats?.total || 0} subtitle="Itens Mapeados" />
+                <KPICard title="Mapeado" value={stats?.aguardando || 0} subtitle="Ainda não recebidos" className="border-slate-200 bg-slate-50/50" />
                 <KPICard title="Recebidos" value={stats?.recebidos || 0} subtitle="Aguardando revisão" className="border-blue-200 bg-blue-50/50" />
-                <KPICard title="Validados" value={(stats?.validados || 0) + (stats?.validadosRessalva || 0)} subtitle="Aprovados (Total)" className="border-emerald-200 bg-emerald-50/50" />
+                <KPICard title="Validados" value={(stats?.validados || 0) + (stats?.validadosRessalva || 0) + (stats?.validadosParcial || 0)} subtitle="Aprovados (Total)" className="border-emerald-200 bg-emerald-50/50" />
                 <KPICard title="Rejeitados" value={stats?.rejeitados || 0} subtitle="Necessitam correção" className="border-rose-200 bg-rose-50/50" />
                 <KPICard title="Atrasados" value={stats?.atrasados || 0} subtitle="Prazo expirado" className="border-rose-100 bg-rose-50/30 text-rose-600" />
             </div>
@@ -202,13 +203,15 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
                         <CardContent>
                             <Table>
                                 <TableHeader>
-                                    <TableRow className="hover:bg-transparent border-slate-100">
-                                        <TableHead className="w-[300px] text-slate-500 font-bold uppercase text-[10px] tracking-wider">Documento</TableHead>
-                                        <TableHead className="text-slate-500 font-bold uppercase text-[10px] tracking-wider">Empresa</TableHead>
-                                        <TableHead className="text-slate-500 font-bold uppercase text-[10px] tracking-wider">Disciplina</TableHead>
-                                        <TableHead className="text-slate-500 font-bold uppercase text-[10px] tracking-wider">Prazo</TableHead>
-                                        <TableHead className="text-slate-500 font-bold uppercase text-[10px] tracking-wider">Status</TableHead>
-                                        <TableHead className="text-right text-slate-500 font-bold uppercase text-[10px] tracking-wider">Ações</TableHead>
+                                    <TableRow className="hover:bg-transparent border-slate-100 uppercase text-[10px] font-bold tracking-wider text-slate-500 italic">
+                                        <TableHead className="w-[120px]">Prazo</TableHead>
+                                        <TableHead className="w-[120px]">Pacote / SM</TableHead>
+                                        <TableHead className="w-[280px]">Documento</TableHead>
+                                        <TableHead>Responsável</TableHead>
+                                        <TableHead>Edificação</TableHead>
+                                        <TableHead>Disciplina</TableHead>
+                                        <TableHead>Status</TableHead>
+                                        <TableHead className="text-right">Ações</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -224,32 +227,38 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
                                         filteredEntregas.map((entrega: any) => {
                                             const statusInfo = STATUS_LABELS[entrega.status] || STATUS_LABELS['AGUARDANDO'];
                                             const StatusIcon = statusInfo.icon;
-                                            const isAtrasado = entrega.status === 'AGUARDANDO' && dayjs(entrega.dataPrevista).isBefore(dayjs());
 
                                             return (
                                                 <TableRow
                                                     key={entrega.id}
-                                                    className="hover:bg-slate-50/50 transition-colors border-slate-100 group cursor-pointer"
+                                                    className="hover:bg-slate-50/50 transition-colors border-slate-100 group cursor-pointer text-xs"
                                                     onClick={() => handleViewDetail(entrega)}
                                                 >
                                                     <TableCell>
                                                         <div className="flex flex-col">
-                                                            <span className="font-semibold text-slate-700">{entrega.nomeDocumento}</span>
-                                                            <span className="text-[10px] text-slate-400 uppercase tracking-tighter">{DOC_TYPES[entrega.tipoDocumento] || entrega.tipoDocumento}</span>
-                                                        </div>
-                                                    </TableCell>
-                                                    <TableCell className="text-sm text-slate-600 font-medium">{entrega.empresaResponsavel}</TableCell>
-                                                    <TableCell className="text-sm text-slate-600 font-medium">{entrega.disciplina}</TableCell>
-                                                    <TableCell>
-                                                        <div className="flex flex-col">
-                                                            <span className={`text-sm font-semibold ${isAtrasado ? 'text-rose-500' : 'text-slate-700'}`}>
+                                                            <span className="font-semibold text-slate-700">
                                                                 {dayjs(entrega.dataPrevista).format('DD/MM/YYYY')}
                                                             </span>
-                                                            {isAtrasado && <span className="text-[9px] text-rose-400 font-bold uppercase">Atrasado</span>}
                                                         </div>
                                                     </TableCell>
                                                     <TableCell>
-                                                        <div className={`px-3 py-1 rounded-full border text-[10px] font-bold uppercase flex items-center gap-1.5 w-fit ${statusInfo.color}`}>
+                                                        <div className="font-bold text-[#940707]">
+                                                            {entrega.identificadorEntrega || "-"}
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <div className="flex flex-col">
+                                                            <span className="font-semibold text-slate-700">{entrega.nomeDocumento}</span>
+                                                            <span className="text-[10px] text-slate-400 uppercase tracking-tighter italic">
+                                                                {DOC_TYPES[entrega.formato] || entrega.formato || entrega.tipoDocumento}
+                                                            </span>
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell className="text-slate-600 font-medium">{entrega.empresaResponsavel}</TableCell>
+                                                    <TableCell className="text-slate-600">{entrega.edificacao}</TableCell>
+                                                    <TableCell className="text-slate-600">{entrega.disciplina}</TableCell>
+                                                    <TableCell>
+                                                        <div className={`px-3 py-1 rounded-full border text-[9px] font-bold uppercase flex items-center gap-1.5 w-fit ${statusInfo.color}`}>
                                                             <StatusIcon className="w-3 h-3" />
                                                             {statusInfo.label}
                                                         </div>
@@ -1001,6 +1010,10 @@ function EntregaDetailView({ entrega, onBack, onUpdate, onEdit, onDelete }: any)
                     <CardContent className="space-y-6">
                         <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
                             <div className="space-y-1">
+                                <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1"><Layers className="w-3 h-3" /> Modelo Base</span>
+                                <p className="font-semibold text-[#940707]">{entrega.modeloBaseReferencia || "-"}</p>
+                            </div>
+                            <div className="space-y-1">
                                 <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1"><Building2 className="w-3 h-3" /> Edificação</span>
                                 <p className="font-semibold text-slate-700">{entrega.edificacao}</p>
                             </div>
@@ -1013,15 +1026,15 @@ function EntregaDetailView({ entrega, onBack, onUpdate, onEdit, onDelete }: any)
                                 <p className="font-semibold text-slate-700">{entrega.empresaResponsavel}</p>
                             </div>
                             <div className="space-y-1">
-                                <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1"><FileText className="w-3 h-3" /> Identificador / SM</span>
-                                <p className="font-semibold text-[#940707]">{entrega.identificadorEntrega || "-"}</p>
+                                <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1"><FileText className="w-3 h-3" /> Pacote / SM</span>
+                                <p className="font-semibold text-slate-700">{entrega.identificadorEntrega || "-"}</p>
                             </div>
                             <div className="space-y-1">
                                 <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1"><History className="w-3 h-3" /> Formato</span>
                                 <Badge variant="outline" className="font-bold uppercase bg-slate-50">{entrega.formato || "-"}</Badge>
                             </div>
                             <div className="space-y-1">
-                                <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1"><Calendar className="w-3 h-3" /> Recebido em</span>
+                                <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1"><Calendar className="w-3 h-3" /> Prazo Referência</span>
                                 <p className="font-semibold text-slate-700">{entrega.dataRecebimento ? dayjs(entrega.dataRecebimento).format('DD/MM/YYYY') : "Pendente"}</p>
                             </div>
                         </div>
@@ -1257,8 +1270,8 @@ function EntregaForm({ onClose, entrega, selectedEdificacao }: any) {
                             <Input value={formData.edificacao} onChange={e => setFormData({ ...formData, edificacao: e.target.value })} placeholder="Ex: Bloco A" className="rounded-xl border-slate-200" />
                         </div>
                         <div className="space-y-2">
-                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Identificador / SM</label>
-                            <Input value={formData.identificadorEntrega} onChange={e => setFormData({ ...formData, identificadorEntrega: e.target.value })} placeholder="Ex: SM 10" className="rounded-xl border-slate-200" />
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Pacote / SM</label>
+                            <Input value={formData.identificadorEntrega} onChange={e => setFormData({ ...formData, identificadorEntrega: e.target.value })} placeholder="Ex: SM 611" className="rounded-xl border-slate-200" />
                         </div>
                         <div className="space-y-2">
                             <label className="text-xs font-bold uppercase text-slate-500 ml-1">Formato</label>
