@@ -197,19 +197,45 @@ export default function FieldReportTab() {
         }
     };
 
-    const uploadImage = async (file: File): Promise<string | null> => {
-        const formData = new FormData();
-        formData.append('image', file);
+    const compressImage = (file: File, maxWidth = 1024): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = (event) => {
+                const img = new Image();
+                img.src = event.target?.result as string;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
 
+                    if (width > maxWidth) {
+                        height = (maxWidth / width) * height;
+                        width = maxWidth;
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx?.drawImage(img, 0, 0, width, height);
+
+                    // Compress to JPEG with 0.7 quality
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                    resolve(dataUrl);
+                };
+                img.onerror = reject;
+            };
+            reader.onerror = reject;
+        });
+    };
+
+    const uploadImage = async (file: File): Promise<string | null> => {
         try {
-            const res = await fetch('/api/upload-image', {
-                method: 'POST',
-                body: formData,
-            });
-            const data = await res.json();
-            return data.url;
+            // Now we don't upload to API, we just compress and return Base64
+            // This bypasses the ephemeral filesystem issue on Vercel
+            return await compressImage(file);
         } catch (e) {
-            console.error("Upload error:", e);
+            console.error("Compression error:", e);
             return null;
         }
     };

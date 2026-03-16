@@ -151,7 +151,13 @@ export async function generatePDFReport(filters?: { edificacao?: string; discipl
                 let success = false;
                 if (url) {
                     try {
-                        if (url.startsWith('http')) {
+                        if (url.startsWith('data:image')) {
+                            // Handle Base64 Data URL (stored in DB)
+                            const base64Data = url.split(',')[1];
+                            const buffer = Buffer.from(base64Data, 'base64');
+                            doc.image(buffer, x, y, { width: imgWidth, height: imgHeight, fit: [imgWidth, imgHeight] });
+                            success = true;
+                        } else if (url.startsWith('http')) {
                             const response = await axios.get(url, { responseType: 'arraybuffer' });
                             const buffer = Buffer.from(response.data);
                             doc.image(buffer, x, y, { width: imgWidth, height: imgHeight, fit: [imgWidth, imgHeight] });
@@ -270,7 +276,13 @@ export async function generateAsBuiltReport(edificacao?: string): Promise<Buffer
                 let success = false;
                 if (url) {
                     try {
-                        if (url.startsWith('http')) {
+                        if (url.startsWith('data:image')) {
+                            // Handle Base64 Data URL (stored in DB)
+                            const base64Data = url.split(',')[1];
+                            const buffer = Buffer.from(base64Data, 'base64');
+                            doc.image(buffer, x, y, { width: imgWidth, height: height, fit: [imgWidth, height] });
+                            success = true;
+                        } else if (url.startsWith('http')) {
                             const response = await axios.get(url, { responseType: 'arraybuffer' });
                             const buffer = Buffer.from(response.data);
                             doc.image(buffer, x, y, { width: imgWidth, height: height, fit: [imgWidth, height] });
