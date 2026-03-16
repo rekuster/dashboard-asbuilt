@@ -115,29 +115,28 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
             {/* KPI Section */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
-                <KPICard title="Total Previsto" value={stats?.total || 0} subtitle="Itens Mapeados" />
-                <KPICard title="Mapeado" value={stats?.aguardando || 0} subtitle="Ainda não recebidos" className="border-slate-200 bg-slate-50/50" />
-                <KPICard title="Recebidos" value={stats?.recebidos || 0} subtitle="Aguardando revisão" className="border-blue-200 bg-blue-50/50" />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+                <KPICard title="Lista Mestra" value={stats?.total || 0} subtitle="Modelos Finais Esperados" />
+                <KPICard title="Mapeado" value={stats?.aguardando || 0} subtitle="Aguardando entrega" className="border-slate-200 bg-slate-50/50" />
+                <KPICard title="Recebidos" value={stats?.recebidos || 0} subtitle="Log de Entregas (SM)" className="border-blue-200 bg-blue-50/50" />
                 <KPICard title="Validados" value={(stats?.validados || 0) + (stats?.validadosRessalva || 0) + (stats?.validadosParcial || 0)} subtitle="Aprovados (Total)" className="border-emerald-200 bg-emerald-50/50" />
                 <KPICard title="Rejeitados" value={stats?.rejeitados || 0} subtitle="Necessitam correção" className="border-rose-200 bg-rose-50/50" />
-                <KPICard title="Atrasados" value={stats?.atrasados || 0} subtitle="Prazo expirado" className="border-rose-100 bg-rose-50/30 text-rose-600" />
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                     <TabsList className="grid grid-cols-3 w-full max-w-2xl bg-slate-100 p-1 rounded-xl">
                         <TabsTrigger value="list" className="rounded-lg data-[state=active]:bg-[#940707] data-[state=active]:text-white">
-                            <FileText className="w-4 h-4 mr-2" />
-                            Lista de Entregas
-                        </TabsTrigger>
-                        <TabsTrigger value="scope" className="rounded-lg data-[state=active]:bg-[#940707] data-[state=active]:text-white">
-                            <Layers className="w-4 h-4 mr-2" />
-                            Gestão de Escopo
+                            <History className="w-4 h-4 mr-2" />
+                            Gestão de Entregas
                         </TabsTrigger>
                         <TabsTrigger value="validation" className="rounded-lg data-[state=active]:bg-[#940707] data-[state=active]:text-white">
                             <ClipboardCheck className="w-4 h-4 mr-2" />
                             Validação por Sala
+                        </TabsTrigger>
+                        <TabsTrigger value="scope" className="rounded-lg data-[state=active]:bg-[#940707] data-[state=active]:text-white">
+                            <FileText className="w-4 h-4 mr-2" />
+                            Lista de Entregas Final
                         </TabsTrigger>
                     </TabsList>
 
@@ -204,12 +203,15 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
                             <Table>
                                 <TableHeader>
                                     <TableRow className="hover:bg-transparent border-slate-100 uppercase text-[10px] font-bold tracking-wider text-slate-500 italic">
-                                        <TableHead className="w-[120px]">Prazo</TableHead>
+                                        <TableHead className="w-[120px]">Data de Entrega</TableHead>
                                         <TableHead className="w-[120px]">Pacote / SM</TableHead>
-                                        <TableHead className="w-[280px]">Documento</TableHead>
                                         <TableHead>Responsável</TableHead>
                                         <TableHead>Edificação</TableHead>
                                         <TableHead>Disciplina</TableHead>
+                                        <TableHead className="w-[250px]">Documento Entregue</TableHead>
+                                        <TableHead>Formato</TableHead>
+                                        <TableHead>Modelo Base</TableHead>
+                                        <TableHead>Ações pós Entrega</TableHead>
                                         <TableHead>Status</TableHead>
                                         <TableHead className="text-right">Ações</TableHead>
                                     </TableRow>
@@ -234,29 +236,23 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
                                                     className="hover:bg-slate-50/50 transition-colors border-slate-100 group cursor-pointer text-xs"
                                                     onClick={() => handleViewDetail(entrega)}
                                                 >
-                                                    <TableCell>
-                                                        <div className="flex flex-col">
-                                                            <span className="font-semibold text-slate-700">
-                                                                {dayjs(entrega.dataPrevista).format('DD/MM/YYYY')}
-                                                            </span>
-                                                        </div>
+                                                    <TableCell className="font-semibold text-slate-700">
+                                                        {entrega.dataRecebimento ? dayjs(entrega.dataRecebimento).format('DD/MM/YYYY') : "-"}
                                                     </TableCell>
-                                                    <TableCell>
-                                                        <div className="font-bold text-[#940707]">
-                                                            {entrega.identificadorEntrega || "-"}
-                                                        </div>
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <div className="flex flex-col">
-                                                            <span className="font-semibold text-slate-700">{entrega.nomeDocumento}</span>
-                                                            <span className="text-[10px] text-slate-400 uppercase tracking-tighter italic">
-                                                                {DOC_TYPES[entrega.formato] || entrega.formato || entrega.tipoDocumento}
-                                                            </span>
-                                                        </div>
+                                                    <TableCell className="font-bold text-[#940707]">
+                                                        {entrega.identificadorEntrega || "-"}
                                                     </TableCell>
                                                     <TableCell className="text-slate-600 font-medium">{entrega.empresaResponsavel}</TableCell>
                                                     <TableCell className="text-slate-600">{entrega.edificacao}</TableCell>
                                                     <TableCell className="text-slate-600">{entrega.disciplina}</TableCell>
+                                                    <TableCell className="font-semibold text-slate-700">{entrega.nomeDocumento}</TableCell>
+                                                    <TableCell>
+                                                        <span className="text-[10px] text-slate-400 uppercase tracking-tighter italic">
+                                                            {DOC_TYPES[entrega.formato] || entrega.formato || entrega.tipoDocumento}
+                                                        </span>
+                                                    </TableCell>
+                                                    <TableCell className="text-xs text-slate-500 truncate max-w-[120px]">{entrega.modeloBaseReferencia || "-"}</TableCell>
+                                                    <TableCell className="text-xs text-rose-500 font-bold">{entrega.acoesNecessarias || "-"}</TableCell>
                                                     <TableCell>
                                                         <div className={`px-3 py-1 rounded-full border text-[9px] font-bold uppercase flex items-center gap-1.5 w-fit ${statusInfo.color}`}>
                                                             <StatusIcon className="w-3 h-3" />
@@ -379,16 +375,12 @@ function ScopeManagementView({ entregas, selectedEdificacao }: { entregas: any[]
                         <Table>
                             <TableHeader className="bg-slate-50">
                                 <TableRow>
-                                    <TableHead className="font-bold uppercase text-[10px] tracking-wider">Empresa</TableHead>
-                                    <TableHead className="font-bold uppercase text-[10px] tracking-wider">Disciplina</TableHead>
+                                    <TableHead className="font-bold uppercase text-[10px] tracking-wider">Prazo</TableHead>
+                                    <TableHead className="font-bold uppercase text-[10px] tracking-wider w-[300px]">Documento (Modelo Final)</TableHead>
+                                    <TableHead className="font-bold uppercase text-[10px] tracking-wider">Responsável</TableHead>
                                     <TableHead className="font-bold uppercase text-[10px] tracking-wider">Edificação</TableHead>
-                                    <TableHead className="font-bold uppercase text-[10px] tracking-wider">Modelo Base (Projeto)</TableHead>
-                                    <TableHead className="font-bold uppercase text-[10px] tracking-wider">Modelo Final (As-Built)</TableHead>
-                                    <TableHead className="font-bold uppercase text-[10px] tracking-wider">RVT Nativo?</TableHead>
-                                    <TableHead className="font-bold uppercase text-[10px] tracking-wider">Ação RVT (Se não nativo)</TableHead>
-                                    <TableHead className="text-center font-bold uppercase text-[10px] tracking-wider">Parciais</TableHead>
-                                    <TableHead className="text-center font-bold uppercase text-[10px] tracking-wider">Verificados</TableHead>
-                                    <TableHead className="text-center font-bold uppercase text-[10px] tracking-wider">Progresso</TableHead>
+                                    <TableHead className="font-bold uppercase text-[10px] tracking-wider">Disciplina</TableHead>
+                                    <TableHead className="text-center font-bold uppercase text-[10px] tracking-wider">Status</TableHead>
                                     <TableHead className="text-right font-bold uppercase text-[10px] tracking-wider">Ações</TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -408,28 +400,17 @@ function ScopeManagementView({ entregas, selectedEdificacao }: { entregas: any[]
                                     const progress = counts.total > 0 ? Math.round((counts.validados / counts.total) * 100) : 0;
                                     return (
                                         <TableRow key={esc.id} className="hover:bg-slate-50/50 cursor-pointer group" onClick={() => setSelectedEscopo(esc)}>
+                                            <TableCell className="font-bold text-slate-500">01/06/2026</TableCell>
+                                            <TableCell className="text-sm font-bold text-[#940707] max-w-[300px] truncate" title={esc.nomeModeloFinal}>{esc.nomeModeloFinal || "SEM NOME DEFINIDO"}</TableCell>
                                             <TableCell className="font-bold text-slate-700">{esc.empresa}</TableCell>
+                                            <TableCell className="font-medium text-slate-600">{esc.edificacao}</TableCell>
                                             <TableCell>
                                                 <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-bold">{esc.disciplina}</span>
                                             </TableCell>
-                                            <TableCell className="font-medium text-slate-600">{esc.edificacao}</TableCell>
-                                            <TableCell className="text-xs font-medium text-slate-500 max-w-[180px] truncate" title={esc.nomeModelo}>{esc.nomeModelo || "-"}</TableCell>
-                                            <TableCell className="text-sm font-bold text-[#940707] max-w-[180px] truncate" title={esc.nomeModeloFinal}>{esc.nomeModeloFinal || "-"}</TableCell>
-                                            <TableCell>
-                                                <Badge variant={esc.temRvtOriginal ? "secondary" : "outline"} className={esc.temRvtOriginal ? "bg-blue-100 text-blue-700 border-none" : "bg-amber-100 text-amber-700 border-none"}>
-                                                    {esc.temRvtOriginal ? "Sim" : "Não"}
+                                            <TableCell className="text-center">
+                                                <Badge variant={progress === 100 ? "secondary" : "outline"} className={progress === 100 ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}>
+                                                    {progress === 100 ? "VALIDADO" : "PENDENTE"}
                                                 </Badge>
-                                            </TableCell>
-                                            <TableCell className="text-xs text-slate-500 max-w-[200px] truncate">{esc.pendenciaRvt || "-"}</TableCell>
-                                            <TableCell className="text-center font-bold">{counts.total}</TableCell>
-                                            <TableCell className="text-center font-bold text-emerald-600">{counts.validados}</TableCell>
-                                            <TableCell>
-                                                <div className="flex items-center gap-2 min-w-[100px]">
-                                                    <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                                        <div className="h-full bg-emerald-500 transition-all" style={{ width: `${progress}%` }} />
-                                                    </div>
-                                                    <span className="text-[10px] font-bold text-slate-500">{progress}%</span>
-                                                </div>
                                             </TableCell>
                                             <TableCell className="text-right">
                                                 <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1034,8 +1015,8 @@ function EntregaDetailView({ entrega, onBack, onUpdate, onEdit, onDelete }: any)
                                 <Badge variant="outline" className="font-bold uppercase bg-slate-50">{entrega.formato || "-"}</Badge>
                             </div>
                             <div className="space-y-1">
-                                <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1"><Calendar className="w-3 h-3" /> Prazo Referência</span>
-                                <p className="font-semibold text-slate-700">{entrega.dataRecebimento ? dayjs(entrega.dataRecebimento).format('DD/MM/YYYY') : "Pendente"}</p>
+                                <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1"><Calendar className="w-3 h-3" /> Data de Entrega</span>
+                                <p className="font-semibold text-slate-700">{entrega.dataRecebimento ? dayjs(entrega.dataRecebimento).format('DD/MM/YYYY') : "Faltando"}</p>
                             </div>
                         </div>
 
