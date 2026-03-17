@@ -129,13 +129,13 @@ export async function generatePDFReport(filters?: { edificacao?: string; discipl
             // ─── Room & Discipline Info ───
             const infoX = 580;
             const infoY = 100;
-            doc.fillColor('#000000').fontSize(12).font('Helvetica');
-            doc.text(`Sala: ${item.numeroSala} - ${item.salaNome}`, infoX, infoY);
+            doc.fillColor('#000000').fontSize(11).font('Helvetica');
+            doc.text(`Sala: ${item.numeroSala} - ${item.salaNome}`, infoX, infoY, { width: 230 });
             doc.text(`Disciplina: ${item.apontamento.disciplina}`, infoX, infoY + 20);
             doc.text(`Responsável: ${item.apontamento.responsavel || 'Não definido'}`, infoX, infoY + 40);
 
             doc.font('Helvetica-Bold').text('Apontamento:', infoX, infoY + 70);
-            doc.font('Helvetica').fontSize(11).text(item.apontamento.divergencia || '', infoX, infoY + 85, { width: 230 });
+            doc.font('Helvetica').fontSize(10).text(item.apontamento.divergencia || '', infoX, infoY + 85, { width: 230 });
 
             // ─── Images Section ───
             const imgY = 110;
@@ -147,60 +147,58 @@ export async function generatePDFReport(filters?: { edificacao?: string; discipl
             const rightFotoUrl = item.apontamento.fotoUrl;
 
             // Helper to fetch/draw image
-            const drawImage = async (url: string | null, x: number, y: number, label: string, labelColor: string) => {
+            const drawImage = async (url: string | null, x: number, y: number, w: number, h: number, label?: string, labelColor?: string) => {
                 let success = false;
                 if (url) {
                     try {
                         if (url.startsWith('data:image')) {
-                            // Handle Base64 Data URL (stored in DB)
                             const base64Data = url.split(',')[1];
                             const buffer = Buffer.from(base64Data, 'base64');
-                            doc.image(buffer, x, y, { width: imgWidth, height: imgHeight, fit: [imgWidth, imgHeight] });
+                            doc.image(buffer, x, y, { width: w, height: h, fit: [w, h] });
                             success = true;
                         } else if (url.startsWith('http')) {
-                            const response = await axios.get(url, { responseType: 'arraybuffer' });
+                            const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 10000 });
                             const buffer = Buffer.from(response.data);
-                            doc.image(buffer, x, y, { width: imgWidth, height: imgHeight, fit: [imgWidth, imgHeight] });
+                            doc.image(buffer, x, y, { width: w, height: h, fit: [w, h] });
                             success = true;
                         } else {
                             const fullPath = path.join(process.cwd(), url.replace(/^\//, ''));
                             if (fs.existsSync(fullPath)) {
-                                doc.image(fullPath, x, y, { width: imgWidth, height: imgHeight, fit: [imgWidth, imgHeight] });
+                                doc.image(fullPath, x, y, { width: w, height: h, fit: [w, h] });
                                 success = true;
                             }
                         }
                     } catch (e) {
                         console.error(`Error loading image ${url}:`, e);
-                        // Fallback to error placeholder
                     }
                 }
 
-                if (!success) {
-                    doc.rect(x, y, imgWidth, imgHeight).stroke('#CCCCCC');
-                    doc.fillColor('#999999').fontSize(10).text(url ? 'Erro imagem' : 'Sem imagem', x, y + 150, { width: imgWidth, align: 'center' });
+                if (!success && label !== 'PLANTA') {
+                    doc.rect(x, y, w, h).stroke('#CCCCCC');
+                    doc.fillColor('#999999').fontSize(10).text(url ? 'Erro imagem' : 'Sem imagem', x, y + (h / 2) - 10, { width: w, align: 'center' });
                 }
 
-                if (label) {
-                    doc.fillColor(labelColor).fontSize(10).font('Helvetica-Bold').text(label, x, y - 15);
+                if (label && label !== 'PLANTA') {
+                    doc.fillColor(labelColor || '#666666').fontSize(10).font('Helvetica-Bold').text(label, x, y - 15);
                 }
             };
 
-            // Left Image (Planta or Reference)
+            // 1. Comparison Images (Left: Model, Right: Real)
+            // Left: Projeto RA / Modelo
+            await drawImage(refUrl, 60, imgY, imgWidth, imgHeight, 'PROJETO RA / MODELO');
+
+            // Right: Execução Real / Obra
+            await drawImage(rightFotoUrl, 60 + imgWidth + 20, imgY, imgWidth, imgHeight, 'EXECUÇÃO REAL / OBRA');
+
+            // 2. Room Plan (Bottom Right)
             if (plantaUrl) {
-                await drawImage(plantaUrl, 60, imgY, 'PLANTA SALA', '#006400');
-            } else if (refUrl) {
-                await drawImage(refUrl, 60, imgY, 'PROJETO RA / MODELO', '#666666');
-            } else {
-                await drawImage(null, 60, imgY, 'Sem planta ou referência', '#999999');
+                const pX = 580;
+                const pY = 320;
+                const pW = 230;
+                const pH = 180;
+                doc.fillColor('#666666').fontSize(10).font('Helvetica-Bold').text('PLANTA SALA', pX, pY - 15);
+                await drawImage(plantaUrl, pX, pY, pW, pH, 'PLANTA');
             }
-
-            // Right Image (Real photo)
-            await drawImage(rightFotoUrl, 60 + imgWidth + 20, imgY, 'EXECUÇÃO REAL / OBRA', '#666666');
-
-            // Bottom Labels
-            doc.fillColor('#666666').fontSize(8).font('Helvetica-Bold');
-            doc.text(plantaUrl ? '' : 'PROJETO RA / MODELO', 60, imgY + imgHeight + 5);
-            doc.text('EXECUÇÃO REAL / OBRA', 60 + imgWidth + 20, imgY + imgHeight + 5);
 
             // ─── Footer Section ───
             if (hasLogo) {
