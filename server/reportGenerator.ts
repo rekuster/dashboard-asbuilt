@@ -47,7 +47,7 @@ async function drawCoverPage(doc: any, logoPath: string, hasLogo: boolean) {
     doc.addPage();
 }
 
-export async function generatePDFReport(filters?: { edificacao?: string; disciplina?: string; responsavel?: string; sala?: string; }): Promise<Buffer> {
+export async function generatePDFReport(filters?: { edificacao?: string; disciplina?: string; responsavel?: string; sala?: string; pavimento?: string }): Promise<Buffer> {
     const doc = new PDFDocument({
         margin: 0,
         size: 'A4',
@@ -71,6 +71,10 @@ export async function generatePDFReport(filters?: { edificacao?: string; discipl
 
     if (filters?.edificacao && filters.edificacao !== "Todas") {
         query = query.where(eq(apontamentos.edificacao, filters.edificacao)) as any;
+    }
+
+    if (filters?.pavimento && filters.pavimento !== "Todos") {
+        query = query.where(eq(apontamentos.pavimento, filters.pavimento)) as any;
     }
 
     let data = await query;
@@ -214,7 +218,7 @@ export async function generatePDFReport(filters?: { edificacao?: string; discipl
     });
 }
 
-export async function generateAsBuiltReport(edificacao?: string): Promise<Buffer> {
+export async function generateAsBuiltReport(filters?: { edificacao?: string; pavimento?: string }): Promise<Buffer> {
     const doc = new PDFDocument({
         margin: 0,
         size: 'A4',
@@ -236,8 +240,12 @@ export async function generateAsBuiltReport(edificacao?: string): Promise<Buffer
         .from(apontamentos)
         .innerJoin(salas, eq(apontamentos.sala, salas.nome));
 
-    if (edificacao) {
-        query = query.where(eq(apontamentos.edificacao, edificacao)) as any;
+    if (filters?.edificacao && filters.edificacao !== "Todas") {
+        query = query.where(eq(apontamentos.edificacao, filters.edificacao)) as any;
+    }
+
+    if (filters?.pavimento && filters.pavimento !== "Todos") {
+        query = query.where(eq(apontamentos.pavimento, filters.pavimento)) as any;
     }
     const data = await query;
 

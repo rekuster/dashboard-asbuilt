@@ -98,6 +98,19 @@ export async function getAllSalas() {
     return db.select().from(salas);
 }
 
+export async function getDistinctPavimentos(edificacao?: string) {
+    const db = await getDb();
+    if (!db) return [];
+    
+    let query = db.selectDistinct({ pavimento: salas.pavimento }).from(salas);
+    if (edificacao && edificacao !== "Todas") {
+        query = query.where(eq(salas.edificacao, edificacao));
+    }
+    
+    const result = await query;
+    return result.map((r: any) => r.pavimento).filter(Boolean).sort();
+}
+
 export async function getSalaByNome(nome: string) {
     const db = await getDb();
     if (!db) return null;

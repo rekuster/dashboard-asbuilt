@@ -21,9 +21,16 @@ export function ReportPreviewModal({ edificacoes, disciplinas, responsaveis }: R
 
     // Filters
     const [filterEdificacao, setFilterEdificacao] = useState("Todas");
+    const [filterPavimento, setFilterPavimento] = useState("Todos");
     const [filterDisciplina, setFilterDisciplina] = useState("Todas");
     const [filterResponsavel, setFilterResponsavel] = useState("Todos");
-    const [filterSala] = useState(""); // Keeping variable but without unused setter
+    const [filterSala] = useState(""); 
+
+    // Fetch pavimentos based on selected edificacao
+    const { data: pavimentos = [] } = trpc.dashboard.getPavimentos.useQuery(
+        { edificacao: filterEdificacao !== "Todas" ? filterEdificacao : undefined },
+        { enabled: isOpen }
+    );
 
     const utils = trpc.useUtils();
 
@@ -34,6 +41,7 @@ export function ReportPreviewModal({ edificacoes, disciplinas, responsaveis }: R
             let base64 = "";
             const filters = {
                 edificacao: filterEdificacao !== "Todas" ? filterEdificacao : undefined,
+                pavimento: filterPavimento !== "Todos" ? filterPavimento : undefined,
                 disciplina: filterDisciplina !== "Todas" ? filterDisciplina : undefined,
                 responsavel: filterResponsavel !== "Todos" ? filterResponsavel : undefined,
                 sala: filterSala || undefined
@@ -42,8 +50,10 @@ export function ReportPreviewModal({ edificacoes, disciplinas, responsaveis }: R
             if (reportType === "CQ") {
                 base64 = await utils.dashboard.getPDFReport.fetch(filters);
             } else {
-                // AsBuilt currently mostly supports edificacao, but we pass others just in case we update backend later
-                base64 = await utils.dashboard.getAsBuiltReport.fetch({ edificacao: filters.edificacao });
+                base64 = await utils.dashboard.getAsBuiltReport.fetch({ 
+                    edificacao: filters.edificacao,
+                    pavimento: filters.pavimento
+                });
             }
 
             setBase64Pdf(base64);
@@ -79,7 +89,7 @@ export function ReportPreviewModal({ edificacoes, disciplinas, responsaveis }: R
                     <DialogTitle>Gerador de Relatórios</DialogTitle>
                 </DialogHeader>
 
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-4 py-4 border-b">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 py-4 border-b items-end">
                     <div className="flex flex-col gap-2">
                         <Label>Tipo de Relatório</Label>
                         <Select value={reportType} onValueChange={(v: "CQ" | "AB") => setReportType(v)}>
@@ -95,13 +105,29 @@ export function ReportPreviewModal({ edificacoes, disciplinas, responsaveis }: R
 
                     <div className="flex flex-col gap-2">
                         <Label>Edificação</Label>
-                        <Select value={filterEdificacao} onValueChange={setFilterEdificacao}>
+                        <Select value={filterEdificacao} onValueChange={(v) => {
+                            setFilterEdificacao(v);
+                            setFilterPavimento("Todos"); // Reset floor when complex changes
+                        }}>
                             <SelectTrigger>
                                 <SelectValue placeholder="Todas" />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="Todas">Todas</SelectItem>
                                 {edificacoes.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                        <Label>Pavimento</Label>
+                        <Select value={filterPavimento} onValueChange={setFilterPavimento}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Todos" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="Todos">Todos</SelectItem>
+                                {pavimentos.map((p: string) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
                             </SelectContent>
                         </Select>
                     </div>
@@ -132,8 +158,8 @@ export function ReportPreviewModal({ edificacoes, disciplinas, responsaveis }: R
                         </Select>
                     </div>
 
-                    <div className="flex flex-col gap-2 justify-end">
-                        <Button onClick={generatePreview} disabled={isLoading} className="w-full">
+                    <div className="flex flex-col gap-2">
+                        <Button onClick={generatePreview} disabled={isLoading} className="w-full bg-red-800 hover:bg-red-900">
                             {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Filter className="w-4 h-4 mr-2" />}
                             Gerar Preview
                         </Button>

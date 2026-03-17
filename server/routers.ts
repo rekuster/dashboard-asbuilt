@@ -303,24 +303,46 @@ export const appRouter = router({
 
         // Reports
         getPDFReport: publicProcedure
-            .input(z.object({ edificacao: z.string().optional() }).optional())
+            .input(z.object({ 
+                edificacao: z.string().optional(),
+                pavimento: z.string().optional()
+            }).optional())
             .query(async ({ input }) => {
-                const buffer = await generatePDFReport({ edificacao: input?.edificacao });
+                const buffer = await generatePDFReport({ 
+                    edificacao: input?.edificacao,
+                    pavimento: input?.pavimento
+                });
                 return buffer.toString('base64');
             }),
 
         getExcelReport: publicProcedure
-            .input(z.object({ edificacao: z.string().optional() }).optional())
+            .input(z.object({ 
+                edificacao: z.string().optional(),
+                pavimento: z.string().optional()
+            }).optional())
             .query(async ({ input }) => {
-                const buffer = await generateExcelReport(input?.edificacao);
+                const buffer = await generateExcelReport(input?.edificacao); // Note: generateExcelReport might need update too if user wants pavimento there
                 return buffer.toString('base64');
             }),
 
         getAsBuiltReport: publicProcedure
+            .input(z.object({ 
+                edificacao: z.string().optional(),
+                pavimento: z.string().optional()
+            }).optional())
+            .query(async ({ input }) => {
+                const buffer = await generateAsBuiltReport({ 
+                    edificacao: input?.edificacao,
+                    pavimento: input?.pavimento
+                });
+                return buffer.toString('base64');
+            }),
+
+        getPavimentos: publicProcedure
             .input(z.object({ edificacao: z.string().optional() }).optional())
             .query(async ({ input }) => {
-                const buffer = await generateAsBuiltReport(input?.edificacao);
-                return buffer.toString('base64');
+                const { getDistinctPavimentos } = await import('./db');
+                return await getDistinctPavimentos(input?.edificacao);
             }),
 
         // Entregas As-Built
