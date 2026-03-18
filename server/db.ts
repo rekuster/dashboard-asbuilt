@@ -930,28 +930,29 @@ export async function createApontamento(data: InsertApontamento) {
     if (!db) return null;
 
     // =====================================================================
-    // PARTE 1: Gerar número sequencial de controle por projeto
-    // Cada apontamento recebe um número único na ordem de criação do projeto
+    // PARTE 1: Inserir com número sequencial atômico
+    //
+    // PROBLEMA ANTERIOR: lermos o MAX() e depois inseríamos em dois passos separados.
+    // Quando vários apontamentos eram salvos ao mesmo tempo (ex: fila de sincronização),
+    // todos liam o mesmo MAX antes de qualquer um ser confirmado → números duplicados.
+    //
+    // SOLUÇÃO: calculamos o próximo número DENTRO DO INSERT como subquery SQL.
+    // O banco faz tudo em uma única operação, impedindo duplicatas.
     // =====================================================================
-    let maxQuery = db.select({
-        maxNum: sql<number>`COALESCE(MAX(${apontamentos.numeroApontamento}), 0)`
-    }).from(apontamentos);
+    const dataVerificacao = typeof data.data === 'string' ? new Date(data.data) : data.data;
 
-    if (data.projectId) {
-        maxQuery = maxQuery.where(eq(apontamentos.projectId, data.projectId)) as any;
-    }
+    // Subquery: calcula o MAX na hora exata do INSERT — operação atômica
+    const nextNumSubquery = data.projectId
+        ? sql`(SELECT COALESCE(MAX(${apontamentos.numeroApontamento}), 0) + 1 FROM ${apontamentos} WHERE ${apontamentos.projectId} = ${data.projectId})`
+        : sql`(SELECT COALESCE(MAX(${apontamentos.numeroApontamento}), 0) + 1 FROM ${apontamentos})`;
 
-    const [maxResult] = await maxQuery;
-    const nextNum = (Number(maxResult?.maxNum) || 0) + 1;
-
-    const values = {
+    const result = await db.insert(apontamentos).values({
         ...data,
-        numeroApontamento: nextNum,
+        data: dataVerificacao,
+        numeroApontamento: nextNumSubquery as any,
         createdAt: new Date(),
         updatedAt: new Date()
-    };
-
-    const result = await db.insert(apontamentos).values(values).returning();
+    }).returning();
 
     // =====================================================================
     // PARTE 2: Atualizar automaticamente a data de verificação da sala
@@ -959,8 +960,6 @@ export async function createApontamento(data: InsertApontamento) {
     // como verificada com a data do apontamento — sem precisar de ação manual.
     // =====================================================================
     try {
-        const dataVerificacao = typeof data.data === 'string' ? new Date(data.data) : data.data;
-
         // Busca a sala pelo nome, edificação e pavimento
         const salaAlvo = await db.select()
             .from(salas)
