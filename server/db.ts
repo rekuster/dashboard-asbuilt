@@ -928,10 +928,17 @@ export async function createApontamento(data: InsertApontamento) {
     const db = await getDb();
     if (!db) return null;
 
-    // Auto-generate sequential numeroApontamento
+    // Auto-generate sequential numeroApontamento PER room context
     const [maxResult] = await db.select({
         maxNum: sql<number>`COALESCE(MAX(${apontamentos.numeroApontamento}), 0)`
-    }).from(apontamentos);
+    }).from(apontamentos)
+    .where(
+        and(
+            eq(apontamentos.sala, data.sala),
+            eq(apontamentos.edificacao, data.edificacao),
+            eq(apontamentos.pavimento, data.pavimento)
+        )
+    );
     const nextNum = (Number(maxResult?.maxNum) || 0) + 1;
 
     const values = {

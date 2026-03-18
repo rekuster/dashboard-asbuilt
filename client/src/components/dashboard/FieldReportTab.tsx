@@ -173,7 +173,7 @@ export default function FieldReportTab() {
         if (offlineQueue.length === 0) return;
 
         toast.info(`Sincronizando ${offlineQueue.length} itens...`);
-        let successCount = 0;
+        let successIds: string[] = [];
 
         for (const item of offlineQueue) {
             try {
@@ -188,20 +188,23 @@ export default function FieldReportTab() {
                     fotoUrl: item.fotoUrl,
                     fotoReferenciaUrl: item.fotoReferenciaUrl
                 });
-                successCount++;
+                successIds.push(item.id);
+                // Pequeno atraso para não sobrecarregar a rede móvel
+                await new Promise(r => setTimeout(r, 500));
             } catch (e) {
                 console.error("Sync failed for item", item.id, e);
             }
         }
 
-        const remaining = offlineQueue.slice(successCount);
+        const remaining = offlineQueue.filter(item => !successIds.includes(item.id));
         setOfflineQueue(remaining);
         localStorage.setItem('field_report_queue', JSON.stringify(remaining));
 
         if (remaining.length === 0) {
             toast.success("Sincronização completa!");
+            refetchExisting();
         } else {
-            toast.warning(`${successCount} sincronizados, ${remaining.length} falharam.`);
+            toast.warning(`${successIds.length} sincronizados, ${remaining.length} falharam e continuam na fila.`);
         }
     };
 
@@ -222,7 +225,7 @@ export default function FieldReportTab() {
         }
     };
 
-    const compressImage = (file: File, maxWidth = 1024): Promise<string> => {
+    const compressImage = (file: File, maxWidth = 900): Promise<string> => {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.readAsDataURL(file);
@@ -244,8 +247,8 @@ export default function FieldReportTab() {
                     const ctx = canvas.getContext('2d');
                     ctx?.drawImage(img, 0, 0, width, height);
 
-                    // Compress to JPEG with 0.7 quality
-                    const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                    // Compress to JPEG with 0.6 quality (safer for Vercel/mobile)
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
                     resolve(dataUrl);
                 };
                 img.onerror = reject;
@@ -340,6 +343,8 @@ export default function FieldReportTab() {
                 try {
                     await createApontamento.mutateAsync(payload);
                     successCount++;
+                    // Pequeno atraso para garantir que cada requisição termine bem
+                    await new Promise(r => setTimeout(r, 500));
                 } catch (e) {
                     console.error("Error saving apontamento:", e);
                     // Queue for offline
@@ -349,7 +354,9 @@ export default function FieldReportTab() {
                         ...payload,
                         fotoBase64: item.fotoRAPreview || item.fotoRealPreview || undefined,
                     };
-                    const updatedQueue = [...offlineQueue, queued];
+                    const savedQueue = localStorage.getItem('field_report_queue');
+                    const currentQueue = savedQueue ? JSON.parse(savedQueue) : [];
+                    const updatedQueue = [...currentQueue, queued];
                     setOfflineQueue(updatedQueue);
                     localStorage.setItem('field_report_queue', JSON.stringify(updatedQueue));
                 }
@@ -360,7 +367,9 @@ export default function FieldReportTab() {
                     ...payload,
                     fotoBase64: item.fotoRAPreview || item.fotoRealPreview || undefined,
                 };
-                const updatedQueue = [...offlineQueue, queued];
+                const savedQueue = localStorage.getItem('field_report_queue');
+                const currentQueue = savedQueue ? JSON.parse(savedQueue) : [];
+                const updatedQueue = [...currentQueue, queued];
                 setOfflineQueue(updatedQueue);
                 localStorage.setItem('field_report_queue', JSON.stringify(updatedQueue));
                 successCount++;
