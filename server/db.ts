@@ -929,7 +929,10 @@ export async function createApontamento(data: InsertApontamento) {
     const db = await getDb();
     if (!db) return null;
 
-    // Auto-generate sequential numeroApontamento PER project context
+    // =====================================================================
+    // PARTE 1: Gerar número sequencial de controle por projeto
+    // Cada apontamento recebe um número único na ordem de criação do projeto
+    // =====================================================================
     let maxQuery = db.select({
         maxNum: sql<number>`COALESCE(MAX(${apontamentos.numeroApontamento}), 0)`
     }).from(apontamentos);
@@ -948,7 +951,50 @@ export async function createApontamento(data: InsertApontamento) {
         updatedAt: new Date()
     };
 
-    return await db.insert(apontamentos).values(values).returning();
+    const result = await db.insert(apontamentos).values(values).returning();
+
+    // =====================================================================
+    // PARTE 2: Atualizar automaticamente a data de verificação da sala
+    // Quando um apontamento é registrado, a sala correspondente é marcada
+    // como verificada com a data do apontamento — sem precisar de ação manual.
+    // =====================================================================
+    try {
+        const dataVerificacao = typeof data.data === 'string' ? new Date(data.data) : data.data;
+
+        // Busca a sala pelo nome, edificação e pavimento
+        const salaAlvo = await db.select()
+            .from(salas)
+            .where(
+                and(
+                    eq(salas.nome, data.sala),
+                    eq(salas.edificacao, data.edificacao),
+                    eq(salas.pavimento, data.pavimento)
+                )
+            )
+            .limit(1);
+
+        if (salaAlvo.length > 0) {
+            const sala = salaAlvo[0];
+            // Atualiza a data de verificação apenas se ainda não foi preenchida
+            // ou se a data do apontamento for mais recente
+            const deveAtualizar = !sala.dataVerificada || dataVerificacao > sala.dataVerificada;
+
+            if (deveAtualizar) {
+                await db.update(salas)
+                    .set({
+                        dataVerificada: dataVerificacao,
+                        status: 'VERIFICADA',
+                        updatedAt: new Date()
+                    })
+                    .where(eq(salas.id, sala.id));
+            }
+        }
+    } catch (syncError) {
+        // Erro aqui não cancela o apontamento — apenas logamos para não afetar o usuário
+        console.warn('[createApontamento] Falha ao sincronizar data de verificação da sala:', syncError);
+    }
+
+    return result;
 }
 
 export async function updateSalaStatus(id: number, data: Partial<InsertSala>) {
