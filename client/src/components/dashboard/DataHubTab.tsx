@@ -501,16 +501,16 @@ export default function DataHubTab() {
                                                 </TableCell>
                                                 <TableCell className="text-center">
                                                     <div className="flex gap-1 justify-center items-center">
-                                                        {/* Botão Excluir — aparece ao passar o mouse na linha */}
+                                                        {/* Botão de excluir — sempre visível, fica vermelho ao passar o mouse */}
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
                                                             title={`Excluir #${item.numeroApontamento}`}
-                                                            className="h-6 w-6 opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-600 hover:bg-red-50 transition-all"
+                                                            className="h-6 w-6 text-slate-300 hover:text-red-600 hover:bg-red-50 transition-all shrink-0"
                                                             onClick={() => handleDeleteApontamento(item.id, item.numeroApontamento)}
                                                             disabled={deleteApontamento.isPending}
                                                         >
-                                                            <X size={13} />
+                                                            <X size={14} />
                                                         </Button>
 
                                                         {/* Model Photo (Referencia) */}
