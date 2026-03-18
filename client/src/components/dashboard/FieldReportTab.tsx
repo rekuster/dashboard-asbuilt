@@ -29,6 +29,7 @@ import { toast } from "sonner";
 
 interface QueuedApontamento {
     id: string; // Temp local ID
+    projectId?: string; // Project scope
     salaId: number;
     edificacao: string;
     pavimento: string;
@@ -178,6 +179,7 @@ export default function FieldReportTab() {
         for (const item of offlineQueue) {
             try {
                 await createApontamento.mutateAsync({
+                    projectId: item.projectId, // Added projectId
                     data: item.data,
                     edificacao: item.edificacao,
                     pavimento: item.pavimento,
@@ -328,6 +330,7 @@ export default function FieldReportTab() {
             }
 
             const payload = {
+                projectId: selectedSala.projectId, // Added projectId
                 data: dataISO,
                 edificacao: selectedSala.edificacao,
                 pavimento: selectedSala.pavimento,

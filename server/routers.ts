@@ -459,6 +459,7 @@ export const appRouter = router({
         // Field Report Mutations
         createApontamento: publicProcedure
             .input(z.object({
+                projectId: z.string().optional(),
                 numeroApontamento: z.number().optional(),
                 data: z.date().or(z.string()),
                 edificacao: z.string(),
