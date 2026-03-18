@@ -196,6 +196,45 @@ export async function getApontamentosBySala(nomeSala: string) {
     return db.select().from(apontamentos).where(eq(apontamentos.sala, nomeSala));
 }
 
+export async function deleteApontamento(id: number) {
+    const db = await getDb();
+    if (!db) return null;
+
+    // 1. Buscar o contexto (sala, edificacao, pavimento) para saber quem renumerar
+    const target = await db.select().from(apontamentos).where(eq(apontamentos.id, id)).limit(1);
+    if (target.length === 0) return null;
+
+    const { sala, edificacao, pavimento } = target[0];
+
+    // 2. Deletar o apontamento
+    await db.delete(apontamentos).where(eq(apontamentos.id, id));
+
+    // 3. Buscar todos os que sobraram na mesma sala/pavimento/edificação
+    // Ordenamos pela data original para manter a sequência histórica correta
+    const remaining = await db.select()
+        .from(apontamentos)
+        .where(
+            and(
+                eq(apontamentos.sala, sala),
+                eq(apontamentos.edificacao, edificacao),
+                eq(apontamentos.pavimento, pavimento)
+            )
+        )
+        .orderBy(apontamentos.data); 
+
+    // 4. Atualizar a numeração de todos para garantir que não haja "buracos"
+    for (let i = 0; i < remaining.length; i++) {
+        const novoNumero = i + 1;
+        if (remaining[i].numeroApontamento !== novoNumero) {
+            await db.update(apontamentos)
+                .set({ numeroApontamento: novoNumero })
+                .where(eq(apontamentos.id, remaining[i].id));
+        }
+    }
+
+    return true;
+}
+
 // ============================================================================
 // KPI FUNCTIONS
 // ============================================================================

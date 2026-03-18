@@ -246,6 +246,13 @@ export const appRouter = router({
             return await getTopDivergencias();
         }),
 
+        deleteApontamento: publicProcedure
+            .input(z.object({ id: z.number() }))
+            .mutation(async ({ input }) => {
+                const { deleteApontamento } = await import('./db');
+                return await deleteApontamento(input.id);
+            }),
+
         getApontamentosPorSemana: publicProcedure
             .input(z.object({ edificacao: z.string().optional() }).optional())
             .query(async ({ input }) => {

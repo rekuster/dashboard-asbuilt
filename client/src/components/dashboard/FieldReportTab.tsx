@@ -113,6 +113,31 @@ export default function FieldReportTab() {
         }
     });
 
+    // Buscar apontamentos já existentes para a sala selecionada
+    const { data: existingApontamentos = [], refetch: refetchExisting } = trpc.dashboard.getApontamentosBySala.useQuery(
+        { sala: selectedSala?.nome || "" },
+        { enabled: !!selectedSala }
+    );
+
+    const deleteApontamentoMutation = trpc.dashboard.deleteApontamento.useMutation({
+        onSuccess: () => {
+            toast.success("Apontamento excluído e renumerado!");
+            refetchExisting();
+            utils.dashboard.getKPIs.invalidate();
+            utils.dashboard.getApontamentos.invalidate();
+        },
+        onError: (err) => {
+            toast.error("Erro ao excluir apontamento.");
+            console.error(err);
+        }
+    });
+
+    const handleDeleteExisting = async (id: number) => {
+        if (window.confirm("Tem certeza que deseja excluir este apontamento? A numeração de todos os outros desta sala será ajustada automaticamente.")) {
+            await deleteApontamentoMutation.mutateAsync({ id });
+        }
+    };
+
     // Fetch data
     const { data: edificacoes = [] } = trpc.dashboard.getEdificacoes.useQuery();
     const { data: salas = [] } = trpc.dashboard.getSalas.useQuery();
@@ -688,6 +713,60 @@ export default function FieldReportTab() {
                                                 )}
                                             </Button>
                                         </div>
+                                    </CardContent>
+                                </Card>
+                            )}
+
+                            {/* Histórico da Sala (Já Salvos) */}
+                            {selectedSala && (
+                                <Card className="shadow-md border-slate-200">
+                                    <CardHeader className="pb-3 border-b border-slate-100">
+                                        <CardTitle className="text-lg flex items-center gap-2">
+                                            <CalendarDays className="w-5 h-5 text-slate-500" />
+                                            Apontamentos Existentes
+                                            {existingApontamentos.length > 0 && (
+                                                <span className="ml-2 text-sm font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
+                                                    {existingApontamentos.length}
+                                                </span>
+                                            )}
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="p-0">
+                                        {existingApontamentos.length === 0 ? (
+                                            <div className="p-8 text-center text-slate-400 italic text-sm">
+                                                Nenhum apontamento registrado para esta sala ainda.
+                                            </div>
+                                        ) : (
+                                            <div className="divide-y divide-slate-100">
+                                                {existingApontamentos.map((ap: any) => (
+                                                    <div key={ap.id} className="flex items-start gap-4 p-4 hover:bg-slate-50/50 transition-colors group">
+                                                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-black">
+                                                            {ap.numeroApontamento}
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex items-center gap-2 mb-1">
+                                                                <span className="text-[10px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-slate-200 text-slate-700">
+                                                                    {ap.disciplina}
+                                                                </span>
+                                                                <span className="text-[10px] text-slate-400 font-medium">
+                                                                    {new Date(ap.data).toLocaleDateString('pt-BR')}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-sm text-slate-600 leading-snug">{ap.divergencia}</p>
+                                                        </div>
+                                                        <Button
+                                                            size="icon"
+                                                            variant="ghost"
+                                                            className="flex-shrink-0 h-8 w-8 text-slate-300 hover:text-red-600 hover:bg-red-50"
+                                                            onClick={() => handleDeleteExisting(ap.id)}
+                                                            disabled={deleteApontamentoMutation.isPending}
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </Button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                     </CardContent>
                                 </Card>
                             )}
