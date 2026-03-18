@@ -26,7 +26,8 @@ import {
     Map,
     ListChecks,
     ClipboardCheck,
-    Image as ImageIcon
+    Image as ImageIcon,
+    X
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -111,6 +112,23 @@ export default function DataHubTab() {
         },
         onError: () => toast.error("Erro ao atualizar apontamento.")
     });
+
+    // Mutation para excluir um apontamento e renumerar os demais automaticamente
+    const deleteApontamento = trpc.dashboard.deleteApontamento.useMutation({
+        onSuccess: () => {
+            toast.success("Apontamento excluído! Numeração ajustada.");
+            utils.dashboard.getApontamentos.invalidate();
+            utils.dashboard.getKPIs.invalidate();
+        },
+        onError: () => toast.error("Erro ao excluir apontamento.")
+    });
+
+    // Função de exclusão com confirmação
+    const handleDeleteApontamento = (id: number, numero: number) => {
+        if (window.confirm(`Excluir o Apontamento #${numero}?\nOs demais serão renumerados automaticamente.`)) {
+            deleteApontamento.mutate({ id });
+        }
+    };
 
     const downloadExcel = async () => {
         try {
@@ -438,7 +456,7 @@ export default function DataHubTab() {
                                     </TableHeader>
                                     <TableBody>
                                         {sortedApontamentos.map((item: any) => (
-                                            <TableRow key={item.id}>
+                                            <TableRow key={item.id} className="group">
                                                 <TableCell className="text-xs">
                                                     <div className="font-medium text-primary">#{item.numeroApontamento}</div>
                                                     <div className="text-muted-foreground">{format(new Date(item.data), "dd/MM/yy")}</div>
@@ -482,7 +500,19 @@ export default function DataHubTab() {
                                                     />
                                                 </TableCell>
                                                 <TableCell className="text-center">
-                                                    <div className="flex gap-1 justify-center">
+                                                    <div className="flex gap-1 justify-center items-center">
+                                                        {/* Botão Excluir — aparece ao passar o mouse na linha */}
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            title={`Excluir #${item.numeroApontamento}`}
+                                                            className="h-6 w-6 opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-600 hover:bg-red-50 transition-all"
+                                                            onClick={() => handleDeleteApontamento(item.id, item.numeroApontamento)}
+                                                            disabled={deleteApontamento.isPending}
+                                                        >
+                                                            <X size={13} />
+                                                        </Button>
+
                                                         {/* Model Photo (Referencia) */}
                                                         <Popover>
                                                             <PopoverTrigger asChild>
