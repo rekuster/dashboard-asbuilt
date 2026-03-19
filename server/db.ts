@@ -349,9 +349,9 @@ export async function getTendenciaVerificacao(edificacao?: string) {
     const agrupamento: { [dateStr: string]: number } = {};
     let countRealizado = 0;
     
-    // Para simplificar, agrupamos pelo formato DD/MM
+    // Formato DD/MM/YY para evitar confusão de ano
     datasValidas.forEach(d => {
-        const diaStr = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}`;
+        const diaStr = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear().toString().slice(-2)}`;
         countRealizado++;
         agrupamento[diaStr] = countRealizado;
     });
@@ -398,7 +398,7 @@ export async function getTendenciaVerificacao(edificacao?: string) {
             // Ponto Intermediário
             if (diasFaltantes > 2) {
                 const dataMeio = new Date(agora + ((diasFaltantes / 2) * 1000 * 60 * 60 * 24));
-                const labelMeio = `${dataMeio.getDate().toString().padStart(2, '0')}/${(dataMeio.getMonth() + 1).toString().padStart(2, '0')}`;
+                const labelMeio = `${dataMeio.getDate().toString().padStart(2, '0')}/${(dataMeio.getMonth() + 1).toString().padStart(2, '0')}/${dataMeio.getFullYear().toString().slice(-2)}`;
                 // Garantir de não repetir rotulo
                 if (!resultadoFinal.find(r => r.name === labelMeio)) {
                     resultadoFinal.push({
@@ -411,7 +411,7 @@ export async function getTendenciaVerificacao(edificacao?: string) {
 
             // Ponto Final (Término)
             const dataFim = new Date(agora + (diasFaltantes * 1000 * 60 * 60 * 24));
-            const labelFim = `${dataFim.getDate().toString().padStart(2, '0')}/${(dataFim.getMonth() + 1).toString().padStart(2, '0')}`;
+            const labelFim = `${dataFim.getDate().toString().padStart(2, '0')}/${(dataFim.getMonth() + 1).toString().padStart(2, '0')}/${dataFim.getFullYear().toString().slice(-2)}`;
             if (!resultadoFinal.find(r => r.name === labelFim)) {
                 resultadoFinal.push({
                     name: labelFim,
