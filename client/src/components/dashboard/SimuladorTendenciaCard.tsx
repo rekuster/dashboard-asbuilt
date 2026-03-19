@@ -193,6 +193,16 @@ export default function SimuladorTendenciaCard({ data, allRooms, projectId, proj
             }
         }
 
+        // 4. Generate Baseline (Fixed Goal) if exists
+        if (project?.baselineRoomsPerWeek && project?.baselineTargetDate) {
+            const baselineSpeedPerBusinessDay = project.baselineRoomsPerWeek / 5;
+            const now = new Date().getTime();
+            
+            // Start baseline from first recorded point
+            const firstPoint = history[0];
+            const startTimestamp = firstPoint?.timestamp || now;
+            const startVal = firstPoint?.Realizado || 0;
+
             result.forEach(point => {
                 if (point.timestamp) {
                     const businessDaysElapsed = getBusinessDaysCount(new Date(startTimestamp), new Date(point.timestamp)) - 1;
@@ -204,6 +214,7 @@ export default function SimuladorTendenciaCard({ data, allRooms, projectId, proj
                     }
                 }
             });
+        }
 
         return result;
     }, [data, mode, roomsPerWeek, targetDate, salasRestantes, salasVerificadas, totalSalas, globalTotalSalas, project]);

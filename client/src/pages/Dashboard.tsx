@@ -263,7 +263,16 @@ export default function Dashboard() {
                             <KPICard
                                 title="Previsão Término"
                                 value={kpis?.estimativaTermino ? new Date(kpis.estimativaTermino).toLocaleDateString('pt-BR', {day: '2-digit', month: 'short'}) : "..."}
-                                subtitle={kpis?.velocidadeVerificacao > 0 ? `${kpis.velocidadeVerificacao.toFixed(1)} salas/dia` : "Aguardando dados"}
+                                subtitle={
+                                    <div className="flex flex-col gap-0.5">
+                                        <span>{kpis?.velocidadeVerificacao > 0 ? `${kpis.velocidadeVerificacao.toFixed(1)} salas/dia` : "Aguardando dados"}</span>
+                                        {project?.baselineTargetDate && (
+                                            <span className="text-[10px] text-primary font-bold">
+                                                Meta: {new Date(project.baselineTargetDate).toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'})}
+                                            </span>
+                                        )}
+                                    </div>
+                                }
                                 icon={CalendarDays}
                                 variant="default"
                             />
