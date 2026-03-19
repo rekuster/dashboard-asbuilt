@@ -1,12 +1,5 @@
-import {
-    LineChart,
-    Line,
-    XAxis,
-    YAxis,
-    CartesianGrid,
-    Tooltip,
-    ResponsiveContainer,
-    Legend
+    Legend,
+    Bar
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp } from "lucide-react";
@@ -35,7 +28,7 @@ export default function ApontamentosPorSemanaChart({ data, hideTitle }: Apontame
 
     const chartContent = (
         <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data} margin={{ top: 30, right: 30, left: 10, bottom: 5 }}>
+            <LineChart data={data} margin={{ top: 40, right: 30, left: 10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
                 <XAxis
                     dataKey="semana"
@@ -43,8 +36,7 @@ export default function ApontamentosPorSemanaChart({ data, hideTitle }: Apontame
                     tickFormatter={(value) => value.split('-W')[1] ? `S.${value.split('-W')[1]}` : value}
                     axisLine={{ stroke: "#E2E8F0" }}
                 />
-                <YAxis yAxisId="left" tick={{ fontSize: 10, fill: "#940707" }} axisLine={{ stroke: "#E2E8F0" }} />
-                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: "#10B981" }} axisLine={{ stroke: "#E2E8F0" }} />
+                <YAxis tick={{ fontSize: 10, fill: "#64748B" }} axisLine={{ stroke: "#E2E8F0" }} width={30} />
                 <Tooltip
                     contentStyle={{
                         backgroundColor: "rgba(255, 255, 255, 0.96)",
@@ -60,42 +52,37 @@ export default function ApontamentosPorSemanaChart({ data, hideTitle }: Apontame
                     wrapperStyle={{ paddingTop: '10px' }}
                 />
 
-                {/* Appointments Line */}
-                <Line
-                    yAxisId="left"
+                {/* Appointments as Bar for better volume visualization */}
+                <Bar 
                     name="Apontamentos"
-                    type="monotone"
-                    dataKey="count"
-                    stroke="#940707"
-                    strokeWidth={4}
-                    dot={{ r: 4, fill: "#940707", strokeWidth: 2, stroke: "#fff" }}
-                    activeDot={{ r: 7, fill: "#940707", strokeWidth: 0 }}
-                    label={{
-                        position: 'top',
-                        fontSize: 11,
-                        fill: '#940707',
+                    dataKey="count" 
+                    fill="#940707" 
+                    radius={[4, 4, 0, 0]} 
+                    barSize={20}
+                    label={{ 
+                        position: 'top', 
+                        fontSize: 11, 
+                        fill: '#940707', 
                         fontWeight: 'bold',
-                        offset: 12
-                    }}
+                        offset: 10
+                    }} 
                 />
 
-                {/* Verified Rooms Line */}
+                {/* Verified Rooms as Line over the bars */}
                 <Line
-                    yAxisId="right"
                     name="Salas Verificadas"
                     type="monotone"
                     dataKey="verifiedRooms"
                     stroke="#10B981"
                     strokeWidth={3}
-                    strokeDasharray="5 5"
                     dot={{ r: 4, fill: "#10B981", strokeWidth: 2, stroke: "#fff" }}
                     activeDot={{ r: 6, fill: "#10B981", strokeWidth: 0 }}
                     label={{
-                        position: 'bottom',
+                        position: 'top',
                         fontSize: 11,
                         fill: '#10B981',
                         fontWeight: 'bold',
-                        offset: 12
+                        offset: 15
                     }}
                 />
             </LineChart>
