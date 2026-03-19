@@ -360,8 +360,15 @@ export async function getTendenciaVerificacao(edificacao?: string) {
     
     // Adicionar histórico no gráfico
     for (const data in agrupamento) {
+        // Encontrar o timestamp original para essa label (aproximado pela última ocorrência)
+        const dOriginal = datasValidas.reverse().find(d => 
+            `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear().toString().slice(-2)}` === data
+        );
+        datasValidas.reverse(); // Restaurar ordem
+
         resultadoFinal.push({
             name: data,
+            timestamp: dOriginal?.getTime() || null,
             Realizado: agrupamento[data],
             Projetado: null
         });
@@ -397,12 +404,14 @@ export async function getTendenciaVerificacao(edificacao?: string) {
             // Projetar 1 ponto intermediário (metade do caminho) e 1 ponto final
             // Ponto Intermediário
             if (diasFaltantes > 2) {
-                const dataMeio = new Date(agora + ((diasFaltantes / 2) * 1000 * 60 * 60 * 24));
+                const tsMeio = agora + ((diasFaltantes / 2) * 1000 * 60 * 60 * 24);
+                const dataMeio = new Date(tsMeio);
                 const labelMeio = `${dataMeio.getDate().toString().padStart(2, '0')}/${(dataMeio.getMonth() + 1).toString().padStart(2, '0')}/${dataMeio.getFullYear().toString().slice(-2)}`;
                 // Garantir de não repetir rotulo
                 if (!resultadoFinal.find(r => r.name === labelMeio)) {
                     resultadoFinal.push({
                         name: labelMeio,
+                        timestamp: tsMeio,
                         Realizado: null,
                         Projetado: Math.round(countRealizado + (salasRestantes / 2))
                     });
@@ -410,17 +419,22 @@ export async function getTendenciaVerificacao(edificacao?: string) {
             }
 
             // Ponto Final (Término)
-            const dataFim = new Date(agora + (diasFaltantes * 1000 * 60 * 60 * 24));
+            const tsFim = agora + (diasFaltantes * 1000 * 60 * 60 * 24);
+            const dataFim = new Date(tsFim);
             const labelFim = `${dataFim.getDate().toString().padStart(2, '0')}/${(dataFim.getMonth() + 1).toString().padStart(2, '0')}/${dataFim.getFullYear().toString().slice(-2)}`;
             if (!resultadoFinal.find(r => r.name === labelFim)) {
                 resultadoFinal.push({
                     name: labelFim,
+                    timestamp: tsFim,
                     Realizado: null,
                     Projetado: totalSalas
                 });
             } else {
                  const match = resultadoFinal.find(r => r.name === labelFim);
-                 if (match) match.Projetado = totalSalas;
+                 if (match) {
+                     match.Projetado = totalSalas;
+                     match.timestamp = tsFim;
+                 }
             }
         }
     }

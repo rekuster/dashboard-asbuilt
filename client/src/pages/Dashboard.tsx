@@ -30,8 +30,8 @@ import ApontamentosPorSalaChart from "@/components/charts/ApontamentosPorSalaCha
 import ApontamentosPorSemanaChart from "@/components/charts/ApontamentosPorSemanaChart";
 import ApontamentosPorDisciplinaChart from "@/components/charts/ApontamentosPorDisciplinaChart";
 import StatusPieChart from "@/components/charts/StatusPieChart";
-import VerificacaoProgressoChart from "@/components/charts/VerificacaoProgressoChart";
 import TopImpactedRooms from "@/components/dashboard/TopImpactedRooms";
+import SimuladorTendenciaCard from "@/components/dashboard/SimuladorTendenciaCard";
 import DataHubTab from "@/components/dashboard/DataHubTab";
 import DataIntegrityAlert from "@/components/dashboard/DataIntegrityAlert";
 import IfcUploader from "@/components/ifc/IfcUploader";
@@ -277,18 +277,12 @@ export default function Dashboard() {
                                 <StatusPieChart data={chartStatus} />
                             </div>
 
-                            {/* Novo Gráfico de Tendência (Ocupa 2 cartões de largura na tela grande e 3 na maior) */}
-                            <Card className="col-span-1 lg:col-span-2 xl:col-span-3 h-[400px] flex flex-col p-4">
-                                <CardHeader className="p-0 pb-4">
-                                    <CardTitle className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                                        <CalendarDays className="w-4 h-4 text-primary" />
-                                        Tendência de Verificação (Conclusão)
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="flex-1 p-0 pb-4">
-                                    <VerificacaoProgressoChart data={tendenciaData} />
-                                </CardContent>
-                            </Card>
+                            {/* Simulador de Tendência Interativo */}
+                            <SimuladorTendenciaCard 
+                                data={tendenciaData} 
+                                totalSalas={kpis?.totalSalas || 0}
+                                salasVerificadas={kpis?.salasVerificadas || 0}
+                            />
                             <div className="xl:col-span-2">
                                 <TopImpactedRooms data={topSalas} />
                             </div>

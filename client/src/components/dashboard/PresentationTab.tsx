@@ -5,13 +5,12 @@ import {
     Building2,
     Calendar,
     Users,
-    Trash2,
-    CalendarDays
+    Trash2
 } from "lucide-react";
 import { toast } from "sonner";
 import ApontamentosPorSemanaChart from "@/components/charts/ApontamentosPorSemanaChart";
 import ApontamentosPorDisciplinaChart from "@/components/charts/ApontamentosPorDisciplinaChart";
-import VerificacaoProgressoChart from "@/components/charts/VerificacaoProgressoChart";
+import SimuladorTendenciaCard from "@/components/dashboard/SimuladorTendenciaCard";
 import TopImpactedRooms from "@/components/dashboard/TopImpactedRooms";
 import IfcViewer from "@/components/ifc/IfcViewer";
 
@@ -213,15 +212,13 @@ export default function PresentationTab({
             </div>
 
             {/* Middle Section 2: Tendency Chart (Full Width) */}
-            <Card className="bg-white border border-slate-100 shadow-sm rounded-2xl overflow-hidden p-5 flex flex-col h-[350px]">
-                <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
-                    <CalendarDays className="w-3.5 h-3.5 text-primary" />
-                    Curva de Progresso: Histórico e Projeção de Término
-                </h2>
-                <div className="flex-1 pt-2">
-                    <VerificacaoProgressoChart data={tendenciaData} />
-                </div>
-            </Card>
+            <div className="w-full">
+                <SimuladorTendenciaCard 
+                    data={tendenciaData} 
+                    totalSalas={kpis?.totalSalas || 0}
+                    salasVerificadas={kpis?.salasVerificadas || 0}
+                />
+            </div>
 
             {/* Bottom Row: Top Impacted Rooms */}
             <Card className="bg-white border border-slate-100 shadow-sm rounded-2xl p-5">
