@@ -5,7 +5,7 @@
  */
 
 import "dotenv/config";
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc, like } from "drizzle-orm";
 // import { drizzle as drizzleSqlite } from "drizzle-orm/better-sqlite3"; // REMOVED STATIC IMPORT
 import { drizzle as drizzlePg } from "drizzle-orm/postgres-js";
 // import Database from "better-sqlite3"; // REMOVED STATIC IMPORT
@@ -193,7 +193,8 @@ export async function getAllApontamentos() {
 export async function getApontamentosBySala(nomeSala: string) {
     const db = await getDb();
     if (!db) return [];
-    return db.select().from(apontamentos).where(eq(apontamentos.sala, nomeSala));
+    // Use like() with % to avoid issues with trailing spaces from Excel/User typing
+    return db.select().from(apontamentos).where(like(apontamentos.sala, `%${nomeSala.trim()}%`));
 }
 
 export async function deleteApontamento(id: number) {

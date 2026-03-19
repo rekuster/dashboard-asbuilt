@@ -145,12 +145,17 @@ export function useIfcViewer() {
 
         console.log("🎨 Applying status colors to model...");
 
-        // Clear existing status highlights
-        const styles = (highlighterRef.current as any).styles;
-        if (styles) {
-            for (const s in styles) {
-                if (s.startsWith("status-")) highlighterRef.current.clear(s);
+        try {
+            // Clear existing status highlights
+            const styles = (highlighterRef.current as any).styles;
+            if (styles) {
+                for (const s in styles) {
+                    if (s.startsWith("status-")) highlighterRef.current.clear(s);
+                }
             }
+        } catch (e) {
+            console.warn("Could not clear highlighter styles, FragmentsManager might not be initialized:", e);
+            return; // Abort applying colors if we can't clear
         }
 
         // Group rooms by color
