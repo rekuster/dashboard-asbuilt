@@ -23,6 +23,8 @@ import {
     getAllRoomsWithColors,
     getAllIfcFiles,
     getIfcFilesByEdificacao,
+    getTendenciaVerificacao,
+    getTendenciaVerificacaoPorEdificacao,
     getSalaByNome,
     getApontamentosBySala,
     linkIfcToRoom,
@@ -268,6 +270,16 @@ export const appRouter = router({
             .input(z.object({ edificacao: z.string() }))
             .query(async ({ input }) => {
                 return await getKPIsPorEdificacao(input.edificacao);
+            }),
+            
+        getTendenciaVerificacao: publicProcedure.query(async () => {
+            return await getTendenciaVerificacao();
+        }),
+
+        getTendenciaVerificacaoPorEdificacao: publicProcedure
+            .input(z.object({ edificacao: z.string() }))
+            .query(async ({ input }) => {
+                return await getTendenciaVerificacaoPorEdificacao(input.edificacao);
             }),
 
         getSalasPorEdificacao: publicProcedure.query(async () => {

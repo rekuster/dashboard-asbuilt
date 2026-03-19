@@ -6,10 +6,12 @@ import {
     Calendar,
     Users,
     Trash2,
+    CalendarDays
 } from "lucide-react";
 import { toast } from "sonner";
 import ApontamentosPorSemanaChart from "@/components/charts/ApontamentosPorSemanaChart";
 import ApontamentosPorDisciplinaChart from "@/components/charts/ApontamentosPorDisciplinaChart";
+import VerificacaoProgressoChart from "@/components/charts/VerificacaoProgressoChart";
 import TopImpactedRooms from "@/components/dashboard/TopImpactedRooms";
 import IfcViewer from "@/components/ifc/IfcViewer";
 
@@ -41,6 +43,15 @@ export default function PresentationTab({
     const { data: topSalas = [] } = trpc.dashboard.getTopSalasImpactadas.useQuery(
         { edificacao: edificacao || undefined }
     );
+    const { data: chartTendenciaGeral = [] } = trpc.dashboard.getTendenciaVerificacao.useQuery(
+        undefined,
+        { enabled: !edificacao }
+    );
+    const { data: chartTendenciaFiltrada = [] } = trpc.dashboard.getTendenciaVerificacaoPorEdificacao.useQuery(
+        { edificacao: edificacao || "" },
+        { enabled: !!edificacao }
+    );
+    const tendenciaData = edificacao ? chartTendenciaFiltrada : chartTendenciaGeral;
 
     const utils = trpc.useUtils();
     const deleteMutation = trpc.ifc.deleteFile.useMutation({
@@ -200,6 +211,17 @@ export default function PresentationTab({
                     </Card>
                 </div>
             </div>
+
+            {/* Middle Section 2: Tendency Chart (Full Width) */}
+            <Card className="bg-white border border-slate-100 shadow-sm rounded-2xl overflow-hidden p-5 flex flex-col h-[350px]">
+                <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                    <CalendarDays className="w-3.5 h-3.5 text-purple-600" />
+                    Curva de Progresso: Histórico e Projeção de Término
+                </h2>
+                <div className="flex-1 pt-2">
+                    <VerificacaoProgressoChart data={tendenciaData} />
+                </div>
+            </Card>
 
             {/* Bottom Row: Top Impacted Rooms */}
             <Card className="bg-white border border-slate-100 shadow-sm rounded-2xl p-5">

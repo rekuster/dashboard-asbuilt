@@ -323,6 +323,106 @@ export async function getKPIs(edificacao?: string) {
     };
 }
 
+export async function getTendenciaVerificacao(edificacao?: string) {
+    const db = await getDb();
+    if (!db) return [];
+
+    // Busca dados base da mesma forma que os KPIs para manter as métricas idênticas
+    let sQuery = db.select().from(salas);
+    if (edificacao) {
+        sQuery = db.select().from(salas).where(eq(salas.edificacao, edificacao));
+    }
+    const allSalas = await sQuery;
+    const totalSalas = allSalas.length;
+
+    // Extrair histórico de datas e ordenar
+    const datasValidas = allSalas
+        .map((s: any) => s.dataVerificada ? new Date(s.dataVerificada) : null)
+        .filter((d: any) => d !== null) as Date[];
+
+    datasValidas.sort((a, b) => a.getTime() - b.getTime());
+
+    // Agrupar cumulativamente por data (YYYY-MM-DD -> total acumulado)
+    const agrupamento: { [dateStr: string]: number } = {};
+    let countRealizado = 0;
+    
+    // Para simplificar, agrupamos pelo formato DD/MM
+    datasValidas.forEach(d => {
+        const diaStr = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}`;
+        countRealizado++;
+        agrupamento[diaStr] = countRealizado;
+    });
+
+    const resultadoFinal: any[] = [];
+    
+    // Adicionar histórico no gráfico
+    for (const data in agrupamento) {
+        resultadoFinal.push({
+            name: data,
+            Realizado: agrupamento[data],
+            Projetado: null
+        });
+    }
+
+    // Se houve histórico, usar o cálculo de velocidade para gerar a projeção
+    if (resultadoFinal.length > 0 && countRealizado < totalSalas) {
+        // Obter velocidade usando a janela de 30 dias (Igual getKPIs)
+        const limitDays = 30;
+        const agora = Date.now();
+        const limitePast = agora - (limitDays * 24 * 60 * 60 * 1000);
+        
+        const timestampValidos = datasValidas.map(d => d.getTime());
+        const timestampRecentes = timestampValidos.filter(time => time > limitePast);
+        
+        if (timestampRecentes.length > 0) {
+            const minDataRecente = Math.min(...timestampRecentes);
+            const diasAtivos = Math.max(1, (agora - minDataRecente) / (1000 * 60 * 60 * 24));
+            const velocidade = timestampRecentes.length / diasAtivos;
+            
+            // O último ponto real que temos
+            const ultimoRegistro = resultadoFinal[resultadoFinal.length - 1];
+            
+            // Vamos adicionar o Ponto de Interseção (onde o Projetado começa exatamente onde o Realizado parou)
+            ultimoRegistro.Projetado = ultimoRegistro.Realizado;
+            
+            // Salas restantes
+            const salasRestantes = totalSalas - countRealizado;
+            const diasFaltantes = salasRestantes / velocidade;
+            
+            // Projetar 1 ponto intermediário (metade do caminho) e 1 ponto final
+            // Ponto Intermediário
+            if (diasFaltantes > 2) {
+                const dataMeio = new Date(agora + ((diasFaltantes / 2) * 1000 * 60 * 60 * 24));
+                const labelMeio = `${dataMeio.getDate().toString().padStart(2, '0')}/${(dataMeio.getMonth() + 1).toString().padStart(2, '0')}`;
+                // Garantir de não repetir rotulo
+                if (!resultadoFinal.find(r => r.name === labelMeio)) {
+                    resultadoFinal.push({
+                        name: labelMeio,
+                        Realizado: null,
+                        Projetado: Math.round(countRealizado + (salasRestantes / 2))
+                    });
+                }
+            }
+
+            // Ponto Final (Término)
+            const dataFim = new Date(agora + (diasFaltantes * 1000 * 60 * 60 * 24));
+            const labelFim = `${dataFim.getDate().toString().padStart(2, '0')}/${(dataFim.getMonth() + 1).toString().padStart(2, '0')}`;
+            if (!resultadoFinal.find(r => r.name === labelFim)) {
+                resultadoFinal.push({
+                    name: labelFim,
+                    Realizado: null,
+                    Projetado: totalSalas
+                });
+            } else {
+                 const match = resultadoFinal.find(r => r.name === labelFim);
+                 if (match) match.Projetado = totalSalas;
+            }
+        }
+    }
+
+    return resultadoFinal;
+}
+
 export async function getStatsStatus(edificacao?: string) {
     const db = await getDb();
     if (!db) return [];
@@ -529,6 +629,10 @@ export async function getEdificacoes() {
 export async function getKPIsPorEdificacao(edificacao: string) {
     const kpis = await getKPIs(edificacao);
     return kpis ? { ...kpis, edificacao } : null;
+}
+
+export async function getTendenciaVerificacaoPorEdificacao(edificacao: string) {
+    return await getTendenciaVerificacao(edificacao);
 }
 
 export async function getSalasPorEdificacao() {

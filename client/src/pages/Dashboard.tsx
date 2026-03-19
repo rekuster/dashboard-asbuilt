@@ -30,6 +30,7 @@ import ApontamentosPorSalaChart from "@/components/charts/ApontamentosPorSalaCha
 import ApontamentosPorSemanaChart from "@/components/charts/ApontamentosPorSemanaChart";
 import ApontamentosPorDisciplinaChart from "@/components/charts/ApontamentosPorDisciplinaChart";
 import StatusPieChart from "@/components/charts/StatusPieChart";
+import VerificacaoProgressoChart from "@/components/charts/VerificacaoProgressoChart";
 import TopImpactedRooms from "@/components/dashboard/TopImpactedRooms";
 import DataHubTab from "@/components/dashboard/DataHubTab";
 import DataIntegrityAlert from "@/components/dashboard/DataIntegrityAlert";
@@ -90,6 +91,15 @@ export default function Dashboard() {
     const { data: topSalas = [] } = trpc.dashboard.getTopSalasImpactadas.useQuery(
         { edificacao: selectedEdificacao || undefined }
     );
+    const { data: chartTendenciaGeral = [] } = trpc.dashboard.getTendenciaVerificacao.useQuery(
+        undefined,
+        { enabled: !selectedEdificacao }
+    );
+    const { data: chartTendenciaFiltrada = [] } = trpc.dashboard.getTendenciaVerificacaoPorEdificacao.useQuery(
+        { edificacao: selectedEdificacao || "" },
+        { enabled: !!selectedEdificacao }
+    );
+    const tendenciaData = selectedEdificacao ? chartTendenciaFiltrada : chartTendenciaGeral;
 
     const { data: ifcFiles = [] } = trpc.ifc.getAllFiles.useQuery();
     const utils = trpc.useUtils();
@@ -260,6 +270,19 @@ export default function Dashboard() {
 
                         {/* Charts Grid */}
                         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                            {/* Novo Gráfico de Tendência (Ocupa 2 cartões de largura na tela grande e 3 na maior) */}
+                            <Card className="col-span-1 lg:col-span-2 xl:col-span-3 h-[400px] flex flex-col p-4">
+                                <CardHeader className="p-0 pb-4">
+                                    <CardTitle className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                                        <CalendarDays className="w-4 h-4 text-purple-600" />
+                                        Tendência de Verificação (Conclusão)
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="flex-1 p-0 pb-4">
+                                    <VerificacaoProgressoChart data={tendenciaData} />
+                                </CardContent>
+                            </Card>
+
                             <div className="xl:col-span-2">
                                 <ApontamentosPorSemanaChart data={chartSemana} />
                             </div>
