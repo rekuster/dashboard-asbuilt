@@ -35,6 +35,30 @@ interface SimuladorTendenciaCardProps {
     project?: any;
 }
 
+// Helper: Calculate business days between two dates
+const getBusinessDaysCount = (start: Date, end: Date) => {
+    let count = 0;
+    const cur = new Date(start);
+    while (cur <= end) {
+        const dayOfWeek = cur.getDay();
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) count++;
+        cur.setDate(cur.getDate() + 1);
+    }
+    return Math.max(1, count);
+};
+
+// Helper: Add business days to a date
+const addBusinessDays = (start: Date, days: number) => {
+    const date = new Date(start);
+    let added = 0;
+    while (added < days) {
+        date.setDate(date.getDate() + 1);
+        const dayOfWeek = date.getDay();
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) added++;
+    }
+    return date;
+};
+
 export default function SimuladorTendenciaCard({ data, allRooms, projectId, project }: SimuladorTendenciaCardProps) {
     const [roomsPerWeek, setRoomsPerWeek] = useState<number>(9);
     const [targetDate, setTargetDate] = useState<string>("");
@@ -82,10 +106,11 @@ export default function SimuladorTendenciaCard({ data, allRooms, projectId, proj
     // Initial calculation for target date based on default speed (9 rooms/week)
     useEffect(() => {
         if (mode === "speed" && roomsPerWeek > 0) {
-            const daysRemaining = salasRestantes > 0 ? (salasRestantes / (roomsPerWeek / 7)) : 0;
-            const date = new Date();
-            date.setDate(date.getDate() + daysRemaining);
-            setTargetDate(date.toISOString().split('T')[0]);
+            // Velocity is per week (usually 5 business days)
+            const speedPerBusinessDay = roomsPerWeek / 5;
+            const businessDaysNeeded = salasRestantes > 0 ? (salasRestantes / speedPerBusinessDay) : 0;
+            const finishDate = addBusinessDays(new Date(), Math.ceil(businessDaysNeeded));
+            setTargetDate(finishDate.toISOString().split('T')[0]);
         }
     }, [roomsPerWeek, mode, salasRestantes]);
 
@@ -112,20 +137,20 @@ export default function SimuladorTendenciaCard({ data, allRooms, projectId, proj
         const result = [...history];
 
         // 2. Calculate simulation parameters
-        let speedPerDay = 0;
+        let speedPerBusinessDay = 0;
         if (mode === "speed") {
-            speedPerDay = roomsPerWeek / 7;
+            speedPerBusinessDay = roomsPerWeek / 5;
         } else {
             const tDate = new Date(targetDate + "T12:00:00");
             const now = new Date();
-            const diffDays = Math.max(1, (tDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-            speedPerDay = salasRestantes / diffDays;
+            const businessDaysCount = getBusinessDaysCount(now, tDate);
+            speedPerBusinessDay = salasRestantes / businessDaysCount;
         }
 
-        if (speedPerDay <= 0 && salasRestantes > 0) return history;
+        if (speedPerBusinessDay <= 0 && salasRestantes > 0) return history;
 
         // 3. Generate projection points
-        const daysToFinish = speedPerDay > 0 ? salasRestantes / speedPerDay : 0;
+        const businessDaysToFinish = speedPerBusinessDay > 0 ? salasRestantes / speedPerBusinessDay : 0;
         
         // Point 0: Interruption (where Projetado starts or ends if finished)
         const lastIndex = result.length - 1;
@@ -136,9 +161,8 @@ export default function SimuladorTendenciaCard({ data, allRooms, projectId, proj
 
         if (salasRestantes > 0) {
             // Point 1: Middle
-            if (daysToFinish > 2) {
-                const midDate = new Date();
-                midDate.setDate(midDate.getDate() + (daysToFinish / 2));
+            if (businessDaysToFinish > 2) {
+                const midDate = addBusinessDays(new Date(), Math.ceil(businessDaysToFinish / 2));
                 const labelMid = `${midDate.getDate().toString().padStart(2, '0')}/${(midDate.getMonth() + 1).toString().padStart(2, '0')}/${midDate.getFullYear().toString().slice(-2)}`;
                 
                 result.push({
@@ -151,8 +175,7 @@ export default function SimuladorTendenciaCard({ data, allRooms, projectId, proj
             }
 
             // Point 2: End
-            const endDate = new Date();
-            endDate.setDate(endDate.getDate() + daysToFinish);
+            const endDate = addBusinessDays(new Date(), Math.ceil(businessDaysToFinish));
             const labelEnd = `${endDate.getDate().toString().padStart(2, '0')}/${(endDate.getMonth() + 1).toString().padStart(2, '0')}/${endDate.getFullYear().toString().slice(-2)}`;
             
             result.push({
@@ -171,7 +194,7 @@ export default function SimuladorTendenciaCard({ data, allRooms, projectId, proj
 
         // 4. Generate Baseline (Fixed Goal) if exists
         if (project?.baselineRoomsPerWeek && project?.baselineTargetDate) {
-            const baselineSpeedPerDay = project.baselineRoomsPerWeek / 7;
+            const baselineSpeedPerBusinessDay = project.baselineRoomsPerWeek / 5;
             const now = new Date().getTime();
             
             // Start baseline from first recorded point
@@ -181,9 +204,9 @@ export default function SimuladorTendenciaCard({ data, allRooms, projectId, proj
 
             result.forEach(point => {
                 if (point.timestamp) {
-                    const diffDays = (point.timestamp - startTimestamp) / (1000 * 60 * 60 * 24);
-                    if (diffDays >= 0) {
-                        point.Meta = Math.min(globalTotalSalas, Math.round(startVal + (diffDays * baselineSpeedPerDay)));
+                    const businessDaysElapsed = getBusinessDaysCount(new Date(startTimestamp), new Date(point.timestamp)) - 1;
+                    if (businessDaysElapsed >= 0) {
+                        point.Meta = Math.min(globalTotalSalas, Math.round(startVal + (businessDaysElapsed * baselineSpeedPerBusinessDay)));
                     } else {
                         point.Meta = startVal;
                     }
@@ -206,11 +229,11 @@ export default function SimuladorTendenciaCard({ data, allRooms, projectId, proj
         setTargetDate(val);
         setMode("date");
         
-        // Calculate rooms per week required for this date
+        // Calculate rooms per week required for this date (using business days)
         const tDate = new Date(val + "T12:00:00");
         const now = new Date();
-        const diffDays = Math.max(1, (tDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-        const neededPerWeek = (salasRestantes / diffDays) * 7;
+        const businessDaysCount = getBusinessDaysCount(now, tDate);
+        const neededPerWeek = (salasRestantes / businessDaysCount) * 5;
         setRoomsPerWeek(Math.round(neededPerWeek * 10) / 10);
     };
 
@@ -372,7 +395,7 @@ export default function SimuladorTendenciaCard({ data, allRooms, projectId, proj
                    </div>
                    <div className="bg-rose-50 p-3 rounded-lg border border-rose-200/50">
                         <p className="text-[10px] font-bold text-rose-500 uppercase">Velocidade Meta</p>
-                        <p className="text-xl font-black text-rose-800">{(roomsPerWeek / 7).toFixed(2)} <span className="text-xs font-medium text-rose-500">salas/dia</span></p>
+                        <p className="text-xl font-black text-rose-800">{(roomsPerWeek / 5).toFixed(2)} <span className="text-xs font-medium text-rose-500">salas/dia úteis</span></p>
                    </div>
                    <div className="bg-primary/5 p-3 rounded-lg border border-primary/20">
                         <p className="text-[10px] font-bold text-primary uppercase">Conclusão Estimada</p>
