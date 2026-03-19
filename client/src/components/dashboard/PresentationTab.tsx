@@ -86,7 +86,7 @@ export default function PresentationTab({
             </div>
 
             {/* Top Row: Main KPIs */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-4 gap-4">
                 <Card className="bg-slate-50 border-none shadow-sm rounded-xl p-4 border-l-4 border-slate-300">
                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Total de Salas</p>
                     <div className="flex items-baseline gap-2">
@@ -110,6 +110,18 @@ export default function PresentationTab({
                     <div className="flex items-baseline gap-2">
                         <span className="text-3xl font-black text-slate-900">{kpis?.totalApontamentos || 0}</span>
                         <span className="text-rose-600 font-medium text-xs">{kpis?.mediaApontamentos?.toFixed(1) || 0} p/ sala</span>
+                    </div>
+                </Card>
+
+                <Card className="bg-purple-50/50 border-none shadow-sm rounded-xl p-4 border-l-4 border-purple-500">
+                    <p className="text-[10px] font-bold text-purple-700 uppercase tracking-widest mb-1 font-black">Previsão Término</p>
+                    <div className="flex items-baseline gap-2">
+                        <span className="text-3xl font-black text-slate-900">
+                            {kpis?.estimativaTermino ? new Date(kpis.estimativaTermino).toLocaleDateString('pt-BR', {day: '2-digit', month: 'short'}) : "..."}
+                        </span>
+                        <span className="text-purple-600 font-medium text-[11px]">
+                            {kpis?.velocidadeVerificacao > 0 ? `${kpis.velocidadeVerificacao.toFixed(1)} s/dia` : "Aguardando"}
+                        </span>
                     </div>
                 </Card>
             </div>

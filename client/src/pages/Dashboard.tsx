@@ -18,7 +18,8 @@ import {
     Smartphone,
     ArrowLeft,
     CheckCircle,
-    Settings
+    Settings,
+    CalendarDays
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -219,7 +220,7 @@ export default function Dashboard() {
 
                     <TabsContent value="overview" className="space-y-8 animate-in fade-in duration-500">
                         {/* KPIs Grid */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6">
                             <KPICard
                                 title="Salas Mapeadas"
                                 value={kpis?.totalSalas || 0}
@@ -247,6 +248,13 @@ export default function Dashboard() {
                                 subtitle={`${kpis?.mediaApontamentos?.toFixed(1) || 0} média por sala`}
                                 icon={Database}
                                 variant="red"
+                            />
+                            <KPICard
+                                title="Previsão Término"
+                                value={kpis?.estimativaTermino ? new Date(kpis.estimativaTermino).toLocaleDateString('pt-BR', {day: '2-digit', month: 'short'}) : "..."}
+                                subtitle={kpis?.velocidadeVerificacao > 0 ? `${kpis.velocidadeVerificacao.toFixed(1)} salas/dia` : "Aguardando dados"}
+                                icon={CalendarDays}
+                                variant="default"
                             />
                         </div>
 

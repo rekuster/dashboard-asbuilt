@@ -276,6 +276,34 @@ export async function getKPIs(edificacao?: string) {
     let salasCriticas = 0;
     issuesPerRoom.forEach(count => { if (count > 10) salasCriticas++; });
 
+    // ==========================================================
+    // CÁLCULO DE TENDÊNCIA DE TÉRMINO
+    // ==========================================================
+    const datasVerificacao = allSalas
+        .filter((s: any) => s.dataVerificada)
+        .map((s: any) => new Date(s.dataVerificada).getTime());
+
+    let estimativaTermino: string | null = null;
+    let velocidadeVerificacao = 0; // salas por dia
+
+    if (salasVerificadas > 0 && datasVerificacao.length > 0) {
+        const minData = Math.min(...datasVerificacao);
+        const maxData = Math.max(...datasVerificacao);
+        
+        // Add 1 to avoid division by zero and include the first day
+        const diasDecorridos = Math.max(1, (maxData - minData) / (1000 * 60 * 60 * 24)); 
+        // fallback to 1 day if minData === maxData
+        const diasReais = diasDecorridos === 0 ? 1 : diasDecorridos;
+
+        velocidadeVerificacao = salasVerificadas / diasReais;
+        
+        const salasRestantes = totalSalas - salasVerificadas;
+        const diasRestantes = salasRestantes / velocidadeVerificacao;
+        
+        const dateTermino = new Date(maxData + (diasRestantes * 1000 * 60 * 60 * 24));
+        estimativaTermino = dateTermino.toISOString();
+    }
+
     return {
         totalSalas,
         salasVerificadas,
@@ -286,6 +314,8 @@ export async function getKPIs(edificacao?: string) {
         taxaLiberacao: totalSalas > 0 ? (salasLiberadas / totalSalas) * 100 : 0,
         taxaCriticidade: totalSalas > 0 ? (salasCriticas / totalSalas) * 100 : 0,
         mediaApontamentos: salasVerificadas > 0 ? totalApontamentos / salasVerificadas : 0,
+        estimativaTermino,
+        velocidadeVerificacao
     };
 }
 
