@@ -270,11 +270,18 @@ export default function Dashboard() {
 
                         {/* Charts Grid */}
                         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                            <div className="xl:col-span-2">
+                                <ApontamentosPorSemanaChart data={chartSemana} />
+                            </div>
+                            <div className="xl:col-span-1">
+                                <StatusPieChart data={chartStatus} />
+                            </div>
+
                             {/* Novo Gráfico de Tendência (Ocupa 2 cartões de largura na tela grande e 3 na maior) */}
                             <Card className="col-span-1 lg:col-span-2 xl:col-span-3 h-[400px] flex flex-col p-4">
                                 <CardHeader className="p-0 pb-4">
                                     <CardTitle className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                                        <CalendarDays className="w-4 h-4 text-purple-600" />
+                                        <CalendarDays className="w-4 h-4 text-primary" />
                                         Tendência de Verificação (Conclusão)
                                     </CardTitle>
                                 </CardHeader>
@@ -282,13 +289,6 @@ export default function Dashboard() {
                                     <VerificacaoProgressoChart data={tendenciaData} />
                                 </CardContent>
                             </Card>
-
-                            <div className="xl:col-span-2">
-                                <ApontamentosPorSemanaChart data={chartSemana} />
-                            </div>
-                            <div className="xl:col-span-1">
-                                <StatusPieChart data={chartStatus} />
-                            </div>
                             <div className="xl:col-span-2">
                                 <TopImpactedRooms data={topSalas} />
                             </div>

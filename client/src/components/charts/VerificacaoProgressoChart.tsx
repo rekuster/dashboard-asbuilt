@@ -81,9 +81,9 @@ export default function VerificacaoProgressoChart({ data }: VerificacaoProgresso
                 <Line
                     type="monotone"
                     dataKey="Realizado"
-                    stroke="#0ea5e9"
+                    stroke="#e11d48"
                     strokeWidth={3}
-                    dot={{ r: 4, fill: "#0ea5e9", strokeWidth: 0 }}
+                    dot={{ r: 4, fill: "#e11d48", strokeWidth: 0 }}
                     activeDot={{ r: 6, strokeWidth: 0 }}
                     connectNulls
                 />
@@ -92,10 +92,10 @@ export default function VerificacaoProgressoChart({ data }: VerificacaoProgresso
                 <Line
                     type="monotone"
                     dataKey="Projetado"
-                    stroke="#a855f7"
+                    stroke="#fda4af"
                     strokeWidth={3}
                     strokeDasharray="5 5"
-                    dot={{ r: 4, fill: "#a855f7", strokeWidth: 0 }}
+                    dot={{ r: 4, fill: "#fda4af", strokeWidth: 0 }}
                     activeDot={{ r: 6, strokeWidth: 0 }}
                     connectNulls
                 />

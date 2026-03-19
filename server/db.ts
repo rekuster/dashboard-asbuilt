@@ -277,35 +277,37 @@ export async function getKPIs(edificacao?: string) {
     issuesPerRoom.forEach(count => { if (count > 10) salasCriticas++; });
 
     // ==========================================================
-    // CÁLCULO DE TENDÊNCIA DE TÉRMINO (Velocidade Ativa)
+    // CÁLCULO DE TENDÊNCIA DE TÉRMINO (Velocidade Ativa GLOBAL)
     // ==========================================================
     const limitDays = 30; // Janela móvel de cálculo (últimos 30 dias)
     const agora = Date.now();
     const limitePast = agora - (limitDays * 24 * 60 * 60 * 1000);
 
-    const datasRecentes = allSalas
+    // O ritmo de verificação é da equipe (global), independente do prédio
+    const globSalas = await db.select().from(salas);
+    const globDatasRecentes = globSalas
         .map((s: any) => s.dataVerificada ? new Date(s.dataVerificada).getTime() : 0)
         .filter((time: number) => time > limitePast);
 
-    let estimativaTermino: string | null = null;
-    let velocidadeVerificacao = 0; // salas por dia
-
-    if (datasRecentes.length > 0 && salasVerificadas < totalSalas) {
-        // Encontra quando as verificações recentes começaram na janela para ter um divisor realista
-        const minDataRecente = Math.min(...datasRecentes);
+    let velocidadeVerificacao = 0; // salas por dia (global)
+    if (globDatasRecentes.length > 0) {
+        const minDataRecente = Math.min(...globDatasRecentes);
         const diasAtivos = Math.max(1, (agora - minDataRecente) / (1000 * 60 * 60 * 24));
-        
-        velocidadeVerificacao = datasRecentes.length / diasAtivos;
-        
+        velocidadeVerificacao = globDatasRecentes.length / diasAtivos;
+    }
+
+    let estimativaTermino: string | null = null;
+
+    if (velocidadeVerificacao > 0 && salasVerificadas < totalSalas) {
         const salasRestantes = totalSalas - salasVerificadas;
+        // Calculamos os dias restantes usando a velocidade global da equipe
         const diasRestantes = salasRestantes / velocidadeVerificacao;
         
         const dateTermino = new Date(agora + (diasRestantes * 1000 * 60 * 60 * 24));
         estimativaTermino = dateTermino.toISOString();
-    } else if (salasVerificadas >= totalSalas) {
-        // Se 100% concluído, estimativa é igual à data da última sala validada
+    } else if (salasVerificadas >= totalSalas && totalSalas > 0) {
+        // Se 100% concluído, estimativa é igual à data de hoje (ou última)
         estimativaTermino = new Date(agora).toISOString();
-        velocidadeVerificacao = salasVerificadas;
     }
 
     return {
@@ -366,18 +368,20 @@ export async function getTendenciaVerificacao(edificacao?: string) {
 
     // Se houve histórico, usar o cálculo de velocidade para gerar a projeção
     if (resultadoFinal.length > 0 && countRealizado < totalSalas) {
-        // Obter velocidade usando a janela de 30 dias (Igual getKPIs)
+        // Obter velocidade Global usando a janela de 30 dias
         const limitDays = 30;
         const agora = Date.now();
         const limitePast = agora - (limitDays * 24 * 60 * 60 * 1000);
         
-        const timestampValidos = datasValidas.map(d => d.getTime());
-        const timestampRecentes = timestampValidos.filter(time => time > limitePast);
-        
-        if (timestampRecentes.length > 0) {
-            const minDataRecente = Math.min(...timestampRecentes);
+        const globSalas = await db.select().from(salas);
+        const globDatasRecentes = globSalas
+            .map((s: any) => s.dataVerificada ? new Date(s.dataVerificada).getTime() : 0)
+            .filter((time: number) => time > limitePast);
+
+        if (globDatasRecentes.length > 0) {
+            const minDataRecente = Math.min(...globDatasRecentes);
             const diasAtivos = Math.max(1, (agora - minDataRecente) / (1000 * 60 * 60 * 24));
-            const velocidade = timestampRecentes.length / diasAtivos;
+            const velocidade = globDatasRecentes.length / diasAtivos;
             
             // O último ponto real que temos
             const ultimoRegistro = resultadoFinal[resultadoFinal.length - 1];

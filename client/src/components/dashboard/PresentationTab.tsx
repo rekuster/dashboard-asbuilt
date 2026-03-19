@@ -215,7 +215,7 @@ export default function PresentationTab({
             {/* Middle Section 2: Tendency Chart (Full Width) */}
             <Card className="bg-white border border-slate-100 shadow-sm rounded-2xl overflow-hidden p-5 flex flex-col h-[350px]">
                 <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
-                    <CalendarDays className="w-3.5 h-3.5 text-purple-600" />
+                    <CalendarDays className="w-3.5 h-3.5 text-primary" />
                     Curva de Progresso: Histórico e Projeção de Término
                 </h2>
                 <div className="flex-1 pt-2">
