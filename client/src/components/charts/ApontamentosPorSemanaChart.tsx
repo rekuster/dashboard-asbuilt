@@ -1,5 +1,14 @@
+import {
+    LineChart,
+    Line,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    Tooltip,
+    ResponsiveContainer,
     Legend,
-    Bar
+    Bar,
+    ComposedChart
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp } from "lucide-react";
@@ -26,9 +35,8 @@ export default function ApontamentosPorSemanaChart({ data, hideTitle }: Apontame
         );
     }
 
-    const chartContent = (
         <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data} margin={{ top: 40, right: 30, left: 10, bottom: 5 }}>
+            <ComposedChart data={data} margin={{ top: 40, right: 30, left: 10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
                 <XAxis
                     dataKey="semana"
@@ -85,7 +93,23 @@ export default function ApontamentosPorSemanaChart({ data, hideTitle }: Apontame
                         offset: 15
                     }}
                 />
-            </LineChart>
+                <Line
+                    name="Salas Verificadas"
+                    type="monotone"
+                    dataKey="verifiedRooms"
+                    stroke="#10B981"
+                    strokeWidth={3}
+                    dot={{ r: 4, fill: "#10B981", strokeWidth: 2, stroke: "#fff" }}
+                    activeDot={{ r: 6, fill: "#10B981", strokeWidth: 0 }}
+                    label={{
+                        position: 'top',
+                        fontSize: 11,
+                        fill: '#10B981',
+                        fontWeight: 'bold',
+                        offset: 15
+                    }}
+                />
+            </ComposedChart>
         </ResponsiveContainer>
     );
 
