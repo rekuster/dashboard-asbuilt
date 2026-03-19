@@ -66,6 +66,7 @@ export default function SimuladorTendenciaCard({ data, allRooms, projectId, proj
     const [selectedBuildings, setSelectedBuildings] = useState<string[]>([]);
     const [open, setOpen] = useState(false);
     const [isSavingBaseline, setIsSavingBaseline] = useState(false);
+    const [showFixSuccess, setShowFixSuccess] = useState(false);
 
     const utils = trpc.useUtils();
     const updateBaselineMutation = trpc.projects.updateBaseline.useMutation();
@@ -192,27 +193,17 @@ export default function SimuladorTendenciaCard({ data, allRooms, projectId, proj
             }
         }
 
-        // 4. Generate Baseline (Fixed Goal) if exists
-        if (project?.baselineRoomsPerWeek && project?.baselineTargetDate) {
-            const baselineSpeedPerBusinessDay = project.baselineRoomsPerWeek / 5;
-            const now = new Date().getTime();
-            
-            // Start baseline from first recorded point
-            const firstPoint = history[0];
-            const startTimestamp = firstPoint?.timestamp || now;
-            const startVal = firstPoint?.Realizado || 0;
-
             result.forEach(point => {
                 if (point.timestamp) {
                     const businessDaysElapsed = getBusinessDaysCount(new Date(startTimestamp), new Date(point.timestamp)) - 1;
                     if (businessDaysElapsed >= 0) {
-                        point.Meta = Math.min(globalTotalSalas, Math.round(startVal + (businessDaysElapsed * baselineSpeedPerBusinessDay)));
+                        // Use totalSalas (selected) instead of globalTotalSalas to match the scale of other lines
+                        point.Meta = Math.min(totalSalas, Math.round(startVal + (businessDaysElapsed * baselineSpeedPerBusinessDay)));
                     } else {
                         point.Meta = startVal;
                     }
                 }
             });
-        }
 
         return result;
     }, [data, mode, roomsPerWeek, targetDate, salasRestantes, salasVerificadas, totalSalas, globalTotalSalas, project]);
@@ -258,6 +249,9 @@ export default function SimuladorTendenciaCard({ data, allRooms, projectId, proj
         } finally {
             setIsSavingBaseline(false);
         }
+        
+        setShowFixSuccess(true);
+        setTimeout(() => setShowFixSuccess(false), 3000);
     };
 
     return (
@@ -366,7 +360,7 @@ export default function SimuladorTendenciaCard({ data, allRooms, projectId, proj
                                 className="h-8 px-3 text-[10px] font-bold border-primary/20 text-primary hover:bg-primary/5 gap-2"
                             >
                                 <Target className="w-3.5 h-3.5" />
-                                {isSavingBaseline ? "Salvando..." : "Fixar como Plano"}
+                                {isSavingBaseline ? "Salvando..." : showFixSuccess ? "✓ Meta Salva!" : "Fixar como Plano"}
                             </Button>
                         </div>
 
