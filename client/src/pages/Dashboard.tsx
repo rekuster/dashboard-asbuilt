@@ -37,6 +37,9 @@ import DataIntegrityAlert from "@/components/dashboard/DataIntegrityAlert";
 import IfcUploader from "@/components/ifc/IfcUploader";
 import PresentationTab from "@/components/dashboard/PresentationTab";
 import EntregasTab from "@/components/dashboard/EntregasTab";
+import AsBuiltDashboard from "@/components/dashboard/AsBuiltDashboard";
+import FieldReportTab from "@/components/dashboard/FieldReportTab";
+import { ErrorBoundary } from "@/components/dashboard/ErrorBoundary";
 import StatusDetailsModal from "@/components/dashboard/StatusDetailsModal";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -305,12 +308,12 @@ export default function Dashboard() {
                                     statusName={selectedStatus}
                                     color={selectedStatusColor}
                                     rooms={(salas || [])
-                                        .filter(s => {
+                                        .filter((s: any) => {
                                             const matchesStatus = s.status?.trim().toUpperCase() === selectedStatus.toUpperCase();
                                             const matchesEdificacao = !selectedEdificacao || s.edificacao === selectedEdificacao;
                                             return matchesStatus && matchesEdificacao;
                                         })
-                                        .map(s => ({
+                                        .map((s: any) => ({
                                             id: s.id,
                                             nome: s.nome || "S/ Nome",
                                             edificacao: s.edificacao || "S/ Edif",
