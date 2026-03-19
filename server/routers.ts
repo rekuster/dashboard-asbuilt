@@ -50,6 +50,7 @@ import {
     createProject,
     getProjectById,
     updateProject,
+    updateProjectBaseline,
     saveMasterList,
     getSalasByProjectId,
     updateSala,
@@ -136,6 +137,17 @@ export const appRouter = router({
                 return await updateProject(id, updateData);
             }),
 
+        updateBaseline: publicProcedure
+            .input(z.object({
+                id: z.string(),
+                baselineTargetDate: z.string().nullable(),
+                baselineRoomsPerWeek: z.number().nullable(),
+            }))
+            .mutation(async ({ input }) => {
+                const targetDate = input.baselineTargetDate ? new Date(input.baselineTargetDate) : null;
+                return await updateProjectBaseline(input.id, targetDate, input.baselineRoomsPerWeek);
+            }),
+
         saveMasterList: publicProcedure
             .input(z.object({
                 projectId: z.string(),
@@ -214,6 +226,10 @@ export const appRouter = router({
 
         // Salas
         getSalas: publicProcedure.query(async () => {
+            return await getAllSalas();
+        }),
+
+        getAllSalas: publicProcedure.query(async () => {
             return await getAllSalas();
         }),
 

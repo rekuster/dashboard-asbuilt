@@ -15,6 +15,8 @@ export const projects = pgTable("projects", {
     endDate: timestamp("endDate"),
     imageUrl: text("imageUrl"),
     status: text("status").default("ativo").notNull(),  // 'ativo' | 'concluido' | 'arquivado'
+    baselineTargetDate: timestamp("baselineTargetDate"),
+    baselineRoomsPerWeek: integer("baselineRoomsPerWeek"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });

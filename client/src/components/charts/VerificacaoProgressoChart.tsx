@@ -13,6 +13,7 @@ interface ProgressoData {
     name: string;
     Realizado: number | null;
     Projetado: number | null;
+    Meta?: number | null;
 }
 
 interface VerificacaoProgressoChartProps {
@@ -31,7 +32,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
                             style={{ backgroundColor: entry.color }}
                         />
                         <span className="text-sm font-medium text-slate-600">
-                            {entry.name}:
+                            {entry.name === 'Meta' ? 'Meta Planejada' : entry.name}:
                         </span>
                         <span className="text-sm font-bold" style={{ color: entry.color }}>
                             {entry.value} salas
@@ -77,9 +78,23 @@ export default function VerificacaoProgressoChart({ data }: VerificacaoProgresso
                     wrapperStyle={{ fontSize: '11px', color: '#64748b' }}
                 />
                 
+                {/* Linha Planejada (Baseline Fixed) - Dark Blue/Slate */}
+                <Line
+                    type="monotone"
+                    name="Meta"
+                    dataKey="Meta"
+                    stroke="#334155"
+                    strokeWidth={2}
+                    strokeDasharray="10 5"
+                    dot={false}
+                    activeDot={{ r: 4, strokeWidth: 0 }}
+                    connectNulls
+                />
+
                 {/* Linha Realizada (Histórico Sólido) */}
                 <Line
                     type="monotone"
+                    name="Realizado"
                     dataKey="Realizado"
                     stroke="#e11d48"
                     strokeWidth={3}
@@ -91,6 +106,7 @@ export default function VerificacaoProgressoChart({ data }: VerificacaoProgresso
                 {/* Linha de Projeção (Futuro Pontilhado) */}
                 <Line
                     type="monotone"
+                    name="Projetado"
                     dataKey="Projetado"
                     stroke="#fda4af"
                     strokeWidth={3}

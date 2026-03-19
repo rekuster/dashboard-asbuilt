@@ -42,6 +42,7 @@ export default function PresentationTab({
     const { data: topSalas = [] } = trpc.dashboard.getTopSalasImpactadas.useQuery(
         { edificacao: edificacao || undefined }
     );
+    const allSalasQuery = trpc.dashboard.getAllSalas.useQuery();
     const { data: chartTendenciaGeral = [] } = trpc.dashboard.getTendenciaVerificacao.useQuery(
         undefined,
         { enabled: !edificacao }
@@ -215,8 +216,7 @@ export default function PresentationTab({
             <div className="w-full">
                 <SimuladorTendenciaCard 
                     data={tendenciaData} 
-                    totalSalas={kpis?.totalSalas || 0}
-                    salasVerificadas={kpis?.salasVerificadas || 0}
+                    allRooms={allSalasQuery.data || []}
                 />
             </div>
 

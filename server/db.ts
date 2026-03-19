@@ -1190,14 +1190,23 @@ export async function getProjectById(id: string) {
     return result.length > 0 ? result[0] : null;
 }
 
-export async function updateProject(id: string, data: Partial<InsertProject>) {
+export async function updateProject(id: string, data: Partial<Project>) {
     const db = await getDb();
     if (!db) return null;
-    const result = await db.update(projects)
-        .set({ ...data, updatedAt: new Date() })
+    return await db.update(projects).set({ ...data, updatedAt: new Date() }).where(eq(projects.id, id)).returning();
+}
+
+export async function updateProjectBaseline(id: string, baselineTargetDate: Date | null, baselineRoomsPerWeek: number | null) {
+    const db = await getDb();
+    if (!db) return null;
+    return await db.update(projects)
+        .set({ 
+            baselineTargetDate, 
+            baselineRoomsPerWeek, 
+            updatedAt: new Date() 
+        })
         .where(eq(projects.id, id))
         .returning();
-    return result[0];
 }
 
 export async function saveMasterList(projectId: string, salasList: Array<{

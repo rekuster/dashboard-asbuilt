@@ -1,8 +1,23 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { Check, ChevronsUpDown, Building2, CalendarDays, TrendingUp, Target } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "@/components/ui/command";
+import { cn } from "@/lib/utils";
+import { trpc } from "@/lib/trpc";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CalendarDays, TrendingUp, Target } from "lucide-react";
 import VerificacaoProgressoChart from "@/components/charts/VerificacaoProgressoChart";
 
 interface ProgressoData {
@@ -10,39 +25,90 @@ interface ProgressoData {
     timestamp: number | null;
     Realizado: number | null;
     Projetado: number | null;
+    Meta?: number | null;
 }
 
 interface SimuladorTendenciaCardProps {
     data: ProgressoData[];
-    totalSalas: number;
-    salasVerificadas: number;
+    allRooms: any[];
+    projectId?: string;
+    project?: any;
 }
 
-export default function SimuladorTendenciaCard({ data, totalSalas, salasVerificadas }: SimuladorTendenciaCardProps) {
+export default function SimuladorTendenciaCard({ data, allRooms, projectId, project }: SimuladorTendenciaCardProps) {
     const [roomsPerWeek, setRoomsPerWeek] = useState<number>(9);
     const [targetDate, setTargetDate] = useState<string>("");
     const [mode, setMode] = useState<"speed" | "date">("speed");
+    const [selectedBuildings, setSelectedBuildings] = useState<string[]>([]);
+    const [open, setOpen] = useState(false);
+    const [isSavingBaseline, setIsSavingBaseline] = useState(false);
+
+    const utils = trpc.useUtils();
+    const updateBaselineMutation = trpc.projects.updateBaseline.useMutation();
+
+    // Load project-wide baseline if it exists
+    useEffect(() => {
+        if (project?.baselineRoomsPerWeek) {
+            setRoomsPerWeek(project.baselineRoomsPerWeek);
+        }
+        if (project?.baselineTargetDate) {
+            const date = new Date(project.baselineTargetDate);
+            setTargetDate(date.toISOString().split('T')[0]);
+        }
+    }, [project]);
+
+    // Get unique buildings from all rooms
+    const buildingsList = useMemo(() => {
+        const set = new Set(allRooms.map(r => r.edificacao).filter(Boolean));
+        return Array.from(set).sort();
+    }, [allRooms]);
+
+    // Calculate dynamic counts based on selection
+    const { totalSalas, salasVerificadas } = useMemo(() => {
+        const filtered = selectedBuildings.length > 0
+            ? allRooms.filter(r => selectedBuildings.includes(r.edificacao))
+            : allRooms;
+            
+        const salasVerificadasCount = filtered.filter(r => r.status?.trim().toUpperCase() === 'VERIFICADA').length;
+            
+        return {
+            totalSalas: filtered.length,
+            salasVerificadas: salasVerificadasCount
+        };
+    }, [allRooms, selectedBuildings]);
 
     const salasRestantes = Math.max(0, totalSalas - salasVerificadas);
 
     // Initial calculation for target date based on default speed (9 rooms/week)
     useEffect(() => {
         if (mode === "speed" && roomsPerWeek > 0) {
-            const daysRemaining = (salasRestantes / (roomsPerWeek / 7));
+            const daysRemaining = salasRestantes > 0 ? (salasRestantes / (roomsPerWeek / 7)) : 0;
             const date = new Date();
             date.setDate(date.getDate() + daysRemaining);
             setTargetDate(date.toISOString().split('T')[0]);
         }
     }, [roomsPerWeek, mode, salasRestantes]);
 
-    const simulatedData = useMemo(() => {
+    const globalTotalSalas = useMemo(() => allRooms.length, [allRooms]);
+
+    const simulatedData = useMemo<ProgressoData[]>(() => {
         if (!data || data.length === 0) return [];
 
-        // 1. Keep only historical data (Realizado is not null)
-        const history = data.filter(d => d.Realizado !== null);
+        // 1. Scale historical data based on selection ratio
+        const ratio = globalTotalSalas > 0 ? (totalSalas / globalTotalSalas) : 1;
+
+        const history: ProgressoData[] = data
+            .filter(d => d.Realizado !== null)
+            .map(d => ({
+                name: d.name,
+                timestamp: d.timestamp,
+                Realizado: d.Realizado !== null ? Math.round(d.Realizado * ratio) : null,
+                Projetado: null,
+                Meta: null
+            }));
+
         if (history.length === 0) return data;
 
-        const lastPoint = history[history.length - 1];
         const result = [...history];
 
         // 2. Calculate simulation parameters
@@ -56,43 +122,77 @@ export default function SimuladorTendenciaCard({ data, totalSalas, salasVerifica
             speedPerDay = salasRestantes / diffDays;
         }
 
-        if (speedPerDay <= 0) return data;
+        if (speedPerDay <= 0 && salasRestantes > 0) return history;
 
         // 3. Generate projection points
-        const daysToFinish = salasRestantes / speedPerDay;
+        const daysToFinish = speedPerDay > 0 ? salasRestantes / speedPerDay : 0;
         
-        // Point 0: Interruption (where Projetado starts)
+        // Point 0: Interruption (where Projetado starts or ends if finished)
         const lastIndex = result.length - 1;
-        result[lastIndex] = { ...result[lastIndex], Projetado: result[lastIndex].Realizado };
+        result[lastIndex] = { 
+            ...result[lastIndex], 
+            Projetado: result[lastIndex].Realizado ?? 0 
+        };
 
-        // Point 1: Middle
-        if (daysToFinish > 2) {
-            const midDate = new Date();
-            midDate.setDate(midDate.getDate() + (daysToFinish / 2));
-            const labelMid = `${midDate.getDate().toString().padStart(2, '0')}/${(midDate.getMonth() + 1).toString().padStart(2, '0')}/${midDate.getFullYear().toString().slice(-2)}`;
+        if (salasRestantes > 0) {
+            // Point 1: Middle
+            if (daysToFinish > 2) {
+                const midDate = new Date();
+                midDate.setDate(midDate.getDate() + (daysToFinish / 2));
+                const labelMid = `${midDate.getDate().toString().padStart(2, '0')}/${(midDate.getMonth() + 1).toString().padStart(2, '0')}/${midDate.getFullYear().toString().slice(-2)}`;
+                
+                result.push({
+                    name: labelMid,
+                    timestamp: midDate.getTime(),
+                    Realizado: null,
+                    Projetado: Math.round(salasVerificadas + (salasRestantes / 2)),
+                    Meta: null
+                });
+            }
+
+            // Point 2: End
+            const endDate = new Date();
+            endDate.setDate(endDate.getDate() + daysToFinish);
+            const labelEnd = `${endDate.getDate().toString().padStart(2, '0')}/${(endDate.getMonth() + 1).toString().padStart(2, '0')}/${endDate.getFullYear().toString().slice(-2)}`;
             
             result.push({
-                name: labelMid,
-                timestamp: midDate.getTime(),
+                name: labelEnd,
+                timestamp: endDate.getTime(),
                 Realizado: null,
-                Projetado: Math.round(salasVerificadas + (salasRestantes / 2))
+                Projetado: totalSalas,
+                Meta: null
+            });
+        } else {
+            // If already finished, ensure projection doesn't go beyond total
+            if (result[lastIndex]) {
+                result[lastIndex].Projetado = totalSalas;
+            }
+        }
+
+        // 4. Generate Baseline (Fixed Goal) if exists
+        if (project?.baselineRoomsPerWeek && project?.baselineTargetDate) {
+            const baselineSpeedPerDay = project.baselineRoomsPerWeek / 7;
+            const now = new Date().getTime();
+            
+            // Start baseline from first recorded point
+            const firstPoint = history[0];
+            const startTimestamp = firstPoint?.timestamp || now;
+            const startVal = firstPoint?.Realizado || 0;
+
+            result.forEach(point => {
+                if (point.timestamp) {
+                    const diffDays = (point.timestamp - startTimestamp) / (1000 * 60 * 60 * 24);
+                    if (diffDays >= 0) {
+                        point.Meta = Math.min(globalTotalSalas, Math.round(startVal + (diffDays * baselineSpeedPerDay)));
+                    } else {
+                        point.Meta = startVal;
+                    }
+                }
             });
         }
 
-        // Point 2: End
-        const endDate = new Date();
-        endDate.setDate(endDate.getDate() + daysToFinish);
-        const labelEnd = `${endDate.getDate().toString().padStart(2, '0')}/${(endDate.getMonth() + 1).toString().padStart(2, '0')}/${endDate.getFullYear().toString().slice(-2)}`;
-        
-        result.push({
-            name: labelEnd,
-            timestamp: endDate.getTime(),
-            Realizado: null,
-            Projetado: totalSalas
-        });
-
         return result;
-    }, [data, mode, roomsPerWeek, targetDate, salasRestantes, salasVerificadas, totalSalas]);
+    }, [data, mode, roomsPerWeek, targetDate, salasRestantes, salasVerificadas, totalSalas, globalTotalSalas, project]);
 
     const handleSpeedChange = (val: string) => {
         const num = parseFloat(val);
@@ -114,16 +214,99 @@ export default function SimuladorTendenciaCard({ data, totalSalas, salasVerifica
         setRoomsPerWeek(Math.round(neededPerWeek * 10) / 10);
     };
 
+    const toggleBuilding = (b: string) => {
+        setSelectedBuildings((prev: string[]) => 
+            prev.includes(b) ? prev.filter((item: string) => item !== b) : [...prev, b]
+        );
+    };
+
+    const handleFixBaseline = async () => {
+        if (!projectId) return;
+        setIsSavingBaseline(true);
+        try {
+            await updateBaselineMutation.mutateAsync({
+                id: projectId,
+                baselineTargetDate: targetDate,
+                baselineRoomsPerWeek: roomsPerWeek
+            });
+            utils.projects.getById.invalidate({ id: projectId });
+        } catch (error) {
+            console.error("Error saving baseline:", error);
+        } finally {
+            setIsSavingBaseline(false);
+        }
+    };
+
     return (
-        <Card className="col-span-1 lg:col-span-2 xl:col-span-3 min-h-[500px] flex flex-col overflow-hidden">
+        <Card className="col-span-1 lg:col-span-2 xl:col-span-3 min-h-[550px] flex flex-col overflow-hidden">
             <CardHeader className="bg-slate-50/50 border-b border-slate-100 p-4">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <CardTitle className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                        <CalendarDays className="w-4 h-4 text-primary" />
-                        Simulador de Tendência de Verificação
-                    </CardTitle>
+                <div className="flex flex-col gap-4">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <CardTitle className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                            <CalendarDays className="w-4 h-4 text-primary" />
+                            Simulador de Tendência de Verificação
+                        </CardTitle>
+
+                        {/* Multi-Select Dropdown */}
+                        <div className="flex items-center gap-2">
+                            <Label className="text-[10px] uppercase font-bold text-slate-500 whitespace-nowrap">Edificações:</Label>
+                            <Popover open={open} onOpenChange={setOpen}>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        role="combobox"
+                                        aria-expanded={open}
+                                        className="h-8 w-[250px] justify-between text-xs font-bold border-slate-200"
+                                    >
+                                        <div className="truncate flex items-center gap-1">
+                                            <Building2 className="w-3.5 h-3.5 text-slate-400" />
+                                            {selectedBuildings.length === 0 
+                                                ? "Todas as Edificações" 
+                                                : `${selectedBuildings.length} selecionadas`}
+                                        </div>
+                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-[250px] p-0" align="end">
+                                    <Command>
+                                        <CommandInput placeholder="Buscar edificação..." className="h-8" />
+                                        <CommandEmpty>Nenhuma encontrada.</CommandEmpty>
+                                        <CommandGroup className="max-h-60 overflow-y-auto">
+                                            {buildingsList.map((building) => (
+                                                <CommandItem
+                                                    key={building}
+                                                    onSelect={() => toggleBuilding(building)}
+                                                    className="flex items-center gap-2"
+                                                >
+                                                    <div className={cn(
+                                                        "flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
+                                                        selectedBuildings.includes(building)
+                                                            ? "bg-primary text-primary-foreground"
+                                                            : "opacity-50 [&_svg]:invisible"
+                                                    )}>
+                                                        <Check className={cn("h-3 w-3")} />
+                                                    </div>
+                                                    <span className="truncate">{building}</span>
+                                                </CommandItem>
+                                            ))}
+                                        </CommandGroup>
+                                    </Command>
+                                </PopoverContent>
+                            </Popover>
+                            {selectedBuildings.length > 0 && (
+                                <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    onClick={() => setSelectedBuildings([])}
+                                    className="h-8 px-2 text-[10px] text-rose-500 hover:text-rose-600 hover:bg-rose-50"
+                                >
+                                    Limpar
+                                </Button>
+                            )}
+                        </div>
+                    </div>
                     
-                    <div className="flex flex-wrap items-center gap-6">
+                    <div className="flex flex-wrap items-center gap-6 pt-2 border-t border-slate-100">
                         <div className="flex flex-col gap-1.5">
                             <Label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold flex items-center gap-1">
                                 <TrendingUp className="w-3 h-3" /> Salas p/ Semana
@@ -148,9 +331,25 @@ export default function SimuladorTendenciaCard({ data, totalSalas, salasVerifica
                             />
                         </div>
 
-                        <div className="hidden md:flex flex-col gap-0.5 justify-center">
-                            <span className="text-[10px] text-slate-400 font-medium">Status</span>
-                            <span className="text-xs font-bold text-primary bg-primary/5 px-2 py-0.5 rounded-full border border-primary/10">
+                        <div className="flex flex-col gap-1.5">
+                            <Label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold flex items-center gap-1 invisible">
+                                .
+                            </Label>
+                            <Button
+                                onClick={handleFixBaseline}
+                                disabled={isSavingBaseline || !projectId}
+                                variant="outline"
+                                size="sm"
+                                className="h-8 px-3 text-[10px] font-bold border-primary/20 text-primary hover:bg-primary/5 gap-2"
+                            >
+                                <Target className="w-3.5 h-3.5" />
+                                {isSavingBaseline ? "Salvando..." : "Fixar como Plano"}
+                            </Button>
+                        </div>
+
+                        <div className="hidden md:flex flex-col gap-0.5 justify-center flex-1 text-right">
+                            <span className="text-[10px] text-slate-400 font-medium">Status da Simulação</span>
+                            <span className="text-xs font-bold text-primary">
                                 {mode === "speed" ? "Simulando por Velocidade" : "Simulando por Prazo"}
                             </span>
                         </div>
@@ -162,10 +361,14 @@ export default function SimuladorTendenciaCard({ data, totalSalas, salasVerifica
                     <VerificacaoProgressoChart data={simulatedData} />
                 </div>
                 
-                <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4 border-t border-slate-100 pt-4">
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-4 gap-4 border-t border-slate-100 pt-4">
                    <div className="bg-slate-50 p-3 rounded-lg border border-slate-200/50">
-                        <p className="text-[10px] font-bold text-slate-500 uppercase">Restam</p>
-                        <p className="text-xl font-black text-slate-800">{salasRestantes} <span className="text-xs font-medium text-slate-500">salas</span></p>
+                        <p className="text-[10px] font-bold text-slate-500 uppercase">Total Escopo</p>
+                        <p className="text-xl font-black text-slate-800">{totalSalas} <span className="text-xs font-medium text-slate-500">salas</span></p>
+                   </div>
+                   <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-200/50">
+                        <p className="text-[10px] font-bold text-emerald-500 uppercase">Restam</p>
+                        <p className="text-xl font-black text-emerald-800">{salasRestantes} <span className="text-xs font-medium text-emerald-500">salas</span></p>
                    </div>
                    <div className="bg-rose-50 p-3 rounded-lg border border-rose-200/50">
                         <p className="text-[10px] font-bold text-rose-500 uppercase">Velocidade Meta</p>

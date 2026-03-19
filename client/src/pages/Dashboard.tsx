@@ -91,6 +91,7 @@ export default function Dashboard() {
     const { data: topSalas = [] } = trpc.dashboard.getTopSalasImpactadas.useQuery(
         { edificacao: selectedEdificacao || undefined }
     );
+    const { data: salas = [] } = trpc.dashboard.getAllSalas.useQuery();
     const { data: chartTendenciaGeral = [] } = trpc.dashboard.getTendenciaVerificacao.useQuery(
         undefined,
         { enabled: !selectedEdificacao }
@@ -280,8 +281,9 @@ export default function Dashboard() {
                             {/* Simulador de Tendência Interativo */}
                             <SimuladorTendenciaCard 
                                 data={tendenciaData} 
-                                totalSalas={kpis?.totalSalas || 0}
-                                salasVerificadas={kpis?.salasVerificadas || 0}
+                                allRooms={salas || []}
+                                projectId={projectId}
+                                project={project}
                             />
                             <div className="xl:col-span-2">
                                 <TopImpactedRooms data={topSalas} />
