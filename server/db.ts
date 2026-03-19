@@ -277,31 +277,35 @@ export async function getKPIs(edificacao?: string) {
     issuesPerRoom.forEach(count => { if (count > 10) salasCriticas++; });
 
     // ==========================================================
-    // CÁLCULO DE TENDÊNCIA DE TÉRMINO
+    // CÁLCULO DE TENDÊNCIA DE TÉRMINO (Velocidade Ativa)
     // ==========================================================
-    const datasVerificacao = allSalas
-        .filter((s: any) => s.dataVerificada)
-        .map((s: any) => new Date(s.dataVerificada).getTime());
+    const limitDays = 30; // Janela móvel de cálculo (últimos 30 dias)
+    const agora = Date.now();
+    const limitePast = agora - (limitDays * 24 * 60 * 60 * 1000);
+
+    const datasRecentes = allSalas
+        .map((s: any) => s.dataVerificada ? new Date(s.dataVerificada).getTime() : 0)
+        .filter((time: number) => time > limitePast);
 
     let estimativaTermino: string | null = null;
     let velocidadeVerificacao = 0; // salas por dia
 
-    if (salasVerificadas > 0 && datasVerificacao.length > 0) {
-        const minData = Math.min(...datasVerificacao);
-        const maxData = Math.max(...datasVerificacao);
+    if (datasRecentes.length > 0 && salasVerificadas < totalSalas) {
+        // Encontra quando as verificações recentes começaram na janela para ter um divisor realista
+        const minDataRecente = Math.min(...datasRecentes);
+        const diasAtivos = Math.max(1, (agora - minDataRecente) / (1000 * 60 * 60 * 24));
         
-        // Add 1 to avoid division by zero and include the first day
-        const diasDecorridos = Math.max(1, (maxData - minData) / (1000 * 60 * 60 * 24)); 
-        // fallback to 1 day if minData === maxData
-        const diasReais = diasDecorridos === 0 ? 1 : diasDecorridos;
-
-        velocidadeVerificacao = salasVerificadas / diasReais;
+        velocidadeVerificacao = datasRecentes.length / diasAtivos;
         
         const salasRestantes = totalSalas - salasVerificadas;
         const diasRestantes = salasRestantes / velocidadeVerificacao;
         
-        const dateTermino = new Date(maxData + (diasRestantes * 1000 * 60 * 60 * 24));
+        const dateTermino = new Date(agora + (diasRestantes * 1000 * 60 * 60 * 24));
         estimativaTermino = dateTermino.toISOString();
+    } else if (salasVerificadas >= totalSalas) {
+        // Se 100% concluído, estimativa é igual à data da última sala validada
+        estimativaTermino = new Date(agora).toISOString();
+        velocidadeVerificacao = salasVerificadas;
     }
 
     return {
