@@ -43,7 +43,8 @@ export default function ApontamentosPorSemanaChart({ data, hideTitle }: Apontame
                     tickFormatter={(value) => value.split('-W')[1] ? `S.${value.split('-W')[1]}` : value}
                     axisLine={{ stroke: "#E2E8F0" }}
                 />
-                <YAxis tick={{ fontSize: 10, fill: "#64748B" }} axisLine={{ stroke: "#E2E8F0" }} />
+                <YAxis yAxisId="left" tick={{ fontSize: 10, fill: "#940707" }} axisLine={{ stroke: "#E2E8F0" }} />
+                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: "#10B981" }} axisLine={{ stroke: "#E2E8F0" }} />
                 <Tooltip
                     contentStyle={{
                         backgroundColor: "rgba(255, 255, 255, 0.96)",
@@ -61,6 +62,7 @@ export default function ApontamentosPorSemanaChart({ data, hideTitle }: Apontame
 
                 {/* Appointments Line */}
                 <Line
+                    yAxisId="left"
                     name="Apontamentos"
                     type="monotone"
                     dataKey="count"
@@ -70,15 +72,16 @@ export default function ApontamentosPorSemanaChart({ data, hideTitle }: Apontame
                     activeDot={{ r: 7, fill: "#940707", strokeWidth: 0 }}
                     label={{
                         position: 'top',
-                        fontSize: 10,
+                        fontSize: 11,
                         fill: '#940707',
                         fontWeight: 'bold',
-                        offset: 8
+                        offset: 12
                     }}
                 />
 
                 {/* Verified Rooms Line */}
                 <Line
+                    yAxisId="right"
                     name="Salas Verificadas"
                     type="monotone"
                     dataKey="verifiedRooms"
@@ -89,10 +92,10 @@ export default function ApontamentosPorSemanaChart({ data, hideTitle }: Apontame
                     activeDot={{ r: 6, fill: "#10B981", strokeWidth: 0 }}
                     label={{
                         position: 'bottom',
-                        fontSize: 10,
+                        fontSize: 11,
                         fill: '#10B981',
                         fontWeight: 'bold',
-                        offset: 8
+                        offset: 12
                     }}
                 />
             </LineChart>
