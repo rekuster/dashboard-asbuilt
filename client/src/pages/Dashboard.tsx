@@ -37,9 +37,7 @@ import DataIntegrityAlert from "@/components/dashboard/DataIntegrityAlert";
 import IfcUploader from "@/components/ifc/IfcUploader";
 import PresentationTab from "@/components/dashboard/PresentationTab";
 import EntregasTab from "@/components/dashboard/EntregasTab";
-import AsBuiltDashboard from "@/components/dashboard/AsBuiltDashboard";
-import FieldReportTab from "@/components/dashboard/FieldReportTab";
-import { ErrorBoundary } from "@/components/dashboard/ErrorBoundary";
+import StatusDetailsModal from "@/components/dashboard/StatusDetailsModal";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -49,6 +47,11 @@ export default function Dashboard() {
     const [, setLocation] = useLocation();
     const [selectedEdificacao, setSelectedEdificacao] = useState<string | null>(null);
     const [activeModelUrl, setActiveModelUrl] = useState<string | undefined>();
+    
+    // Status Modal State
+    const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+    const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
+    const [selectedStatusColor, setSelectedStatusColor] = useState<string>("#94a3b8");
 
     const { data: project } = trpc.projects.getById.useQuery(
         { id: projectId! },
@@ -283,9 +286,40 @@ export default function Dashboard() {
                             <div className="xl:col-span-2">
                                 <ApontamentosPorSemanaChart data={chartSemana} />
                             </div>
-                            <div className="xl:col-span-1">
-                                <StatusPieChart data={chartStatus} />
+                            <div className="xl:col-span-1 border rounded-xl bg-white shadow-sm overflow-hidden flex flex-col">
+                                <StatusPieChart 
+                                    data={chartStatus} 
+                                    onStatusClick={(status, color) => {
+                                        setSelectedStatus(status);
+                                        setSelectedStatusColor(color);
+                                        setIsStatusModalOpen(true);
+                                    }}
+                                />
                             </div>
+
+                            {/* Status Details Modal */}
+                            {selectedStatus && (
+                                <StatusDetailsModal
+                                    isOpen={isStatusModalOpen}
+                                    onClose={() => setIsStatusModalOpen(false)}
+                                    statusName={selectedStatus}
+                                    color={selectedStatusColor}
+                                    rooms={(salas || [])
+                                        .filter(s => {
+                                            const matchesStatus = s.status?.trim().toUpperCase() === selectedStatus.toUpperCase();
+                                            const matchesEdificacao = !selectedEdificacao || s.edificacao === selectedEdificacao;
+                                            return matchesStatus && matchesEdificacao;
+                                        })
+                                        .map(s => ({
+                                            id: s.id,
+                                            nome: s.nome || "S/ Nome",
+                                            edificacao: s.edificacao || "S/ Edif",
+                                            pavimento: s.pavimento || "S/ Pav",
+                                            status: s.status
+                                        }))
+                                    }
+                                />
+                            )}
 
                             {/* Simulador de Tendência Interativo */}
                             <SimuladorTendenciaCard 

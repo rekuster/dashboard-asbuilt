@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface StatusPieChartProps {
     data: { status: string; count: number; color: string }[];
+    onStatusClick?: (status: string, color: string) => void;
 }
 
 export default function StatusPieChart({ data }: StatusPieChartProps) {
@@ -29,6 +30,8 @@ export default function StatusPieChart({ data }: StatusPieChartProps) {
                             dataKey="count"
                             nameKey="status"
                             label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
+                            onClick={(data) => onStatusClick?.(data.status, data.color)}
+                            style={{ cursor: 'pointer' }}
                         >
                             {data.map((entry, index) => (
                                 <Cell key={`cell-${index}`} fill={entry.color} />
