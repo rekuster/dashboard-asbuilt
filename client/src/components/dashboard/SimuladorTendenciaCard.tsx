@@ -196,21 +196,20 @@ export default function SimuladorTendenciaCard({ data, allRooms, projectId, proj
         // 4. Generate Baseline (Fixed Goal) if exists
         if (project?.baselineRoomsPerWeek && project?.baselineTargetDate) {
             const baselineSpeedPerBusinessDay = project.baselineRoomsPerWeek / 5;
-            const now = new Date().getTime();
             
-            // Start baseline from first recorded point
-            const firstPoint = history[0];
-            const startTimestamp = firstPoint?.timestamp || now;
-            const startVal = firstPoint?.Realizado || 0;
+            // Start baseline from the LAST historical point (Today's progress)
+            const lastHistoricalPoint = result[lastIndex];
+            const startTimestamp = lastHistoricalPoint?.timestamp || new Date().getTime();
+            const startVal = lastHistoricalPoint?.Realizado ?? salasVerificadas;
 
             result.forEach(point => {
                 if (point.timestamp) {
-                    const businessDaysElapsed = getBusinessDaysCount(new Date(startTimestamp), new Date(point.timestamp)) - 1;
-                    if (businessDaysElapsed >= 0) {
-                        // Use totalSalas (selected) instead of globalTotalSalas to match the scale of other lines
-                        point.Meta = Math.min(totalSalas, Math.round(startVal + (businessDaysElapsed * baselineSpeedPerBusinessDay)));
+                    if (point.timestamp < startTimestamp) {
+                        // For past points, Meta follows Realizado to keep the chart clean
+                        point.Meta = point.Realizado;
                     } else {
-                        point.Meta = startVal;
+                        const businessDaysElapsed = getBusinessDaysCount(new Date(startTimestamp), new Date(point.timestamp)) - 1;
+                        point.Meta = Math.min(totalSalas, Math.round(startVal + (businessDaysElapsed * baselineSpeedPerBusinessDay)));
                     }
                 }
             });
