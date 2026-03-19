@@ -28,6 +28,7 @@ export default function StatusPieChart({ data }: StatusPieChartProps) {
                             paddingAngle={5}
                             dataKey="count"
                             nameKey="status"
+                            label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
                         >
                             {data.map((entry, index) => (
                                 <Cell key={`cell-${index}`} fill={entry.color} />
@@ -39,8 +40,22 @@ export default function StatusPieChart({ data }: StatusPieChartProps) {
                                 borderColor: "hsl(var(--border))",
                                 borderRadius: "8px",
                             }}
+                            formatter={(value: number, name: string) => {
+                                const total = data.reduce((acc, curr) => acc + curr.count, 0);
+                                const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                                return [`${value} (${percentage}%)`, name];
+                            }}
                         />
-                        <Legend verticalAlign="bottom" height={36} />
+                        <Legend 
+                            verticalAlign="bottom" 
+                            height={36} 
+                            formatter={(value, entry: any) => {
+                                const total = data.reduce((acc, curr) => acc + curr.count, 0);
+                                const item = data.find(d => d.status === value);
+                                const percentage = total > 0 && item ? ((item.count / total) * 100).toFixed(0) : 0;
+                                return `${value} (${percentage}%)`;
+                            }}
+                        />
                     </PieChart>
                 </ResponsiveContainer>
             </CardContent>

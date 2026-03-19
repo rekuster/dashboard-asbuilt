@@ -462,15 +462,12 @@ export async function getStatsStatus(edificacao?: string) {
         issuesPerRoom.set(a.sala, (issuesPerRoom.get(a.sala) || 0) + 1);
     });
 
-    const stats = { Verificada: 0, Revisar: 0, Pendente: 0, Critico: 0 };
+    const stats = { Verificada: 0, Revisar: 0, Pendente: 0 };
 
     allRooms.forEach((room: any) => {
-        const count = issuesPerRoom.get(room.nome) || 0;
-        const status = (room.status || '').trim().toUpperCase(); // FIXED: Added trim()
+        const status = (room.status || '').trim().toUpperCase();
 
-        if (count > 10) {
-            stats.Critico++;
-        } else if (status === 'VERIFICADA') {
+        if (status === 'VERIFICADA') {
             stats.Verificada++;
         } else if (status === 'EM REVISÃO' || status === 'REVISAR') {
             stats.Revisar++;
@@ -482,7 +479,6 @@ export async function getStatsStatus(edificacao?: string) {
     return [
         { status: 'Verificada', count: stats.Verificada, color: '#22C55E' },
         { status: 'Revisar', count: stats.Revisar, color: '#EAB308' },
-        { status: 'Crítico', count: stats.Critico, color: '#EF4444' },
         { status: 'Pendente', count: stats.Pendente, color: '#9CA3AF' }
     ];
 }
