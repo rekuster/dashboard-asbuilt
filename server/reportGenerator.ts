@@ -143,14 +143,14 @@ export async function generatePDFReport(filters?: { edificacao?: string; discipl
             doc.fillColor('#444444').fontSize(24).font('Helvetica-Bold').text(item.numeroSala, 750, 20);
 
             // --- Informações Técnicas ---
-            const infoX = 580;
+            const infoX = 610; // Moved from 580 to avoid overlap
             const infoY = 100;
             doc.fillColor('#000000').fontSize(11).font('Helvetica');
             doc.text(`Disciplina: ${item.apontamento.disciplina}`, infoX, infoY);
             doc.text(`Responsável: ${item.apontamento.responsavel || 'Não definido'}`, infoX, infoY + 20);
 
             doc.font('Helvetica-Bold').text('Apontamento:', infoX, infoY + 50);
-            doc.font('Helvetica').fontSize(10).text(item.apontamento.divergencia || '', infoX, infoY + 65, { width: 230 });
+            doc.font('Helvetica').fontSize(10).text(item.apontamento.divergencia || '', infoX, infoY + 65, { width: 210 });
 
             // --- Seção de Imagens ---
             const imgY = 110;
@@ -209,8 +209,9 @@ export async function generatePDFReport(filters?: { edificacao?: string; discipl
 
             // Planta da Sala
             if (item.imagemPlantaUrl) {
-                doc.fillColor('#666666').fontSize(10).font('Helvetica-Bold').text('PLANTA SALA', 580, 305);
-                await drawImage(item.imagemPlantaUrl, 580, 320, 230, 180, 'PLANTA');
+                const pX = 610; // Moved from 580 to match info column
+                doc.fillColor('#666666').fontSize(10).font('Helvetica-Bold').text('PLANTA SALA', pX, 305);
+                await drawImage(item.imagemPlantaUrl, pX, 320, 210, 180, 'PLANTA');
             }
 
             // Logo Adicional (se não houver fundo)
