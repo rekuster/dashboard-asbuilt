@@ -50,6 +50,48 @@ async function drawCoverPage(doc: any, logoPath: string, hasLogo: boolean) {
 }
 
 /**
+ * Função para desenhar a página de sumário (índice) das salas no relatório.
+ */
+async function drawSummaryPage(doc: any, data: any[], backgroundPath: string, hasBackground: boolean) {
+    if (hasBackground) {
+        doc.image(backgroundPath, 0, 0, { width: 842, height: 595 });
+    }
+
+    // Barra Lateral Vermelha (Consistência com o restante do relatório)
+    doc.fillColor('#A31D1D').roundedRect(0, 55, 65, 485, 15).fill();
+
+    // Título do Sumário
+    doc.fillColor('#444444').fontSize(10).font('Helvetica').text('REALIDADE AUMENTADA', 85, 40);
+    doc.fillColor('#000000').fontSize(22).font('Helvetica-Bold').text('SUMÁRIO DE SALAS COM APONTAMENTOS', 85, 52);
+
+    // Lista única de salas para o sumário
+    const uniqueSalas = data.filter((v, i, a) => a.findIndex(t => t.numeroSala === v.numeroSala) === i);
+
+    const startX = 85;
+    const startY = 110;
+    const colWidth = 170;
+    const rowHeight = 20;
+    const maxRows = 20; // Aproximadamente 20 salas por coluna
+
+    doc.fontSize(10).font('Helvetica').fillColor('#333333');
+
+    uniqueSalas.forEach((item, index) => {
+        const col = Math.floor(index / maxRows);
+        const row = index % maxRows;
+        
+        const x = startX + (col * (colWidth + 10));
+        const y = startY + (row * rowHeight);
+
+        // Limite de 4 colunas para não estourar a página landscape
+        if (col < 4) {
+            doc.text(`${item.numeroSala} - ${item.salaNome}`, x, y, { width: colWidth, ellipsis: true });
+        }
+    });
+
+    doc.addPage();
+}
+
+/**
  * Gera o relatório de divergências em PDF.
  * Inclui o layout fundo padrão e ajusta a exibição conforme a orientação das imagens.
  */
@@ -118,6 +160,9 @@ export async function generatePDFReport(filters?: { edificacao?: string; discipl
         doc.fontSize(20).text('Nenhum apontamento encontrado.', 0, 200, { align: 'center' });
     } else {
         await drawCoverPage(doc, logoPath, hasLogo);
+        
+        // Nova Página: Sumário de Salas
+        await drawSummaryPage(doc, data, backgroundPath, hasBackground);
 
         for (let i = 0; i < data.length; i++) {
             const item = data[i];
