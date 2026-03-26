@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, timestamp, uuid } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, uuid, numeric } from "drizzle-orm/pg-core";
 
 /**
  * Projects table - each project represents one construction site / obra
@@ -16,7 +16,7 @@ export const projects = pgTable("projects", {
     imageUrl: text("imageUrl"),
     status: text("status").default("ativo").notNull(),  // 'ativo' | 'concluido' | 'arquivado'
     baselineTargetDate: timestamp("baselineTargetDate"),
-    baselineRoomsPerWeek: integer("baselineRoomsPerWeek"),
+    baselineRoomsPerWeek: numeric("baselineRoomsPerWeek"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
@@ -142,8 +142,16 @@ export const escopoAsBuilt = pgTable("escopoAsBuilt", {
     nomeModeloFinal: text("nomeModeloFinal"),       // The expected final delivery model name
     descricao: text("descricao"),
     temRvtOriginal: integer("temRvtOriginal").default(0), // 1=possui rvt de projeto, 0=não possui
-    pendenciaRvt: text("pendenciaRvt"),              // "Pedir ao projetista", "Gerar via IFC", etc.
+    pendenciaRvt: text("pendenciaRvt"),              // Descrição do problema do RVT
+    acaoRvt: text("acaoRvt"),                        // Plano de ação (ex: "Solicitado", "Converter IFC")
     ativo: integer("ativo").default(1).notNull(),   // 1=ativo, 0=encerrado
+    
+    // Integração Planilha Thá (Reconciliação)
+    statusTha: text("statusTha"),                    // Status na planilha da Thá (ex: "POSTADO")
+    dataAtualizacaoTha: timestamp("dataAtualizacaoTha"), // Data da última atualização na planilha
+    obsTha: text("obsTha"),                          // Observações da Thá
+    modeloBaseTha: text("modeloBaseTha"),            // Nome do modelo base na planilha (para cross-ref)
+
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });

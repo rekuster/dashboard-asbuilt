@@ -5,7 +5,7 @@
  */
 
 import "dotenv/config";
-import { eq, and, sql, desc, like } from "drizzle-orm";
+import { eq, and, sql, desc, like, inArray } from "drizzle-orm";
 // import { drizzle as drizzleSqlite } from "drizzle-orm/better-sqlite3"; // REMOVED STATIC IMPORT
 import { drizzle as drizzlePg } from "drizzle-orm/postgres-js";
 // import Database from "better-sqlite3"; // REMOVED STATIC IMPORT
@@ -620,13 +620,17 @@ export async function getApontamentosPorSemana(edificacao?: string) {
         }
     });
 
+    // 7. Sanitização Final: Garantir que apenas semanas válidas (formato YYYY-WXX) entram no gráfico.
+    // Isso evita que slugs de disciplinas ou dados corrompidos poluam o eixo X.
+    const weekRegex = /^\d{4}-W\d{2}$/;
+
     return Array.from(weeksMap.values())
         .map(w => ({
             semana: w.semana || 'Sem Data',
             count: Number(w.count),
             verifiedRooms: Number(w.verifiedRooms)
         }))
-        .filter(w => w.semana !== 'Sem Data')
+        .filter(w => weekRegex.test(w.semana))
         .sort((a, b) => a.semana.localeCompare(b.semana));
 }
 
@@ -812,7 +816,7 @@ export async function upsertEntrega(data: any) {
     }
 
     let result;
-    const { escopoIds, ...commonValues } = values;
+    const { escopoIds, escopoNames, ...commonValues } = values;
 
     if (escopoIds && Array.isArray(escopoIds)) {
         // BATCH MODE: Create multiple entries for a single delivery action
@@ -823,9 +827,13 @@ export async function upsertEntrega(data: any) {
                 const [esc] = await tx.select().from(escopoAsBuilt).where(eq(escopoAsBuilt.id, escId)).limit(1);
                 if (!esc) continue;
 
+                // Use individual name if provided in escopoNames map, otherwise fallback to common name
+                const individualName = (escopoNames && escopoNames[String(escId)]) || commonValues.nomeDocumento;
+
                 const newRecord = await tx.insert(entregasAsBuilt)
                     .values({
                         ...commonValues,
+                        nomeDocumento: individualName,
                         escopoId: escId,
                         edificacao: commonValues.edificacao || esc.edificacao,
                         disciplina: commonValues.disciplina || esc.disciplina,
@@ -847,7 +855,7 @@ export async function upsertEntrega(data: any) {
                     await tx.insert(entregasHistorico).values({
                         entregaId: newRecord[0].id,
                         acao: 'CRIADO',
-                        descricao: `Entrega em lote criada: ${commonValues.nomeDocumento}`,
+                        descricao: `Entrega em lote criada: ${individualName}`,
                         usuario: 'Usuário',
                         createdAt: new Date()
                     });
@@ -961,34 +969,134 @@ export async function getEntregasStats(edificacao?: string) {
     };
 }
 
-export async function getAsBuiltStatus() {
+export async function getAsBuiltStatus(edificacao?: string) {
     const db = await getDb();
     if (!db) return null;
 
-    const escopos = await db.select().from(escopoAsBuilt);
-    const entregas = await db.select().from(entregasAsBuilt);
+    let escopoQuery = db.select().from(escopoAsBuilt);
+    if (edificacao) {
+        // Use ILIKE for flexible building matching
+        escopoQuery = db.select().from(escopoAsBuilt)
+            .where(sql`${escopoAsBuilt.edificacao} ILIKE ${'%' + edificacao + '%'}`) as any;
+    }
+    const escopos = await escopoQuery;
+    
+    // For entregas, we filter by the escopoIds we just found
+    const escopoIds = escopos.map((e: any) => e.id);
+    if (escopoIds.length === 0 && edificacao) {
+        return {
+            totalModelos: 0,
+            modelosValidados: 0,
+            modelosPendentes: 0,
+            modelosRecebidos: 0,
+            comRvt: 0,
+            semRvt: 0,
+            percentualCobertura: 0,
+            thaPostados: 0,
+            thaDivergentes: 0,
+            divergenciasTha: [],
+            projectModels: 0,
+            asBuiltModels: 0,
+            consolidationFactor: "1.0"
+        };
+    }
+
+    if (escopoIds.length > 0) {
+        // We still fetch entregas once to have them in memory if needed, 
+        // but currently getEntregasPorEscopo does its own fetch.
+        // We'll keep the escopoIds check for safety but remove the redundant variable if not used.
+    }
 
     const totalModelos = escopos.length;
-    const comRvt = escopos.filter((e: any) => e.temRvtOriginal === 1).length;
-    const semRvt = totalModelos - comRvt;
+    const { entregasMap } = await getEntregasPorEscopo(edificacao);
 
-    // A model is considered covered if there's at least one VALIDATED delivery for it
-    const validadosIds = new Set(entregas.filter((e: any) => e.status === 'VALIDADO').map((e: any) => e.escopoId));
-    const modelosValidados = escopos.filter((e: any) => validadosIds.has(e.id)).length;
+    const projectModelsUnique = new Set(escopos.map((e: any) => e.nomeModelo).filter(Boolean));
+    const asBuiltModelsUnique = new Set(escopos.map((e: any) => e.nomeModeloFinal).filter(Boolean));
 
-    // A model is received if there's at least one RECEBIDO or VALIDADO delivery
-    const recebidosIds = new Set(entregas.filter((e: any) => ['RECEBIDO', 'VALIDADO', 'EM_REVISAO'].includes(e.status)).map((e: any) => e.escopoId));
-    const modelosRecebidos = escopos.filter((e: any) => recebidosIds.has(e.id)).length;
-
-    return {
+    const result = {
         totalModelos,
-        modelosValidados,
-        modelosRecebidos,
-        modelosPendentes: totalModelos - modelosRecebidos,
-        comRvt,
-        semRvt,
-        percentualCobertura: totalModelos > 0 ? (modelosValidados / totalModelos) * 100 : 0
+        modelosValidados: 0,
+        modelosPendentes: 0,
+        modelosRecebidos: 0,
+        comRvt: 0,
+        semRvt: 0,
+        percentualCobertura: 0,
+        // Reconciliação Thá
+        thaPostados: 0,
+        thaDivergentes: 0,
+        divergenciasTha: [] as any[],
+        // Consolidação
+        projectModels: projectModelsUnique.size,
+        asBuiltModels: asBuiltModelsUnique.size || totalModelos,
+        consolidationFactor: projectModelsUnique.size > 0 ? (totalModelos / projectModelsUnique.size).toFixed(1) : "1.0"
     };
+
+    escopos.forEach((escopo: any) => {
+        const entregas = entregasMap.get(escopo.id) || [];
+        const hasValidado = entregas.some((e: any) => e.status === 'VALIDADO');
+        const hasRecebido = entregas.some((e: any) => ['RECEBIDO', 'VALIDADO', 'EM_REVISAO', 'EM_ANDAMENTO'].includes(e.status));
+
+        if (hasValidado) {
+            result.modelosValidados++;
+        } else if (hasRecebido) {
+            result.modelosRecebidos++;
+        } else {
+            result.modelosPendentes++;
+        }
+
+        if (escopo.temRvtOriginal === 1) {
+            result.comRvt++;
+        } else {
+            result.semRvt++;
+        }
+
+        // Reconciliação Thá
+        const statusTha = escopo.statusTha?.toUpperCase();
+        if (statusTha === 'POSTADO') {
+            result.thaPostados++;
+            if (!hasValidado) {
+                result.thaDivergentes++;
+                result.divergenciasTha.push({
+                    id: escopo.id,
+                    edificacao: escopo.edificacao,
+                    disciplina: escopo.disciplina,
+                    nomeModelo: escopo.nomeModelo,
+                    nomeModeloFinal: escopo.nomeModeloFinal,
+                    statusTha: escopo.statusTha,
+                    obsTha: escopo.obsTha
+                });
+            }
+        }
+    });
+
+    result.percentualCobertura = result.totalModelos > 0 ? (result.modelosValidados / result.totalModelos) * 100 : 0;
+    
+    return result;
+}
+
+/**
+ * Helper to get deliveries grouped by scope ID
+ */
+async function getEntregasPorEscopo(edificacao?: string) {
+    const db = await getDb();
+    if (!db) return { entregasMap: new Map() };
+
+    let q = db.select().from(entregasAsBuilt);
+    if (edificacao) {
+        q = db.select().from(entregasAsBuilt).where(sql`${entregasAsBuilt.edificacao} ILIKE ${'%' + edificacao + '%'}`) as any;
+    }
+    const allEntregas = await q;
+    
+    const entregasMap = new Map<number, any[]>();
+    allEntregas.forEach(e => {
+        const id = e.escopoId;
+        if (id) {
+            if (!entregasMap.has(id)) entregasMap.set(id, []);
+            entregasMap.get(id)?.push(e);
+        }
+    });
+
+    return { entregasMap };
 }
 
 // ============================================================================
@@ -1001,32 +1109,48 @@ export async function getEscopos() {
     return db.select().from(escopoAsBuilt).orderBy(desc(escopoAsBuilt.createdAt));
 }
 
-export async function upsertEscopo(data: any) {
+export async function upsertEscopo(data: {
+    id?: number,
+    empresa: string,
+    disciplina: string,
+    edificacao: string,
+    nomeModelo: string,
+    nomeModeloFinal?: string,
+    descricao?: string | null,
+    temRvtOriginal?: number,
+    pendenciaRvt?: string | null,
+    acaoRvt?: string | null,
+    ativo?: number
+}) {
     const db = await getDb();
     if (!db) return null;
 
-    const { id, ...rawValues } = data;
-
-    // Remove undefined values to prevent Drizzle parameter mismatch
-    const values = Object.fromEntries(
-        Object.entries(rawValues).filter(([_, v]) => v !== undefined)
-    ) as any;
-
-    if (id) {
-        const result = await db.update(escopoAsBuilt)
-            .set({ ...values, updatedAt: new Date() })
-            .where(eq(escopoAsBuilt.id, id))
+    if (data.id) {
+        const [result] = await db.update(escopoAsBuilt)
+            .set({ 
+                ...data, 
+                updatedAt: new Date() 
+            })
+            .where(eq(escopoAsBuilt.id, data.id))
             .returning();
-        return result[0];
+        return result;
     } else {
-        const result = await db.insert(escopoAsBuilt)
+        const [result] = await db.insert(escopoAsBuilt)
             .values({
-                ...values,
-                createdAt: new Date(),
-                updatedAt: new Date()
+                projectId: null,
+                empresa: data.empresa,
+                disciplina: data.disciplina,
+                edificacao: data.edificacao,
+                nomeModelo: data.nomeModelo,
+                nomeModeloFinal: data.nomeModeloFinal || data.nomeModelo,
+                descricao: data.descricao || null,
+                temRvtOriginal: data.temRvtOriginal ?? 0,
+                pendenciaRvt: data.pendenciaRvt || null,
+                acaoRvt: data.acaoRvt || null,
+                ativo: data.ativo ?? 1,
             })
             .returning();
-        return result[0];
+        return result;
     }
 }
 
@@ -1313,6 +1437,12 @@ export async function getVerificacoes(salaId: number) {
     const db = await getDb();
     if (!db) return [];
     return db.select().from(verificacaoModelo).where(eq(verificacaoModelo.salaId, salaId));
+}
+
+export async function getAllVerificacoes() {
+    const db = await getDb();
+    if (!db) return [];
+    return db.select().from(verificacaoModelo);
 }
 
 export async function upsertVerificacao(salaId: number, disciplina: string, status: string, observacao?: string | null) {

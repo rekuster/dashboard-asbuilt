@@ -5,7 +5,7 @@
  * Quando você valida uma entrega aqui, o Dashboard de Status é atualizado automaticamente.
  */
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -97,200 +97,200 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
         }
     };
 
-    if (viewingDetail) {
-        return (
-            <EntregaDetailView
-                entrega={viewingDetail}
-                onBack={() => setViewingDetail(null)}
-                onUpdate={() => {
-                    utils.dashboard.getEntregas.invalidate();
-                    utils.dashboard.getEntregasStats.invalidate();
-                }}
-                onEdit={() => handleEdit(viewingDetail)}
-                onDelete={() => handleDelete(viewingDetail.id)}
-            />
-        );
-    }
-
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
-            {/* KPI Section */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-                <KPICard title="Lista Mestra" value={stats?.total || 0} subtitle="Modelos Finais Esperados" />
-                <KPICard title="Mapeado" value={stats?.aguardando || 0} subtitle="Aguardando entrega" className="border-slate-200 bg-slate-50/50" />
-                <KPICard title="Recebidos" value={stats?.recebidos || 0} subtitle="Log de Entregas (SM)" className="border-blue-200 bg-blue-50/50" />
-                <KPICard title="Validados" value={(stats?.validados || 0) + (stats?.validadosRessalva || 0) + (stats?.validadosParcial || 0)} subtitle="Aprovados (Total)" className="border-emerald-200 bg-emerald-50/50" />
-                <KPICard title="Rejeitados" value={stats?.rejeitados || 0} subtitle="Necessitam correção" className="border-rose-200 bg-rose-50/50" />
-            </div>
+            {viewingDetail ? (
+                <EntregaDetailView
+                    entrega={viewingDetail}
+                    onBack={() => setViewingDetail(null)}
+                    onUpdate={() => {
+                        utils.dashboard.getEntregas.invalidate();
+                        utils.dashboard.getEntregasStats.invalidate();
+                    }}
+                    onEdit={() => handleEdit(viewingDetail)}
+                    onDelete={() => handleDelete(viewingDetail.id)}
+                />
+            ) : (
+                <>
+                    {/* KPI Section */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+                        <KPICard title="Lista Mestra" value={stats?.total || 0} subtitle="Modelos Finais Esperados" />
+                        <KPICard title="Mapeado" value={stats?.aguardando || 0} subtitle="Aguardando entrega" className="border-slate-200 bg-slate-50/50" />
+                        <KPICard title="Recebidos" value={stats?.recebidos || 0} subtitle="Log de Entregas (SM)" className="border-blue-200 bg-blue-50/50" />
+                        <KPICard title="Validados" value={(stats?.validados || 0) + (stats?.validadosRessalva || 0) + (stats?.validadosParcial || 0)} subtitle="Aprovados (Total)" className="border-emerald-200 bg-emerald-50/50" />
+                        <KPICard title="Rejeitados" value={stats?.rejeitados || 0} subtitle="Necessitam correção" className="border-rose-200 bg-rose-50/50" />
+                    </div>
 
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                    <TabsList className="grid grid-cols-3 w-full max-w-2xl bg-slate-100 p-1 rounded-xl">
-                        <TabsTrigger value="list" className="rounded-lg data-[state=active]:bg-[#940707] data-[state=active]:text-white">
-                            <History className="w-4 h-4 mr-2" />
-                            Gestão de Entregas
-                        </TabsTrigger>
-                        <TabsTrigger value="validation" className="rounded-lg data-[state=active]:bg-[#940707] data-[state=active]:text-white">
-                            <ClipboardCheck className="w-4 h-4 mr-2" />
-                            Validação por Sala
-                        </TabsTrigger>
-                        <TabsTrigger value="scope" className="rounded-lg data-[state=active]:bg-[#940707] data-[state=active]:text-white">
-                            <FileText className="w-4 h-4 mr-2" />
-                            Lista de Entregas Final
-                        </TabsTrigger>
-                    </TabsList>
+                    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                            <TabsList className="grid grid-cols-3 w-full max-w-2xl bg-slate-100 p-1 rounded-xl">
+                                <TabsTrigger value="list" className="rounded-lg data-[state=active]:bg-[#940707] data-[state=active]:text-white">
+                                    <History className="w-4 h-4 mr-2" />
+                                    Gestão de Entregas
+                                </TabsTrigger>
+                                <TabsTrigger value="validation" className="rounded-lg data-[state=active]:bg-[#940707] data-[state=active]:text-white">
+                                    <ClipboardCheck className="w-4 h-4 mr-2" />
+                                    Validação por Sala
+                                </TabsTrigger>
+                                <TabsTrigger value="scope" className="rounded-lg data-[state=active]:bg-[#940707] data-[state=active]:text-white">
+                                    <FileText className="w-4 h-4 mr-2" />
+                                    Lista de Entregas Final
+                                </TabsTrigger>
+                            </TabsList>
 
-                    {activeTab === "list" && (
-                        <div className="flex bg-slate-100 p-1 rounded-lg self-end">
-                            <Button 
-                                variant={viewMode === "table" ? "ghost" : "ghost"} 
-                                className={`h-8 px-3 rounded-md text-xs font-medium transition-all ${viewMode === "table" ? "bg-white shadow-sm text-[#940707]" : "text-slate-500"}`}
-                                onClick={() => setViewMode("table")}
-                            >
-                                <Layers className="w-3.5 h-3.5 mr-1.5" />
-                                Individual
-                            </Button>
-                            <Button 
-                                variant={viewMode === "packets" ? "ghost" : "ghost"} 
-                                className={`h-8 px-3 rounded-md text-xs font-medium transition-all ${viewMode === "packets" ? "bg-white shadow-sm text-[#940707]" : "text-slate-500"}`}
-                                onClick={() => setViewMode("packets")}
-                            >
-                                <Briefcase className="w-3.5 h-3.5 mr-1.5" />
-                                Por Pacote (SM)
-                            </Button>
-                        </div>
-                    )}
-                </div>
-
-                <TabsContent value="list" className="space-y-4">
-                    <Card className="border-none shadow-xl bg-white/70 backdrop-blur-md">
-                        <CardHeader className="flex flex-row items-center justify-between pb-2">
-                            <CardTitle className="text-xl font-bold flex items-center gap-2">
-                                <FileText className="w-5 h-5 text-primary" />
-                                Lista de Entregas As-Built
-                            </CardTitle>
-                            <div className="flex items-center gap-4">
-                                <div className="relative">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                                    <Input
-                                        placeholder="Buscar documento, empresa..."
-                                        className="pl-9 w-[300px] bg-white/50 border-slate-200 focus:bg-white transition-all rounded-full"
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                    />
+                            {activeTab === "list" && (
+                                <div className="flex bg-slate-100 p-1 rounded-lg self-end">
+                                    <Button 
+                                        variant={viewMode === "table" ? "ghost" : "ghost"} 
+                                        className={`h-8 px-3 rounded-md text-xs font-medium transition-all ${viewMode === "table" ? "bg-white shadow-sm text-[#940707]" : "text-slate-500"}`}
+                                        onClick={() => setViewMode("table")}
+                                    >
+                                        <Layers className="w-3.5 h-3.5 mr-1.5" />
+                                        Individual
+                                    </Button>
+                                    <Button 
+                                        variant={viewMode === "packets" ? "ghost" : "ghost"} 
+                                        className={`h-8 px-3 rounded-md text-xs font-medium transition-all ${viewMode === "packets" ? "bg-white shadow-sm text-[#940707]" : "text-slate-500"}`}
+                                        onClick={() => setViewMode("packets")}
+                                    >
+                                        <Briefcase className="w-3.5 h-3.5 mr-1.5" />
+                                        Por Pacote (SM)
+                                    </Button>
                                 </div>
-                                <Button
-                                    variant="outline"
-                                    className="rounded-full gap-2 border-slate-200 hover:bg-slate-50"
-                                    onClick={() => setIsBatchFormOpen(true)}
-                                >
-                                    <Layers className="w-4 h-4 text-[#940707]" />
-                                    Registrar em Lote
-                                </Button>
-                                <Button
-                                    className="rounded-full gap-2 shadow-lg shadow-primary/20 bg-[#940707] hover:bg-[#7a0606] text-white"
-                                    onClick={() => {
-                                        setEditingEntrega(null);
-                                        setIsFormOpen(true);
-                                    }}
-                                >
-                                    <Plus className="w-4 h-4" />
-                                    Nova Entrega
-                                </Button>
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow className="hover:bg-transparent border-slate-100 uppercase text-[10px] font-bold tracking-wider text-slate-500 italic">
-                                        <TableHead className="w-[50px]">Nº</TableHead>
-                                        <TableHead className="w-[120px]">Data de Entrega</TableHead>
-                                        <TableHead className="w-[120px]">Pacote / SM</TableHead>
-                                        <TableHead>Responsável</TableHead>
-                                        <TableHead>Edificação</TableHead>
-                                        <TableHead>Disciplina</TableHead>
-                                        <TableHead className="w-[200px]">Documento Entregue</TableHead>
-                                        <TableHead>Formato</TableHead>
-                                        <TableHead>Modelo Base</TableHead>
-                                        <TableHead>Ações pós Entrega</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead className="text-right">Ações</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {isLoading ? (
-                                        <TableRow>
-                                            <TableCell colSpan={6} className="text-center py-10 text-slate-400 italic">Carregando entregas...</TableCell>
-                                        </TableRow>
-                                    ) : filteredEntregas.length === 0 ? (
-                                        <TableRow>
-                                            <TableCell colSpan={6} className="text-center py-10 text-slate-400 italic">Nenhuma entrega encontrada.</TableCell>
-                                        </TableRow>
-                                    ) : (
-                                        filteredEntregas.map((entrega: any) => {
-                                            const statusInfo = STATUS_LABELS[entrega.status] || STATUS_LABELS['AGUARDANDO'];
-                                            const StatusIcon = statusInfo.icon;
+                            )}
+                        </div>
 
-                                            return (
-                                                <TableRow
-                                                    key={entrega.id}
-                                                    className="hover:bg-slate-50/50 transition-colors border-slate-100 group cursor-pointer h-12"
-                                                    onClick={() => handleViewDetail(entrega)}
-                                                >
-                                                    <TableCell className="text-[11px] font-bold text-slate-400">
-                                                        {entrega.numeroEntrega || "-"}
-                                                    </TableCell>
-                                                    <TableCell className="text-[11px] font-bold text-slate-700">
-                                                        {entrega.dataRecebimento ? dayjs(entrega.dataRecebimento).format('DD/MM/YYYY') : "-"}
-                                                    </TableCell>
-                                                    <TableCell className="text-[11px] font-bold text-[#940707]">
-                                                        {entrega.identificadorEntrega || "-"}
-                                                    </TableCell>
-                                                    <TableCell className="text-[11px] font-bold text-slate-700">{entrega.empresaResponsavel}</TableCell>
-                                                    <TableCell className="text-[11px] font-bold text-slate-700">{entrega.edificacao}</TableCell>
-                                                    <TableCell className="text-[11px] font-bold text-slate-700">{entrega.disciplina}</TableCell>
-                                                    <TableCell className="text-[11px] font-bold text-slate-700">{entrega.nomeDocumento}</TableCell>
-                                                    <TableCell className="text-[11px] font-bold text-slate-400 italic">
-                                                        {DOC_TYPES[entrega.formato] || entrega.formato || entrega.tipoDocumento}
-                                                    </TableCell>
-                                                    <TableCell className="text-[11px] font-bold text-slate-700 truncate max-w-[120px]">{entrega.modeloBaseReferencia || "-"}</TableCell>
-                                                    <TableCell className="text-[11px] font-bold text-rose-500">{entrega.acoesNecessarias || "-"}</TableCell>
-                                                    <TableCell>
-                                                        <div className={`px-2 py-0.5 rounded-full border text-[9px] font-black uppercase flex items-center gap-1 w-fit ${statusInfo.color}`}>
-                                                            <StatusIcon className="w-2.5 h-2.5" />
-                                                            {statusInfo.label}
-                                                        </div>
-                                                    </TableCell>
-                                                    <TableCell className="text-right">
-                                                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-primary hover:bg-primary/5 rounded-full"
-                                                                onClick={(e) => { e.stopPropagation(); handleEdit(entrega); }}>
-                                                                <Edit2 className="w-4 h-4" />
-                                                            </Button>
-                                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-full"
-                                                                onClick={(e) => handleDelete(entrega.id, e)}>
-                                                                <Trash2 className="w-4 h-4" />
-                                                            </Button>
-                                                        </div>
-                                                    </TableCell>
+                        <TabsContent value="list" className="space-y-4">
+                            <Card className="border-none shadow-xl bg-white/70 backdrop-blur-md">
+                                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                                    <CardTitle className="text-xl font-bold flex items-center gap-2">
+                                        <FileText className="w-5 h-5 text-primary" />
+                                        Lista de Entregas As-Built
+                                    </CardTitle>
+                                    <div className="flex items-center gap-4">
+                                        <div className="relative">
+                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                            <Input
+                                                placeholder="Buscar documento, empresa..."
+                                                className="pl-9 w-[300px] bg-white/50 border-slate-200 focus:bg-white transition-all rounded-full"
+                                                value={searchTerm}
+                                                onChange={(e) => setSearchTerm(e.target.value)}
+                                            />
+                                        </div>
+                                        <Button
+                                            variant="outline"
+                                            className="rounded-full gap-2 border-slate-200 hover:bg-slate-50"
+                                            onClick={() => setIsBatchFormOpen(true)}
+                                        >
+                                            <Layers className="w-4 h-4 text-[#940707]" />
+                                            Registrar em Lote
+                                        </Button>
+                                        <Button
+                                            className="rounded-full gap-2 shadow-lg shadow-primary/20 bg-[#940707] hover:bg-[#7a0606] text-white"
+                                            onClick={() => {
+                                                setEditingEntrega(null);
+                                                setIsFormOpen(true);
+                                            }}
+                                        >
+                                            <Plus className="w-4 h-4" />
+                                            Nova Entrega
+                                        </Button>
+                                    </div>
+                                </CardHeader>
+                                <CardContent>
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow className="hover:bg-transparent border-slate-100 uppercase text-[10px] font-bold tracking-wider text-slate-500 italic">
+                                                <TableHead className="w-[50px]">Nº</TableHead>
+                                                <TableHead className="w-[120px]">Data de Entrega</TableHead>
+                                                <TableHead className="w-[120px]">Pacote / SM</TableHead>
+                                                <TableHead>Responsável</TableHead>
+                                                <TableHead>Edificação</TableHead>
+                                                <TableHead>Disciplina</TableHead>
+                                                <TableHead className="w-[200px]">Documento Entregue</TableHead>
+                                                <TableHead>Formato</TableHead>
+                                                <TableHead>Modelo Base</TableHead>
+                                                <TableHead>Ações pós Entrega</TableHead>
+                                                <TableHead>Status</TableHead>
+                                                <TableHead className="text-right">Ações</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {isLoading ? (
+                                                <TableRow>
+                                                    <TableCell colSpan={6} className="text-center py-10 text-slate-400 italic">Carregando entregas...</TableCell>
                                                 </TableRow>
-                                            );
-                                        })
-                                    )}
-                                </TableBody>
-                            </Table>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
+                                            ) : filteredEntregas.length === 0 ? (
+                                                <TableRow>
+                                                    <TableCell colSpan={6} className="text-center py-10 text-slate-400 italic">Nenhuma entrega encontrada.</TableCell>
+                                                </TableRow>
+                                            ) : (
+                                                filteredEntregas.map((entrega: any) => {
+                                                    const statusInfo = STATUS_LABELS[entrega.status] || STATUS_LABELS['AGUARDANDO'];
+                                                    const StatusIcon = statusInfo.icon;
 
-                <TabsContent value="validation">
-                    <ValidationTab />
-                </TabsContent>
+                                                    return (
+                                                        <TableRow
+                                                            key={entrega.id}
+                                                            className="hover:bg-slate-50/50 transition-colors border-slate-100 group cursor-pointer h-12"
+                                                            onClick={() => handleViewDetail(entrega)}
+                                                        >
+                                                            <TableCell className="text-[11px] font-bold text-slate-400">
+                                                                {entrega.numeroEntrega || "-"}
+                                                            </TableCell>
+                                                            <TableCell className="text-[11px] font-bold text-slate-700">
+                                                                {entrega.dataRecebimento ? dayjs(entrega.dataRecebimento).format('DD/MM/YYYY') : "-"}
+                                                            </TableCell>
+                                                            <TableCell className="text-[11px] font-bold text-[#940707]">
+                                                                {entrega.identificadorEntrega || "-"}
+                                                            </TableCell>
+                                                            <TableCell className="text-[11px] font-bold text-slate-700">{entrega.empresaResponsavel}</TableCell>
+                                                            <TableCell className="text-[11px] font-bold text-slate-700">{entrega.edificacao}</TableCell>
+                                                            <TableCell className="text-[11px] font-bold text-slate-700">{entrega.disciplina}</TableCell>
+                                                            <TableCell className="text-[11px] font-bold text-slate-700">{entrega.nomeDocumento}</TableCell>
+                                                            <TableCell className="text-[11px] font-bold text-slate-400 italic">
+                                                                {DOC_TYPES[entrega.formato] || entrega.formato || entrega.tipoDocumento}
+                                                            </TableCell>
+                                                            <TableCell className="text-[11px] font-bold text-slate-700 truncate max-w-[120px]">{entrega.modeloBaseReferencia || "-"}</TableCell>
+                                                            <TableCell className="text-[11px] font-bold text-rose-500">{entrega.acoesNecessarias || "-"}</TableCell>
+                                                            <TableCell>
+                                                                <div className={`px-2 py-0.5 rounded-full border text-[9px] font-black uppercase flex items-center gap-1 w-fit ${statusInfo.color}`}>
+                                                                    <StatusIcon className="w-2.5 h-2.5" />
+                                                                    {statusInfo.label}
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell className="text-right">
+                                                                <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-primary hover:bg-primary/5 rounded-full"
+                                                                        onClick={(e) => { e.stopPropagation(); handleEdit(entrega); }}>
+                                                                        <Edit2 className="w-4 h-4" />
+                                                                    </Button>
+                                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-full"
+                                                                        onClick={(e) => handleDelete(entrega.id, e)}>
+                                                                        <Trash2 className="w-4 h-4" />
+                                                                    </Button>
+                                                                </div>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    );
+                                                })
+                                            )}
+                                        </TableBody>
+                                    </Table>
+                                </CardContent>
+                            </Card>
+                        </TabsContent>
 
-                <TabsContent value="scope">
-                    <ScopeManagementView entregas={entregas} selectedEdificacao={selectedEdificacao} />
-                </TabsContent>
-            </Tabs>
+                        <TabsContent value="validation">
+                            <ValidationTab />
+                        </TabsContent>
+
+                        <TabsContent value="scope">
+                            <ScopeManagementView entregas={entregas} selectedEdificacao={selectedEdificacao} />
+                        </TabsContent>
+                    </Tabs>
+                </>
+            )}
 
             {isFormOpen && (
                 <EntregaForm
@@ -382,6 +382,8 @@ function ScopeManagementView({ entregas, selectedEdificacao }: { entregas: any[]
                                     <TableHead className="font-bold uppercase text-[10px] tracking-wider">Responsável</TableHead>
                                     <TableHead className="font-bold uppercase text-[10px] tracking-wider">Edificação</TableHead>
                                     <TableHead className="font-bold uppercase text-[10px] tracking-wider">Disciplina</TableHead>
+                                    <TableHead className="text-center font-bold uppercase text-[10px] tracking-wider whitespace-nowrap">RVT Nativo?</TableHead>
+                                    <TableHead className="font-bold uppercase text-[10px] tracking-wider w-[150px]">Plano de Ação</TableHead>
                                     <TableHead className="text-center font-bold uppercase text-[10px] tracking-wider">Status</TableHead>
                                     <TableHead className="text-right font-bold uppercase text-[10px] tracking-wider">Ações</TableHead>
                                 </TableRow>
@@ -408,6 +410,16 @@ function ScopeManagementView({ entregas, selectedEdificacao }: { entregas: any[]
                                             <TableCell className="text-[11px] font-bold text-slate-700">{esc.edificacao}</TableCell>
                                             <TableCell>
                                                 <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[9px] font-black uppercase">{esc.disciplina}</span>
+                                            </TableCell>
+                                            <TableCell className="text-center">
+                                                {esc.temRvtOriginal === 1 ? (
+                                                    <Badge variant="outline" className="text-[8px] bg-emerald-50 text-emerald-600 border-emerald-100 font-black">SIM</Badge>
+                                                ) : (
+                                                    <Badge variant="outline" className="text-[8px] bg-rose-50 text-rose-600 border-rose-100 font-black">NÃO</Badge>
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="text-[10px] font-medium text-slate-500 italic max-w-[150px] truncate" title={esc.acaoRvt || esc.pendenciaRvt}>
+                                                {esc.acaoRvt || esc.pendenciaRvt || "-"}
                                             </TableCell>
                                             <TableCell className="text-center">
                                                 <Badge variant={progress === 100 ? "secondary" : "outline"} className={`text-[9px] font-black px-2 py-0.5 ${progress === 100 ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-400 border-slate-200"}`}>
@@ -469,8 +481,9 @@ function EscopoForm({ escopo, selectedEdificacao, onClose }: { escopo?: any, sel
         edificacao: escopo?.edificacao || selectedEdificacao || "",
         nomeModelo: escopo?.nomeModelo || "",
         nomeModeloFinal: escopo?.nomeModeloFinal || "",
-        temRvtOriginal: escopo?.temRvtOriginal || 0,
+        temRvtOriginal: escopo?.temRvtOriginal ?? 1,
         pendenciaRvt: escopo?.pendenciaRvt || "",
+        acaoRvt: escopo?.acaoRvt || "",
         descricao: escopo?.descricao || "",
     });
 
@@ -519,13 +532,22 @@ function EscopoForm({ escopo, selectedEdificacao, onClose }: { escopo?: any, sel
                                 <option value={0}>Não (IFC ou Outro)</option>
                             </select>
                         </div>
-                        <div className="space-y-1.5">
-                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Ação/Pendência RVT</label>
+                        <div className="space-y-1.5 col-span-2">
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Descrição do Problema / Pendência RVT</label>
                             <Input 
                                 value={formData.pendenciaRvt} 
                                 onChange={e => setFormData({ ...formData, pendenciaRvt: e.target.value })} 
-                                placeholder="Ex: Gerar via IFC" 
+                                placeholder="Ex: Projetista só enviou IFC" 
                                 className="rounded-xl border-slate-200" 
+                            />
+                        </div>
+                        <div className="space-y-1.5 col-span-2">
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Plano de Ação (Ação Tomada)</label>
+                            <Input 
+                                value={formData.acaoRvt} 
+                                onChange={e => setFormData({ ...formData, acaoRvt: e.target.value })} 
+                                placeholder="Ex: Solicitado nativo via e-mail / Converter IFC para RVT" 
+                                className="rounded-xl border-slate-200 bg-emerald-50/20" 
                             />
                         </div>
                         <div className="space-y-1.5 col-span-2">
@@ -953,6 +975,24 @@ function EntregaDetailView({ entrega, onBack, onUpdate, onEdit, onDelete }: any)
         });
     };
 
+    const toggleCheckpointBep = (itemId: string) => {
+        try {
+            const currentCb = JSON.parse(entrega.checkpointBep || '{}');
+            const newCb = {
+                ...currentCb,
+                [itemId]: !currentCb[itemId]
+            };
+            
+            mutation.mutate({
+                ...entrega,
+                dataPrevista: new Date(entrega.dataPrevista),
+                checkpointBep: JSON.stringify(newCb)
+            });
+        } catch (e) {
+            console.error("Erro ao converter checklist BEP:", e);
+        }
+    };
+
     const statusInfo = STATUS_LABELS[entrega.status] || STATUS_LABELS['AGUARDANDO'];
     const StatusIcon = statusInfo.icon;
 
@@ -1073,9 +1113,16 @@ function EntregaDetailView({ entrega, onBack, onUpdate, onEdit, onDelete }: any)
                                                 isChecked = cb[item.id] === true;
                                             } catch (e) {}
                                             return (
-                                                <div key={item.id} className="flex items-center gap-2 text-xs">
-                                                    {isChecked ? <CheckCircle2 className="w-3 h-3 text-emerald-500" /> : <Clock className="w-3 h-3 text-slate-300" />}
-                                                    <span className={isChecked ? "text-slate-700" : "text-slate-400 italic"}>{item.label}</span>
+                                                <div key={item.id} className="flex items-center gap-3 text-xs bg-white/50 p-2 rounded-lg border border-transparent hover:border-blue-200 hover:bg-white transition-all cursor-pointer group"
+                                                     onClick={() => toggleCheckpointBep(item.id)}>
+                                                    <Checkbox 
+                                                        checked={isChecked} 
+                                                        onCheckedChange={() => toggleCheckpointBep(item.id)}
+                                                        className="data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+                                                    />
+                                                    <span className={`transition-colors ${isChecked ? "text-slate-700 font-bold" : "text-slate-400 italic group-hover:text-slate-600"}`}>
+                                                        {item.label}
+                                                    </span>
                                                 </div>
                                             );
                                         })}
@@ -1155,6 +1202,7 @@ function EntregaDetailView({ entrega, onBack, onUpdate, onEdit, onDelete }: any)
 function EntregaForm({ onClose, entrega, selectedEdificacao }: any) {
     const utils = trpc.useUtils();
     const { data: escopos = [] } = trpc.dashboard.getEscopos.useQuery();
+    const { data: allEntregas = [] } = trpc.dashboard.getEntregas.useQuery();
     
     const mutation = trpc.dashboard.upsertEntrega.useMutation({
         onSuccess: () => {
@@ -1163,6 +1211,26 @@ function EntregaForm({ onClose, entrega, selectedEdificacao }: any) {
         },
         onError: (error) => alert("Erro ao salvar: " + error.message)
     });
+
+    // Extrair dados únicos dos escopos para os dropdowns
+    const edificacoesList = useMemo(() => {
+        const unique = Array.from(new Set(escopos.map((e: any) => e.edificacao))).sort();
+        return unique;
+    }, [escopos]);
+
+    const empresasList = useMemo(() => {
+        const unique = Array.from(new Set(escopos.map((e: any) => e.empresa))).sort();
+        return unique;
+    }, [escopos]);
+
+    const isNew = !entrega?.id;
+
+    // Calcular próximo número de entrega
+    const nextNumeroEntrega = useMemo(() => {
+        if (!isNew) return entrega.numeroEntrega;
+        const max = allEntregas.reduce((acc: number, curr: any) => Math.max(acc, curr.numeroEntrega || 0), 0);
+        return max + 1;
+    }, [allEntregas, isNew, entrega]);
 
     const [formData, setFormData] = useState({
         id: entrega?.id,
@@ -1176,8 +1244,7 @@ function EntregaForm({ onClose, entrega, selectedEdificacao }: any) {
         dataRecebimento: entrega?.dataRecebimento ? dayjs(entrega.dataRecebimento).format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD'),
         status: entrega?.status || "RECEBIDO",
         descricao: entrega?.descricao || "",
-        // New coordination fields
-        numeroEntrega: entrega?.numeroEntrega || 0,
+        numeroEntrega: entrega?.numeroEntrega || nextNumeroEntrega,
         identificadorEntrega: entrega?.identificadorEntrega || "",
         formato: entrega?.formato || "rvt",
         isModelo: entrega?.isModelo ?? (entrega?.tipoDocumento === 'rvt' ? 1 : 0),
@@ -1186,43 +1253,75 @@ function EntregaForm({ onClose, entrega, selectedEdificacao }: any) {
         checkpointBep: entrega?.checkpointBep || JSON.stringify({ geo: false, param: false, naming: false, lod: false, clash: false }),
     });
 
-    const [selectedEscopoIds, setSelectedEscopoIds] = useState<number[]>(entrega?.escopoId ? [entrega.escopoId] : []);
-    const isNew = !entrega?.id;
+    // Atualizar numeroEntrega quando os dados carregarem
+    useEffect(() => {
+        if (isNew && formData.numeroEntrega === 0 && nextNumeroEntrega > 0) {
+            setFormData(prev => ({ ...prev, numeroEntrega: nextNumeroEntrega }));
+        }
+    }, [nextNumeroEntrega, isNew]);
 
-    // Filter scope items by current building
-    const relevantEscopos = useMemo(() => {
+    const disciplinasList = useMemo(() => {
         if (!formData.edificacao) return [];
-        return escopos.filter((e: any) => e.edificacao.toLowerCase().includes(formData.edificacao.toLowerCase()));
+        const filtered = escopos.filter((e: any) => e.edificacao === formData.edificacao);
+        const unique = Array.from(new Set(filtered.map((e: any) => e.disciplina))).sort();
+        return unique;
     }, [escopos, formData.edificacao]);
+
+    // Lógica de Modelo Base Automático
+    useEffect(() => {
+        if (formData.edificacao && formData.disciplina) {
+            const match = escopos.find((e: any) => 
+                e.edificacao === formData.edificacao && 
+                e.disciplina === formData.disciplina
+            );
+            if (match && !formData.modeloBaseReferencia) {
+                setFormData(prev => ({ ...prev, modeloBaseReferencia: match.nomeModelo }));
+            }
+        }
+    }, [formData.edificacao, formData.disciplina, escopos]);
+
+    const handleFormatoChange = (val: string) => {
+        let tipo = "relatorio";
+        let isModelo = 0;
+        
+        if (val === "rvt" || val === "ifc") {
+            tipo = "rvt";
+            isModelo = 1;
+        } else if (val === "dwg") {
+            tipo = "dwg";
+        }
+
+        setFormData(prev => ({ 
+            ...prev, 
+            formato: val, 
+            tipoDocumento: tipo, 
+            isModelo 
+        }));
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         
         try {
-            if (isNew && selectedEscopoIds.length > 1) {
-                // Batch create
-                for (const escId of selectedEscopoIds) {
-                    const esc = escopos.find((e: any) => e.id === escId);
-                    await mutation.mutateAsync({ 
-                        ...formData, 
-                        escopoId: escId,
-                        disciplina: esc?.disciplina || formData.disciplina,
-                        empresaResponsavel: esc?.empresa || formData.empresaResponsavel,
-                        dataRecebimento: formData.dataRecebimento || null 
-                    });
-                }
-            } else {
-                // Single create/update
-                await mutation.mutateAsync({ 
-                    ...formData, 
-                    escopoId: selectedEscopoIds[0] || null,
-                    dataRecebimento: formData.dataRecebimento || null 
-                });
+            // Resolver escopoId a partir dos dropdowns se for novo ou se mudou
+            let escopoId = formData.escopoId;
+            if (!escopoId || formData.edificacao || formData.disciplina) {
+                const match = escopos.find((e: any) => 
+                    e.edificacao === formData.edificacao && 
+                    e.disciplina === formData.disciplina &&
+                    e.empresa === formData.empresaResponsavel
+                );
+                if (match) escopoId = match.id;
             }
+
+            await mutation.mutateAsync({ 
+                ...formData, 
+                escopoId,
+                dataRecebimento: formData.dataRecebimento || null 
+            });
+
             onClose();
-        } catch (err) {
-            // Error already handled by mutation onError
-        }
+        } catch (err) { }
     };
 
     return (
@@ -1238,20 +1337,27 @@ function EntregaForm({ onClose, entrega, selectedEdificacao }: any) {
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                         <div className="space-y-2">
                             <label className="text-xs font-bold uppercase text-slate-500 ml-1">Nº Controle</label>
-                            <Input type="number" value={formData.numeroEntrega} onChange={e => setFormData({ ...formData, numeroEntrega: parseInt(e.target.value) })} placeholder="0" className="rounded-xl border-slate-200" />
+                            <Input type="number" value={formData.numeroEntrega} onChange={e => setFormData({ ...formData, numeroEntrega: parseInt(e.target.value) })} className="rounded-xl border-slate-200" />
                         </div>
                         <div className="space-y-2 md:col-span-3">
                             <label className="text-xs font-bold uppercase text-slate-500 ml-1">Nome do Documento / Arquivo *</label>
-                            <Input required value={formData.nomeDocumento} onChange={e => setFormData({ ...formData, nomeDocumento: e.target.value })} placeholder="Ex: Planta de execução Nível 1" className="rounded-xl border-slate-200" />
+                            <Input required value={formData.nomeDocumento} onChange={e => setFormData({ ...formData, nomeDocumento: e.target.value })} placeholder="Ex: NEO-23001-AS-BAR-001..." className="rounded-xl border-slate-200" />
                         </div>
+                        
                         <div className="space-y-2">
-                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Tipo *</label>
-                            <select className="flex h-10 w-full rounded-xl border border-slate-200 bg-background px-3 py-2 text-sm" value={formData.tipoDocumento} onChange={e => setFormData({ ...formData, tipoDocumento: e.target.value })}>
-                                <option value="relatorio">Relatório</option>
-                                <option value="dwg">DWG</option>
-                                <option value="rvt">Revit (RVT)</option>
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Tipo e Formato *</label>
+                            <select 
+                                className="flex h-10 w-full rounded-xl border border-slate-200 bg-background px-3 py-2 text-sm" 
+                                value={formData.formato} 
+                                onChange={e => handleFormatoChange(e.target.value)}
+                            >
+                                <option value="pdf">Relatório (PDF)</option>
+                                <option value="dwg">Desenho (DWG)</option>
+                                <option value="rvt">Modelo Revit (RVT)</option>
+                                <option value="ifc">Modelo BIM (IFC)</option>
                             </select>
                         </div>
+
                         <div className="space-y-2">
                             <label className="text-xs font-bold uppercase text-slate-500 ml-1">Status *</label>
                             <select className="flex h-10 w-full rounded-xl border border-slate-200 bg-background px-3 py-2 text-sm" value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })}>
@@ -1260,120 +1366,121 @@ function EntregaForm({ onClose, entrega, selectedEdificacao }: any) {
                                 ))}
                             </select>
                         </div>
+
                         <div className="space-y-2">
-                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Edificação</label>
-                            <Input value={formData.edificacao} onChange={e => setFormData({ ...formData, edificacao: e.target.value })} placeholder="Ex: Bloco A" className="rounded-xl border-slate-200" />
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Edificação *</label>
+                            <select 
+                                required
+                                className="flex h-10 w-full rounded-xl border border-slate-200 bg-background px-3 py-2 text-sm" 
+                                value={formData.edificacao} 
+                                onChange={e => setFormData({ ...formData, edificacao: e.target.value, disciplina: "", modeloBaseReferencia: "" })}
+                            >
+                                <option value="">Selecione...</option>
+                                {edificacoesList.map((edif: any) => (
+                                    <option key={edif} value={edif}>{edif}</option>
+                                ))}
+                            </select>
                         </div>
+
                         <div className="space-y-2">
                             <label className="text-xs font-bold uppercase text-slate-500 ml-1">Pacote / SM</label>
                             <Input value={formData.identificadorEntrega} onChange={e => setFormData({ ...formData, identificadorEntrega: e.target.value })} placeholder="Ex: SM 611" className="rounded-xl border-slate-200" />
                         </div>
+
                         <div className="space-y-2">
-                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Formato</label>
-                            <select className="flex h-10 w-full rounded-xl border border-slate-200 bg-background px-3 py-2 text-sm" value={formData.formato} onChange={e => setFormData({ ...formData, formato: e.target.value })}>
-                                <option value="rvt">Revit (RVT)</option>
-                                <option value="ifc">IFC</option>
-                                <option value="dwg">DWG</option>
-                                <option value="pdf">PDF</option>
-                            </select>
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">É um Modelo BIM? *</label>
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Disciplina *</label>
                             <select 
-                                className="flex h-10 w-full rounded-xl border border-slate-200 bg-background px-3 py-2 text-sm"
-                                value={formData.isModelo}
-                                onChange={e => setFormData({ ...formData, isModelo: parseInt(e.target.value) })}
+                                required
+                                className="flex h-10 w-full rounded-xl border border-slate-200 bg-background px-3 py-2 text-sm" 
+                                value={formData.disciplina} 
+                                onChange={e => setFormData({ ...formData, disciplina: e.target.value, modeloBaseReferencia: "" })}
                             >
-                                <option value={1}>Sim</option>
-                                <option value={0}>Não</option>
+                                <option value="">Selecione...</option>
+                                {disciplinasList.map((disc: any) => (
+                                    <option key={disc} value={disc}>{disc}</option>
+                                ))}
                             </select>
                         </div>
 
-                        {formData.isModelo === 1 && (
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Empreiteiro *</label>
+                            <select 
+                                required
+                                className="flex h-10 w-full rounded-xl border border-slate-200 bg-background px-3 py-2 text-sm" 
+                                value={formData.empresaResponsavel} 
+                                onChange={e => setFormData({ ...formData, empresaResponsavel: e.target.value })}
+                            >
+                                <option value="">Selecione...</option>
+                                {empresasList.map((emp: any) => (
+                                    <option key={emp} value={emp}>{emp}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">É um Modelo BIM? *</label>
+                            <Input readOnly value={formData.isModelo === 1 ? "Sim" : "Não"} className="rounded-xl border-none bg-slate-50 font-bold text-slate-500" />
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Modelo Base</label>
+                            <Input value={formData.modeloBaseReferencia} onChange={e => setFormData({ ...formData, modeloBaseReferencia: e.target.value })} placeholder="Automático..." className="rounded-xl border-slate-200 bg-blue-50/30" />
+                        </div>
+
+                        {/* BEP Section - Only for existing deliveries */}
+                        {!isNew && formData.isModelo === 1 && (
                             <div className="md:col-span-2 p-4 bg-blue-50/50 border border-blue-100 rounded-2xl space-y-4">
                                 <h4 className="text-xs font-bold text-blue-700 uppercase flex items-center gap-2">
                                     <Layers className="w-4 h-4" /> Coordenação Técnica (BEP)
                                 </h4>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="space-y-1.5">
-                                        <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Modelo Base Referência</label>
-                                        <Input value={formData.modeloBaseReferencia} onChange={e => setFormData({ ...formData, modeloBaseReferencia: e.target.value })} placeholder="Ex: Nome do RVT no Projeto" className="rounded-xl border-slate-200 bg-white" />
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Ações Necessárias (RVT)</label>
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Status Ações Necessárias</label>
                                         <Input value={formData.acoesNecessarias} onChange={e => setFormData({ ...formData, acoesNecessarias: e.target.value })} placeholder="Ex: Pedir RVT nativo" className="rounded-xl border-slate-200 bg-white" />
                                     </div>
-                                </div>
-                                
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Checklist Técnico BEP</label>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-white p-3 rounded-xl border border-slate-100">
-                                        {[
-                                            { id: 'geo', label: 'Georreferenciamento ok' },
-                                            { id: 'param', label: 'Parâmetros preenchidos' },
-                                            { id: 'naming', label: 'Nomenclatura BEP' },
-                                            { id: 'lod', label: 'LOD 500 (As-Built)' },
-                                            { id: 'clash', label: 'Coordenação s/ Interferências' }
-                                        ].map(item => {
-                                            const cb = JSON.parse(formData.checkpointBep);
-                                            return (
-                                                <div key={item.id} className="flex items-center gap-2">
-                                                    <Checkbox 
-                                                        id={`check-${item.id}`}
-                                                        checked={cb[item.id] === true}
-                                                        onCheckedChange={(checked: boolean) => {
-                                                            const newCb = { ...cb, [item.id]: checked };
-                                                            setFormData({ ...formData, checkpointBep: JSON.stringify(newCb) });
-                                                        }}
-                                                    />
-                                                    <label htmlFor={`check-${item.id}`} className="text-xs text-slate-600 cursor-pointer">{item.label}</label>
-                                                </div>
-                                            );
-                                        })}
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Checklist Técnico BEP</label>
+                                        <div className="flex flex-col gap-2 bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                                            {[
+                                                { id: 'geo', label: 'Georreferenciamento ok' },
+                                                { id: 'param', label: 'Parâmetros preenchidos' },
+                                                { id: 'naming', label: 'Nomenclatura BEP' },
+                                                { id: 'lod', label: 'LOD 500 (As-Built)' },
+                                                { id: 'clash', label: 'Coordenação s/ Interferências' }
+                                            ].map(item => {
+                                                const cb = JSON.parse(formData.checkpointBep);
+                                                const checked = cb[item.id] === true;
+                                                return (
+                                                    <div key={item.id} 
+                                                         className={`flex items-center gap-3 p-2 rounded-lg transition-colors cursor-pointer border ${checked ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50/50 border-transparent hover:border-slate-200'}`}
+                                                         onClick={() => {
+                                                             const newCb = { ...cb, [item.id]: !checked };
+                                                             setFormData({ ...formData, checkpointBep: JSON.stringify(newCb) });
+                                                         }}>
+                                                        <Checkbox 
+                                                            id={`check-${item.id}`}
+                                                            checked={checked}
+                                                            onCheckedChange={() => {}} // Handle via parent click
+                                                            className="data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+                                                        />
+                                                        <label htmlFor={`check-${item.id}`} className={`text-xs cursor-pointer select-none ${checked ? 'text-emerald-700 font-bold' : 'text-slate-500'}`}>{item.label}</label>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         )}
 
-                        {isNew && relevantEscopos.length > 0 && (
-                            <div className="space-y-2 md:col-span-2 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                <label className="text-xs font-bold uppercase text-[#940707] ml-1">Vincular a Disciplinas (Lote) *</label>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
-                                    {relevantEscopos.map((esc: any) => (
-                                        <div key={esc.id} className="flex items-center gap-2 bg-white p-2 rounded-xl border border-slate-100">
-                                            <Checkbox 
-                                                id={`esc-${esc.id}`}
-                                                checked={selectedEscopoIds.includes(esc.id)}
-                                                onCheckedChange={(checked: boolean) => {
-                                                    if (checked) setSelectedEscopoIds([...selectedEscopoIds, esc.id]);
-                                                    else setSelectedEscopoIds(selectedEscopoIds.filter(id => id !== esc.id));
-                                                }}
-                                            />
-                                            <label htmlFor={`esc-${esc.id}`} className="text-xs font-medium text-slate-600 cursor-pointer">
-                                                {esc.disciplina} ({esc.empresa})
-                                            </label>
-                                        </div>
-                                    ))}
-                                </div>
-                                <p className="text-[10px] text-slate-400 mt-2 italic">Selecione uma ou mais disciplinas para registrar a entrega em lote.</p>
-                            </div>
-                        )}
 
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Disciplina</label>
-                            <Input value={formData.disciplina} onChange={e => setFormData({ ...formData, disciplina: e.target.value })} placeholder="Ex: Arquitetura" className="rounded-xl border-slate-200" disabled={isNew && selectedEscopoIds.length > 0} />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Empreiteiro *</label>
-                            <Input required value={formData.empresaResponsavel} onChange={e => setFormData({ ...formData, empresaResponsavel: e.target.value })} placeholder="Ex: Empresa ABC" className="rounded-xl border-slate-200" />
-                        </div>
                         <div className="space-y-2">
                             <label className="text-xs font-bold uppercase text-slate-500 ml-1">Data Prevista *</label>
                             <Input type="date" required value={formData.dataPrevista} onChange={e => setFormData({ ...formData, dataPrevista: e.target.value })} className="rounded-xl border-slate-200" />
                         </div>
                         <div className="space-y-2 md:col-span-2">
-                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Descrição</label>
-                            <Textarea value={formData.descricao} onChange={(e) => setFormData({ ...formData, descricao: e.target.value })} placeholder="Notas..." className="resize-none rounded-xl border-slate-200 min-h-[100px]" />
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Descrição / Observações</label>
+                            <Textarea value={formData.descricao} onChange={(e) => setFormData({ ...formData, descricao: e.target.value })} placeholder="Notas adicionais..." className="resize-none rounded-xl border-slate-200 min-h-[80px]" />
                         </div>
                     </div>
                     <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
@@ -1397,6 +1504,7 @@ function BatchEntregaForm({ selectedEdificacao, onClose }: { selectedEdificacao?
     
     const [selectedEmpresa, setSelectedEmpresa] = useState("");
     const [selectedEscopoIds, setSelectedEscopoIds] = useState<number[]>([]);
+    const [escopoNames, setEscopoNames] = useState<Record<number, string>>({});
     const [formData, setFormData] = useState({
         nomeDocumento: "",
         tipoDocumento: "rvt",
@@ -1435,6 +1543,9 @@ function BatchEntregaForm({ selectedEdificacao, onClose }: { selectedEdificacao?
         mutation.mutate({
             ...formData,
             escopoIds: selectedEscopoIds,
+            escopoNames: Object.fromEntries(
+                Object.entries(escopoNames).map(([k, v]) => [k, v])
+            ),
             empresaResponsavel: selectedEmpresa,
             edificacao: selectedEdificacao || "Geral",
             disciplina: "Múltiplas",
@@ -1442,10 +1553,19 @@ function BatchEntregaForm({ selectedEdificacao, onClose }: { selectedEdificacao?
         } as any);
     };
 
-    const toggleEscopo = (id: number) => {
-        setSelectedEscopoIds(prev => 
-            prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-        );
+    const toggleEscopo = (id: number, nomePadrao: string) => {
+        setSelectedEscopoIds(prev => {
+            const isRemoving = prev.includes(id);
+            if (isRemoving) {
+                return prev.filter(i => i !== id);
+            } else {
+                // If adding, pre-fill the name if not already set
+                if (!escopoNames[id]) {
+                    setEscopoNames(curr => ({ ...curr, [id]: nomePadrao }));
+                }
+                return [...prev, id];
+            }
+        });
     };
 
     return (
@@ -1516,7 +1636,15 @@ function BatchEntregaForm({ selectedEdificacao, onClose }: { selectedEdificacao?
                                     variant="ghost" 
                                     size="sm" 
                                     className="h-6 text-[10px] font-bold text-primary"
-                                    onClick={() => setSelectedEscopoIds(filteredEscopos.map((e: any) => e.id))}
+                                    onClick={() => {
+                                        const ids = filteredEscopos.map((e: any) => e.id);
+                                        setSelectedEscopoIds(ids);
+                                        const names = { ...escopoNames };
+                                        filteredEscopos.forEach((e: any) => {
+                                            if (!names[e.id]) names[e.id] = e.nomeModelo;
+                                        });
+                                        setEscopoNames(names);
+                                    }}
                                 >
                                     Selecionar Todos
                                 </Button>
@@ -1539,10 +1667,10 @@ function BatchEntregaForm({ selectedEdificacao, onClose }: { selectedEdificacao?
                                             {filteredEscopos.map((esc: any) => (
                                                 <TableRow 
                                                     key={esc.id} 
-                                                    className="hover:bg-white cursor-pointer group"
-                                                    onClick={() => toggleEscopo(esc.id)}
+                                                    className={`hover:bg-white cursor-pointer group transition-colors ${selectedEscopoIds.includes(esc.id) ? 'bg-white' : ''}`}
+                                                    onClick={() => toggleEscopo(esc.id, esc.nomeModelo)}
                                                 >
-                                                    <TableCell className="w-10">
+                                                    <TableCell className="w-10 align-top pt-4">
                                                         <Checkbox checked={selectedEscopoIds.includes(esc.id)} />
                                                     </TableCell>
                                                     <TableCell>
@@ -1552,6 +1680,18 @@ function BatchEntregaForm({ selectedEdificacao, onClose }: { selectedEdificacao?
                                                                 <span className="text-[10px] bg-slate-200 px-1.5 py-0.5 rounded text-slate-600 font-bold uppercase">{esc.disciplina}</span>
                                                                 <span className="text-[10px] text-slate-400">{esc.edificacao}</span>
                                                             </div>
+
+                                                            {selectedEscopoIds.includes(esc.id) && (
+                                                                <div className="mt-3 pb-2 animate-in slide-in-from-top-1 duration-200" onClick={e => e.stopPropagation()}>
+                                                                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block ml-0.5">Nome do Arquivo Entregue</label>
+                                                                    <Input 
+                                                                        className="h-8 text-xs rounded-lg border-primary/20 bg-white shadow-sm focus-visible:ring-primary/20"
+                                                                        placeholder="Nome específico deste arquivo..."
+                                                                        value={escopoNames[esc.id] || ""}
+                                                                        onChange={e => setEscopoNames(prev => ({ ...prev, [esc.id]: e.target.value }))}
+                                                                    />
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </TableCell>
                                                 </TableRow>

@@ -33,6 +33,8 @@ interface SimuladorTendenciaCardProps {
     allRooms: any[];
     projectId?: string;
     project?: any;
+    // Callback para quando os dados simulados mudarem (para atualizar os cards no topo)
+    onSimulationChange?: (result: { targetDate: string; roomsPerWeek: number }) => void;
 }
 
 // Helper: Calculate business days between two dates
@@ -59,7 +61,7 @@ const addBusinessDays = (start: Date, days: number) => {
     return date;
 };
 
-export default function SimuladorTendenciaCard({ data, allRooms, projectId, project }: SimuladorTendenciaCardProps) {
+export default function SimuladorTendenciaCard({ data, allRooms, projectId, project, onSimulationChange }: SimuladorTendenciaCardProps) {
     const [roomsPerWeek, setRoomsPerWeek] = useState<number>(9);
     const [targetDate, setTargetDate] = useState<string>("");
     const [mode, setMode] = useState<"speed" | "date">("speed");
@@ -111,9 +113,22 @@ export default function SimuladorTendenciaCard({ data, allRooms, projectId, proj
             const speedPerBusinessDay = roomsPerWeek / 5;
             const businessDaysNeeded = salasRestantes > 0 ? (salasRestantes / speedPerBusinessDay) : 0;
             const finishDate = addBusinessDays(new Date(), Math.ceil(businessDaysNeeded));
-            setTargetDate(finishDate.toISOString().split('T')[0]);
+            const dateStr = finishDate.toISOString().split('T')[0];
+            setTargetDate(dateStr);
+            
+            // Avisar o painel principal sobre a nova data simulada
+            if (onSimulationChange) {
+                onSimulationChange({ targetDate: dateStr, roomsPerWeek });
+            }
         }
     }, [roomsPerWeek, mode, salasRestantes]);
+
+    // Avisar o painel principal caso a data mude manualmente (modo date)
+    useEffect(() => {
+        if (mode === "date" && onSimulationChange) {
+            onSimulationChange({ targetDate, roomsPerWeek });
+        }
+    }, [targetDate, roomsPerWeek, mode]);
 
     const globalTotalSalas = useMemo(() => allRooms.length, [allRooms]);
 

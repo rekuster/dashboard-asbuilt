@@ -13,7 +13,7 @@ interface StatusPieChartProps {
     onStatusClick?: (status: string, color: string) => void;
 }
 
-export default function StatusPieChart({ data }: StatusPieChartProps) {
+export default function StatusPieChart({ data, onStatusClick }: StatusPieChartProps) {
     return (
         <Card className="h-[400px]">
             <CardHeader>

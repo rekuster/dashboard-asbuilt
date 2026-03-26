@@ -18,6 +18,7 @@ export function ReportPreviewModal({ edificacoes, disciplinas, responsaveis }: R
     const [reportType, setReportType] = useState<"CQ" | "AB">("CQ");
     const [base64Pdf, setBase64Pdf] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [isDownloading, setIsDownloading] = useState(false);
 
     // Filters
     const [filterEdificacao, setFilterEdificacao] = useState("Todas");
@@ -66,12 +67,47 @@ export function ReportPreviewModal({ edificacoes, disciplinas, responsaveis }: R
         }
     };
 
-    const downloadPDF = () => {
-        if (!base64Pdf) return;
-        const link = document.createElement('a');
-        link.href = `data:application/pdf;base64,${base64Pdf}`;
-        link.download = `${reportType === 'CQ' ? 'Relatorio_Divergencias' : 'Relatorio_AsBuilt'}_${new Date().toISOString().split('T')[0]}.pdf`;
-        link.click();
+    const downloadPDF = async () => {
+        setIsDownloading(true);
+        try {
+            let dataToDownload = base64Pdf;
+
+            // Se ainda não geramos o preview, buscamos os dados agora para baixar diretamente
+            if (!dataToDownload) {
+                const filters = {
+                    edificacao: filterEdificacao !== "Todas" ? filterEdificacao : undefined,
+                    pavimento: filterPavimento !== "Todos" ? filterPavimento : undefined,
+                    disciplina: filterDisciplina !== "Todas" ? filterDisciplina : undefined,
+                    responsavel: filterResponsavel !== "Todos" ? filterResponsavel : undefined,
+                    sala: filterSala || undefined
+                };
+
+                if (reportType === "CQ") {
+                    dataToDownload = await utils.dashboard.getPDFReport.fetch(filters);
+                } else {
+                    dataToDownload = await utils.dashboard.getAsBuiltReport.fetch({ 
+                        edificacao: filters.edificacao,
+                        pavimento: filters.pavimento
+                    });
+                }
+            }
+
+            if (!dataToDownload) throw new Error("Falha ao obter dados do PDF");
+
+            const link = document.createElement('a');
+            link.href = `data:application/pdf;base64,${dataToDownload}`;
+            link.download = `${reportType === 'CQ' ? 'Relatorio_Divergencias' : 'Relatorio_AsBuilt'}_${new Date().toISOString().split('T')[0]}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            toast.success("Download iniciado!");
+        } catch (error) {
+            console.error("Erro ao baixar PDF:", error);
+            toast.error("Erro ao gerar arquivo para download.");
+        } finally {
+            setIsDownloading(false);
+        }
     };
 
     // Reset preview when filters change? Maybe not, manual refresh is better for performance.
@@ -187,10 +223,18 @@ export function ReportPreviewModal({ edificacoes, disciplinas, responsaveis }: R
                 </div>
 
                 <div className="flex justify-end gap-2 pt-2 border-t mt-2">
-                    <Button variant="outline" onClick={() => setIsOpen(false)}>Fechar</Button>
-                    <Button onClick={downloadPDF} disabled={!base64Pdf}>
-                        <Download className="w-4 h-4 mr-2" />
-                        Baixar PDF
+                    <Button variant="outline" onClick={() => setIsOpen(false)} disabled={isLoading || isDownloading}>Fechar</Button>
+                    <Button 
+                        onClick={downloadPDF} 
+                        disabled={isLoading || isDownloading}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white min-w-[140px]"
+                    >
+                        {isDownloading ? (
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                            <Download className="w-4 h-4 mr-2" />
+                        )}
+                        {isDownloading ? "Baixando..." : "Baixar PDF"}
                     </Button>
                 </div>
             </DialogContent>

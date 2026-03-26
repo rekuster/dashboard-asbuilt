@@ -58,6 +58,7 @@ import {
     renumberSalasInEdificacao,
     getVerificacoes,
     upsertVerificacao,
+    getAllVerificacoes,
 } from './db';
 import { eq } from "drizzle-orm";
 import { handleExcelUpload } from './uploadHandler';
@@ -438,9 +439,11 @@ export const appRouter = router({
                 return await getEntregasStats(input?.edificacao);
             }),
 
-        getAsBuiltStatus: publicProcedure.query(async () => {
-            return await getAsBuiltStatus();
-        }),
+        getAsBuiltStatus: publicProcedure
+            .input(z.object({ edificacao: z.string().optional() }))
+            .query(async ({ input }) => {
+                return await getAsBuiltStatus(input.edificacao);
+            }),
 
         // Escopo As-Built (Lista Mestra)
         getEscopos: publicProcedure.query(async () => {
@@ -456,6 +459,9 @@ export const appRouter = router({
                 nomeModelo: z.string(),
                 nomeModeloFinal: z.string().optional(),
                 descricao: z.string().nullish(),
+                temRvtOriginal: z.number().optional(),
+                pendenciaRvt: z.string().nullish(),
+                acaoRvt: z.string().nullish(),
                 ativo: z.number().optional(),
             }))
             .mutation(async ({ input }) => {
@@ -607,6 +613,10 @@ export const appRouter = router({
             .mutation(async ({ input }) => {
                 return await upsertVerificacao(input.salaId, input.disciplina, input.status, input.observacao);
             }),
+
+        getAllVerificacoes: publicProcedure.query(async () => {
+            return await getAllVerificacoes();
+        }),
     }),
 
     ifc: router({

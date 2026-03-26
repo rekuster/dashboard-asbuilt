@@ -1,5 +1,4 @@
 import {
-    LineChart,
     Line,
     XAxis,
     YAxis,
@@ -7,8 +6,7 @@ import {
     Tooltip,
     ResponsiveContainer,
     Legend,
-    Bar,
-    ComposedChart
+    LineChart
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp } from "lucide-react";
@@ -35,8 +33,9 @@ export default function ApontamentosPorSemanaChart({ data, hideTitle }: Apontame
         );
     }
 
+    const chartContent = (
         <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={data} margin={{ top: 40, right: 30, left: 10, bottom: 5 }}>
+            <LineChart data={data} margin={{ top: 25, right: 30, left: 10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
                 <XAxis
                     dataKey="semana"
@@ -59,57 +58,27 @@ export default function ApontamentosPorSemanaChart({ data, hideTitle }: Apontame
                     iconType="circle"
                     wrapperStyle={{ paddingTop: '10px' }}
                 />
-
-                {/* Appointments as Bar for better volume visualization */}
-                <Bar 
+                <Line
                     name="Apontamentos"
-                    dataKey="count" 
-                    fill="#940707" 
-                    radius={[4, 4, 0, 0]} 
-                    barSize={20}
-                    label={{ 
-                        position: 'top', 
-                        fontSize: 11, 
-                        fill: '#940707', 
-                        fontWeight: 'bold',
-                        offset: 10
-                    }} 
-                />
-
-                {/* Verified Rooms as Line over the bars */}
-                <Line
-                    name="Salas Verificadas"
                     type="monotone"
-                    dataKey="verifiedRooms"
-                    stroke="#10B981"
+                    dataKey="count"
+                    stroke="#940707"
                     strokeWidth={3}
-                    dot={{ r: 4, fill: "#10B981", strokeWidth: 2, stroke: "#fff" }}
-                    activeDot={{ r: 6, fill: "#10B981", strokeWidth: 0 }}
-                    label={{
-                        position: 'top',
-                        fontSize: 11,
-                        fill: '#10B981',
-                        fontWeight: 'bold',
-                        offset: 15
-                    }}
+                    dot={{ r: 4, fill: "#940707", strokeWidth: 2, stroke: "#fff" }}
+                    activeDot={{ r: 6, fill: "#940707", strokeWidth: 0 }}
+                    label={{ position: 'top', fontSize: 11, fontWeight: 'bold', fill: "#940707", offset: 10 }}
                 />
                 <Line
                     name="Salas Verificadas"
                     type="monotone"
                     dataKey="verifiedRooms"
-                    stroke="#10B981"
+                    stroke="#22c55e"
                     strokeWidth={3}
-                    dot={{ r: 4, fill: "#10B981", strokeWidth: 2, stroke: "#fff" }}
-                    activeDot={{ r: 6, fill: "#10B981", strokeWidth: 0 }}
-                    label={{
-                        position: 'top',
-                        fontSize: 11,
-                        fill: '#10B981',
-                        fontWeight: 'bold',
-                        offset: 15
-                    }}
+                    dot={{ r: 4, fill: "#22c55e", strokeWidth: 2, stroke: "#fff" }}
+                    activeDot={{ r: 6, fill: "#22c55e", strokeWidth: 0 }}
+                    label={{ position: 'top', fontSize: 11, fontWeight: 'bold', fill: "#22c55e", offset: 10 }}
                 />
-            </ComposedChart>
+            </LineChart>
         </ResponsiveContainer>
     );
 

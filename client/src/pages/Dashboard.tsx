@@ -34,7 +34,6 @@ import TopImpactedRooms from "@/components/dashboard/TopImpactedRooms";
 import SimuladorTendenciaCard from "@/components/dashboard/SimuladorTendenciaCard";
 import DataHubTab from "@/components/dashboard/DataHubTab";
 import DataIntegrityAlert from "@/components/dashboard/DataIntegrityAlert";
-import IfcUploader from "@/components/ifc/IfcUploader";
 import PresentationTab from "@/components/dashboard/PresentationTab";
 import EntregasTab from "@/components/dashboard/EntregasTab";
 import AsBuiltDashboard from "@/components/dashboard/AsBuiltDashboard";
@@ -55,6 +54,9 @@ export default function Dashboard() {
     const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
     const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
     const [selectedStatusColor, setSelectedStatusColor] = useState<string>("#94a3b8");
+
+    // Estados para simulação (dados que vêm do simulador no final da página)
+    const [simulatedData, setSimulatedData] = useState<{ targetDate: string; roomsPerWeek: number } | null>(null);
 
     const { data: project } = trpc.projects.getById.useQuery(
         { id: projectId! },
@@ -231,9 +233,9 @@ export default function Dashboard() {
                         <FieldReportTab />
                     </TabsContent>
 
-                    <TabsContent value="asbuilt" className="animate-in fade-in duration-500">
-                        <AsBuiltDashboard />
-                    </TabsContent>
+                        <TabsContent value="asbuilt" className="m-0">
+                            <AsBuiltDashboard selectedEdificacao={selectedEdificacao} />
+                        </TabsContent>
 
                     <TabsContent value="overview" className="space-y-8 animate-in fade-in duration-500">
                         {/* KPIs Grid */}
@@ -268,19 +270,31 @@ export default function Dashboard() {
                             />
                             <KPICard
                                 title="Previsão Término"
-                                value={kpis?.estimativaTermino ? new Date(kpis.estimativaTermino).toLocaleDateString('pt-BR', {day: '2-digit', month: 'short'}) : "..."}
+                                value={
+                                    simulatedData?.targetDate 
+                                        ? new Date(simulatedData.targetDate + "T12:00:00").toLocaleDateString('pt-BR', {day: '2-digit', month: 'short'})
+                                        : kpis?.estimativaTermino 
+                                            ? new Date(kpis.estimativaTermino).toLocaleDateString('pt-BR', {day: '2-digit', month: 'short'}) 
+                                            : "..."
+                                }
                                 subtitle={
                                     <div className="flex flex-col gap-0.5">
-                                        <span>{kpis?.velocidadeVerificacao > 0 ? `${kpis.velocidadeVerificacao.toFixed(1)} salas/dia` : "Aguardando dados"}</span>
+                                        <span className={simulatedData ? "text-primary font-bold" : ""}>
+                                            {simulatedData 
+                                                ? `${(simulatedData.roomsPerWeek / 5).toFixed(1)} salas/dia (Simulado)` 
+                                                : kpis?.velocidadeVerificacao > 0 
+                                                    ? `${kpis.velocidadeVerificacao.toFixed(1)} salas/dia` 
+                                                    : "Aguardando dados"}
+                                        </span>
                                         {project?.baselineTargetDate && (
-                                            <span className="text-[10px] text-primary font-bold">
+                                            <span className="text-[10px] text-slate-400 font-medium">
                                                 Meta: {new Date(project.baselineTargetDate).toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'})}
                                             </span>
                                         )}
                                     </div>
                                 }
                                 icon={CalendarDays}
-                                variant="default"
+                                variant={simulatedData ? "blue" : "default"}
                             />
                         </div>
 
@@ -330,6 +344,8 @@ export default function Dashboard() {
                                 allRooms={salas || []}
                                 projectId={projectId}
                                 project={project}
+                                // Função para atualizar os dados no topo do dashboard
+                                onSimulationChange={(sim) => setSimulatedData(sim)}
                             />
                             <div className="xl:col-span-2">
                                 <TopImpactedRooms data={topSalas} />
@@ -360,7 +376,14 @@ export default function Dashboard() {
 
                     <TabsContent value="management" className="space-y-6 animate-in fade-in duration-500">
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            <IfcUploader />
+                            {/* <IfcUploader /> */}
+                            <Card className="bg-slate-50 border-dashed border-2 flex flex-col items-center justify-center p-8 text-center">
+                                <Box className="w-12 h-12 text-slate-300 mb-4" />
+                                <CardTitle className="text-slate-500">Upload de Modelos IFC</CardTitle>
+                                <CardDescription className="mt-2">
+                                    Funcionalidade temporariamente desativada para manutenção técnica.
+                                </CardDescription>
+                            </Card>
                             <Card>
                                 <CardHeader>
                                     <div className="flex items-center gap-3">

@@ -4,7 +4,7 @@
  * Mostra uma tabela simples com o nome da sala, edificação e pavimento.
  */
 
-import React, { useState } from "react";
+import { useState } from "react";
 import {
     Dialog,
     DialogContent,

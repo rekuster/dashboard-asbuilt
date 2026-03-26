@@ -60,7 +60,13 @@ export default defineConfig({
         },
     },
     optimizeDeps: {
-        exclude: ['web-ifc', 'web-ifc-three']
+        exclude: [
+            'web-ifc', 
+            'web-ifc-three', 
+            '@thatopen/components', 
+            '@thatopen/fragments',
+            '@thatopen/components-front'
+        ]
     },
     assetsInclude: ['**/*.wasm']
 });

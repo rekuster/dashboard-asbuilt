@@ -53,12 +53,23 @@ export default function IfcUploader() {
         setIsUploading(true);
         const reader = new FileReader();
         reader.onload = async () => {
-            const base64 = (reader.result as string).split(',')[1];
-            await uploadMutation.mutateAsync({
-                fileBuffer: base64,
-                fileName: file.name,
-                edificacao: edificacao || null,
-            });
+            try {
+                const base64 = (reader.result as string).split(',')[1];
+                await uploadMutation.mutateAsync({
+                    fileBuffer: base64,
+                    fileName: file.name,
+                    edificacao: edificacao || null,
+                });
+            } catch (e) {
+                // Erro já tratado no onError do mutation, mas o catch evita uncaught promise
+                console.error("Upload error caught in component:", e);
+            } finally {
+                setIsUploading(false);
+            }
+        };
+        reader.onerror = () => {
+            toast.error("Erro ao ler o arquivo local.");
+            setIsUploading(false);
         };
         reader.readAsDataURL(file);
     };

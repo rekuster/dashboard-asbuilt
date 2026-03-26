@@ -5,14 +5,15 @@ import {
     Building2,
     Calendar,
     Users,
-    Trash2
+    Trash2,
+    Box
 } from "lucide-react";
 import { toast } from "sonner";
 import ApontamentosPorSemanaChart from "@/components/charts/ApontamentosPorSemanaChart";
 import ApontamentosPorDisciplinaChart from "@/components/charts/ApontamentosPorDisciplinaChart";
 import SimuladorTendenciaCard from "@/components/dashboard/SimuladorTendenciaCard";
 import TopImpactedRooms from "@/components/dashboard/TopImpactedRooms";
-import IfcViewer from "@/components/ifc/IfcViewer";
+// import IfcViewer from "@/components/ifc/IfcViewer";
 
 interface PresentationTabProps {
     edificacao: string | null;
@@ -141,51 +142,20 @@ export default function PresentationTab({
             <div className="grid grid-cols-12 gap-6 flex-1 min-h-[500px]">
                 {/* 3D Visualization (7/12) */}
                 <div className="col-span-12 lg:col-span-7 flex flex-col gap-4">
-                    <div className="flex-1 rounded-2xl border border-slate-200 overflow-hidden shadow-sm bg-slate-950 relative min-h-[400px]">
-                        <IfcViewer modelUrl={activeModelUrl} />
-                    </div>
-
-                    {/* Model Selector BELOW 3D Viewer */}
-                    <div className="grid grid-cols-2 gap-4">
-                        <Card className="p-4 bg-slate-50 border-slate-200 shadow-none">
-                            <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Modelos Disponíveis</h3>
-                            <div className="flex flex-wrap gap-2">
-                                {ifcFiles.map((file: any) => (
-                                    <div key={file.id} className="group relative flex items-center">
-                                        <button
-                                            onClick={() => onSelectModel(file.filePath)}
-                                            className={`px-3 py-1.5 pr-2 rounded-lg text-xs font-medium transition-all border flex items-center gap-2 ${activeModelUrl === file.filePath
-                                                ? 'bg-primary text-primary-foreground border-primary shadow-sm'
-                                                : 'bg-white text-slate-600 border-slate-200 hover:border-primary/50'
-                                                }`}
-                                        >
-                                            {file.fileName}
-                                        </button>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleDeleteModel(file.id, file.fileName);
-                                            }}
-                                            className="absolute -top-2 -right-2 bg-white text-slate-400 hover:text-rose-500 hover:bg-rose-50 border border-slate-200 rounded-full p-1 shadow-sm opacity-0 group-hover:opacity-100 transition-all z-10"
-                                            title="Excluir modelo"
-                                        >
-                                            <Trash2 className="w-3 h-3" />
-                                        </button>
-                                    </div>
-                                ))}
-                                {ifcFiles.length === 0 && <span className="text-[10px] text-slate-400 italic">Nenhum modelo carregado</span>}
-                            </div>
-                        </Card>
-                        <div className="p-4 bg-primary/5 rounded-xl border border-primary/10 flex flex-col justify-center">
-                            <h4 className="text-[9px] font-bold text-primary uppercase mb-1">Dica de Navegação</h4>
-                            <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[10px] text-slate-500">
-                                <span>• E: Rotacionar</span>
-                                <span>• D: Pan (Mover)</span>
-                                <span>• Scroll: Zoom</span>
-                                <span>• Dbl-Click: Focar</span>
-                            </div>
+                    <div className="rounded-2xl border border-slate-200 overflow-hidden shadow-sm bg-slate-100 flex items-center justify-center relative h-[450px]">
+                        {/* <IfcViewer modelUrl={activeModelUrl} /> */}
+                        <div className="text-center p-8">
+                            <Box className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                            <p className="text-slate-500 font-medium">Visualizador 3D Temporariamente Desativado</p>
+                            <p className="text-slate-400 text-xs mt-1">Aguardando ajustes de compatibilidade para o deploy.</p>
                         </div>
                     </div>
+
+                    {/* Model Selector temporarily hidden
+                    <div className="grid grid-cols-2 gap-4">
+                        ...
+                    </div>
+                    */}
                 </div>
 
                 {/* Right Column: Trend and Disclipine (5/12) */}

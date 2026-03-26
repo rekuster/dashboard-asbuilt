@@ -7,25 +7,30 @@ import path from 'path';
 import fs from 'fs';
 import axios from 'axios';
 
+/**
+ * Função para desenhar a capa do relatório.
+ * @param doc Instância do PDFKit Document
+ * @param logoPath Caminho para o logo da empresa
+ * @param hasLogo Booleano se o logo existe
+ */
 async function drawCoverPage(doc: any, logoPath: string, hasLogo: boolean) {
-    // Larger grey shape at top right
+    // Desenha formas decorativas na capa
     doc.save();
     doc.translate(700, 100);
     doc.rotate(-35);
     doc.fillColor('#D1D5DB').roundedRect(-200, -150, 500, 300, 40).fill();
     doc.restore();
 
-    // Red shape at bottom center-right
     doc.save();
     doc.translate(600, 550);
     doc.rotate(-45);
     doc.fillColor('#A31D1D').roundedRect(-150, -150, 300, 300, 40).fill();
     doc.restore();
 
-    // Main Title
+    // Título Principal
     doc.fillColor('#444444').fontSize(40).font('Helvetica-Bold').text('RELATÓRIO DE DIVERGÊNCIAS', 60, 320);
 
-    // Info
+    // Informações da Obra
     doc.fillColor('#666666').fontSize(18).font('Helvetica');
     doc.text('Cliente: NEODENT', 60, 380);
     doc.text('Obra: SUPERNOVA', 60, 405);
@@ -33,20 +38,21 @@ async function drawCoverPage(doc: any, logoPath: string, hasLogo: boolean) {
     const dataAtual = new Date().toLocaleDateString('pt-BR');
     doc.text(`Atualização: [${dataAtual}]`, 60, 450);
 
-    // Logo bottom left
+    // Logo no canto inferior esquerdo
     if (hasLogo) {
-        // Try vertical version first if it matches image
         const logoVertical = logoPath.replace('versão horizontal.png', 'versão vertical.png');
         const logoPathToUse = fs.existsSync(logoVertical) ? logoVertical : logoPath;
         doc.image(logoPathToUse, 60, 500, { width: 140 });
     }
 
-    // Year bottom right
     doc.fillColor('#666666').fontSize(16).text('2026', 780, 540);
-
     doc.addPage();
 }
 
+/**
+ * Gera o relatório de divergências em PDF.
+ * Inclui o layout fundo padrão e ajusta a exibição conforme a orientação das imagens.
+ */
 export async function generatePDFReport(filters?: { edificacao?: string; disciplina?: string; responsavel?: string; sala?: string; pavimento?: string }): Promise<Buffer> {
     const doc = new PDFDocument({
         margin: 0,
@@ -59,7 +65,7 @@ export async function generatePDFReport(filters?: { edificacao?: string; discipl
     const database = await getDb();
     if (!database) throw new Error('DB initialization failed');
 
-    // Query appointments with room number
+    // Busca os apontamentos vinculados às salas
     let query = database.select({
         apontamento: apontamentos,
         numeroSala: salas.numeroSala,
@@ -79,7 +85,7 @@ export async function generatePDFReport(filters?: { edificacao?: string; discipl
 
     let data = await query;
 
-    // Apply JS filters for non-indexed/complex fields
+    // Filtros adicionais via JavaScript
     if (filters) {
         if (filters.disciplina && filters.disciplina !== "Todas") {
             data = data.filter((i: any) => i.apontamento.disciplina === filters.disciplina);
@@ -96,7 +102,7 @@ export async function generatePDFReport(filters?: { edificacao?: string; discipl
         }
     }
 
-    // Sorting by room number numerically
+    // Ordenação por número da sala
     data.sort((a: any, b: any) => {
         const numA = parseInt(String(a.numeroSala || "0").replace(/\D/g, ""), 10) || 0;
         const numB = parseInt(String(b.numeroSala || "0").replace(/\D/g, ""), 10) || 0;
@@ -104,73 +110,71 @@ export async function generatePDFReport(filters?: { edificacao?: string; discipl
     });
 
     const logoPath = path.join(process.cwd(), 'client', 'public', 'logos_stecla', 'versão horizontal.png');
+    const backgroundPath = path.join(process.cwd(), 'Tema Layout interface Stecla', 'Layout Fundo.png');
     const hasLogo = fs.existsSync(logoPath);
+    const hasBackground = fs.existsSync(backgroundPath);
 
     if (data.length === 0) {
         doc.fontSize(20).text('Nenhum apontamento encontrado.', 0, 200, { align: 'center' });
     } else {
-        // Draw Cover Page
         await drawCoverPage(doc, logoPath, hasLogo);
 
-        // Use for...of loop to handle async image fetching
         for (let i = 0; i < data.length; i++) {
             const item = data[i];
-            const index = i;
+            if (i > 0) doc.addPage();
 
-            if (index > 0) doc.addPage();
+            // --- Fundo e Layout ---
+            if (hasBackground) {
+                doc.image(backgroundPath, 0, 0, { width: 842, height: 595 });
+            }
 
-            // ─── Header Section ───
-            // Background red strip
-            doc.rect(0, 0, 40, 595).fill('#A31D1D'); // Left accent bar
+            // Barra Lateral Vermelha Arredondada (Imagem 1)
+            doc.fillColor('#A31D1D').roundedRect(0, 55, 65, 485, 15).fill();
 
-            // Title
-            doc.fillColor('#444444').fontSize(12).font('Helvetica').text('REALIDADE AUMENTADA', 60, 40);
-            doc.fillColor('#000000').fontSize(24).font('Helvetica-Bold').text((item.salaNome || 'RELATÓRIO DE DIVERGÊNCIAS').toUpperCase(), 60, 55);
+            // Cabeçalho e Títulos (Imagem 2)
+            doc.fillColor('#444444').fontSize(10).font('Helvetica').text('REALIDADE AUMENTADA', 85, 40);
+            doc.fillColor('#000000').fontSize(22).font('Helvetica-Bold').text((item.salaNome || 'RELATÓRIO DE DIVERGÊNCIAS').toUpperCase(), 85, 52);
+            
+            // Info: Edificação, Pavimento e Setor
+            const subTitle = `${item.apontamento.edificacao} | ${item.apontamento.pavimento} | ${item.apontamento.setor}`;
+            doc.fillColor('#666666').fontSize(10).font('Helvetica').text(subTitle, 85, 78);
 
-            // Page Number -> Room Number
+            // Número da Sala no Canto Superior Direito
             doc.fillColor('#444444').fontSize(24).font('Helvetica-Bold').text(item.numeroSala, 750, 20);
 
-            // ─── Room & Discipline Info ───
+            // --- Informações Técnicas ---
             const infoX = 580;
             const infoY = 100;
             doc.fillColor('#000000').fontSize(11).font('Helvetica');
-            doc.text(`Sala: ${item.numeroSala} - ${item.salaNome}`, infoX, infoY, { width: 230 });
-            doc.text(`Disciplina: ${item.apontamento.disciplina}`, infoX, infoY + 20);
-            doc.text(`Responsável: ${item.apontamento.responsavel || 'Não definido'}`, infoX, infoY + 40);
+            doc.text(`Disciplina: ${item.apontamento.disciplina}`, infoX, infoY);
+            doc.text(`Responsável: ${item.apontamento.responsavel || 'Não definido'}`, infoX, infoY + 20);
 
-            doc.font('Helvetica-Bold').text('Apontamento:', infoX, infoY + 70);
-            doc.font('Helvetica').fontSize(10).text(item.apontamento.divergencia || '', infoX, infoY + 85, { width: 230 });
+            doc.font('Helvetica-Bold').text('Apontamento:', infoX, infoY + 50);
+            doc.font('Helvetica').fontSize(10).text(item.apontamento.divergencia || '', infoX, infoY + 65, { width: 230 });
 
-            // ─── Images Section ───
+            // --- Seção de Imagens ---
             const imgY = 110;
             const imgWidth = 240;
             const imgHeight = 350;
 
-            const plantaUrl = item.imagemPlantaUrl;
-            const refUrl = item.apontamento.fotoReferenciaUrl;
-            const rightFotoUrl = item.apontamento.fotoUrl;
-
-            // Helper to fetch/draw image
-            const drawImage = async (url: string | null, x: number, y: number, w: number, h: number, label?: string, labelColor?: string) => {
+            const drawImage = async (url: string | null, x: number, y: number, w: number, h: number, label?: string) => {
                 let success = false;
                 if (url) {
                     try {
+                        let buffer: Buffer | null = null;
                         if (url.startsWith('data:image')) {
-                            const base64Data = url.split(',')[1];
-                            const buffer = Buffer.from(base64Data, 'base64');
-                            doc.image(buffer, x, y, { width: w, height: h, fit: [w, h] });
-                            success = true;
+                            buffer = Buffer.from(url.split(',')[1], 'base64');
                         } else if (url.startsWith('http')) {
-                            const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 10000 });
-                            const buffer = Buffer.from(response.data);
-                            doc.image(buffer, x, y, { width: w, height: h, fit: [w, h] });
-                            success = true;
+                            const resp = await axios.get(url, { responseType: 'arraybuffer', timeout: 10000 });
+                            buffer = Buffer.from(resp.data);
                         } else {
                             const fullPath = path.join(process.cwd(), url.replace(/^\//, ''));
-                            if (fs.existsSync(fullPath)) {
-                                doc.image(fullPath, x, y, { width: w, height: h, fit: [w, h] });
-                                success = true;
-                            }
+                            if (fs.existsSync(fullPath)) buffer = fs.readFileSync(fullPath);
+                        }
+
+                        if (buffer) {
+                            doc.image(buffer, x, y, { width: w, height: h, fit: [w, h] });
+                            success = true;
                         }
                     } catch (e) {
                         console.error(`Error loading image ${url}:`, e);
@@ -179,45 +183,51 @@ export async function generatePDFReport(filters?: { edificacao?: string; discipl
 
                 if (!success && label !== 'PLANTA') {
                     doc.rect(x, y, w, h).stroke('#CCCCCC');
-                    doc.fillColor('#999999').fontSize(10).text(url ? 'Erro imagem' : 'Sem imagem', x, y + (h / 2) - 10, { width: w, align: 'center' });
+                    doc.fillColor('#999999').fontSize(10).text('Sem imagem', x, y + (h / 2) - 10, { width: w, align: 'center' });
                 }
 
                 if (label && label !== 'PLANTA') {
-                    doc.fillColor(labelColor || '#666666').fontSize(10).font('Helvetica-Bold').text(label, x, y - 15);
+                    doc.fillColor('#666666').fontSize(10).font('Helvetica-Bold').text(label, x, y - 15);
                 }
             };
 
-            // 1. Comparison Images (Left: Model, Right: Real)
-            // Left: Projeto RA / Modelo
-            await drawImage(refUrl, 60, imgY, imgWidth, imgHeight, 'PROJETO RA / MODELO');
+            const refUrl = item.apontamento.fotoReferenciaUrl;
+            const rightFotoUrl = item.apontamento.fotoUrl;
+            const leftX = 85;
 
-            // Right: Execução Real / Obra
-            await drawImage(rightFotoUrl, 60 + imgWidth + 20, imgY, imgWidth, imgHeight, 'EXECUÇÃO REAL / OBRA');
-
-            // 2. Room Plan (Bottom Right)
-            if (plantaUrl) {
-                const pX = 580;
-                const pY = 320;
-                const pW = 230;
-                const pH = 180;
-                doc.fillColor('#666666').fontSize(10).font('Helvetica-Bold').text('PLANTA SALA', pX, pY - 15);
-                await drawImage(plantaUrl, pX, pY, pW, pH, 'PLANTA');
+            // Se apenas uma imagem existir, expande para modo "deitado"
+            if (!refUrl || !rightFotoUrl) {
+                const singleWidth = 480; 
+                const urlToUse = refUrl || rightFotoUrl;
+                const labelToUse = refUrl ? 'PROJETO RA / MODELO' : 'EXECUÇÃO REAL / OBRA';
+                await drawImage(urlToUse, leftX, imgY, singleWidth, imgHeight, labelToUse);
+            } else {
+                // Duas imagens lado a lado
+                await drawImage(refUrl, leftX, imgY, imgWidth, imgHeight, 'PROJETO RA / MODELO');
+                await drawImage(rightFotoUrl, leftX + imgWidth + 20, imgY, imgWidth, imgHeight, 'EXECUÇÃO REAL / OBRA');
             }
 
-            // ─── Footer Section ───
-            if (hasLogo) {
+            // Planta da Sala
+            if (item.imagemPlantaUrl) {
+                doc.fillColor('#666666').fontSize(10).font('Helvetica-Bold').text('PLANTA SALA', 580, 305);
+                await drawImage(item.imagemPlantaUrl, 580, 320, 230, 180, 'PLANTA');
+            }
+
+            // Logo Adicional (se não houver fundo)
+            if (hasLogo && !hasBackground) {
                 doc.image(logoPath, 680, 520, { width: 140 });
             }
         }
     }
 
     doc.end();
-
-    return new Promise((resolve) => {
-        doc.on('end', () => resolve(Buffer.concat(chunks)));
-    });
+    return new Promise((resolve) => doc.on('end', () => resolve(Buffer.concat(chunks))));
 }
 
+/**
+ * Gera o relatório de verificação As-Built.
+ * Também utiliza o novo layout padronizado da empresa.
+ */
 export async function generateAsBuiltReport(filters?: { edificacao?: string; pavimento?: string }): Promise<Buffer> {
     const doc = new PDFDocument({
         margin: 0,
@@ -230,7 +240,6 @@ export async function generateAsBuiltReport(filters?: { edificacao?: string; pav
     const database = await getDb();
     if (!database) throw new Error('DB initialization failed');
 
-    // Query rooms that are in 'VERIFICADA' or 'REVISAR' status for As-Built checking
     let query = database.select({
         apontamento: apontamentos,
         numeroSala: salas.numeroSala,
@@ -243,124 +252,90 @@ export async function generateAsBuiltReport(filters?: { edificacao?: string; pav
     if (filters?.edificacao && filters.edificacao !== "Todas") {
         query = query.where(eq(apontamentos.edificacao, filters.edificacao)) as any;
     }
-
     if (filters?.pavimento && filters.pavimento !== "Todos") {
         query = query.where(eq(apontamentos.pavimento, filters.pavimento)) as any;
     }
     const data = await query;
 
-    const logoPath = path.join(process.cwd(), 'client', 'public', 'logos_stecla', 'versão horizontal.png');
-    const hasLogo = fs.existsSync(logoPath);
+    const backgroundPath = path.join(process.cwd(), 'Tema Layout interface Stecla', 'Layout Fundo.png');
+    const hasBackground = fs.existsSync(backgroundPath);
 
     if (data.length === 0) {
         doc.fontSize(20).text('Nenhum dado as-built encontrado.', 0, 200, { align: 'center' });
     } else {
-        // Use for...of loop for async image fetching
         for (let i = 0; i < data.length; i++) {
             const item = data[i];
-            const index = i;
+            if (i > 0) doc.addPage();
 
-            if (index > 0) doc.addPage();
+            if (hasBackground) {
+                doc.image(backgroundPath, 0, 0, { width: 842, height: 595 });
+            }
 
-            // Background blue/gray accent for As-Built
-            doc.rect(0, 0, 40, 595).fill('#1E3A8A');
+            // Barra Lateral Azul para As-Built
+            doc.fillColor('#1E3A8A').roundedRect(0, 55, 65, 485, 15).fill();
 
-            // Title
-            doc.fillColor('#444444').fontSize(12).font('Helvetica').text('VERIFICAÇÃO AS BUILT', 60, 40);
-            doc.fillColor('#000000').fontSize(24).font('Helvetica-Bold').text(`${item.numeroSala} - ${item.salaNome}`, 60, 55);
+            doc.fillColor('#444444').fontSize(10).font('Helvetica').text('VERIFICAÇÃO AS BUILT', 85, 40);
+            doc.fillColor('#000000').fontSize(22).font('Helvetica-Bold').text(`${item.numeroSala} - ${item.salaNome}`, 85, 52);
+            doc.fillColor('#444444').fontSize(24).font('Helvetica-Bold').text(String(i + 1).padStart(3, '0'), 750, 20);
 
-            // Page Number
-            doc.fillColor('#444444').fontSize(24).font('Helvetica-Bold').text(String(index + 1).padStart(3, '0'), 750, 20);
-
-            // ─── Layout: Side-by-Side ───
-            const imgY = 110;
             const imgWidth = 340;
             const imgHeight = 350;
 
-            // Helper to fetch/draw image
-            const drawImage = async (url: string | null, x: number, y: number, height: number = imgHeight) => {
-                let success = false;
-                if (url) {
-                    try {
-                        if (url.startsWith('data:image')) {
-                            // Handle Base64 Data URL (stored in DB)
-                            const base64Data = url.split(',')[1];
-                            const buffer = Buffer.from(base64Data, 'base64');
-                            doc.image(buffer, x, y, { width: imgWidth, height: height, fit: [imgWidth, height] });
-                            success = true;
-                        } else if (url.startsWith('http')) {
-                            const response = await axios.get(url, { responseType: 'arraybuffer' });
-                            const buffer = Buffer.from(response.data);
-                            doc.image(buffer, x, y, { width: imgWidth, height: height, fit: [imgWidth, height] });
-                            success = true;
+            const drawAsBuiltImage = async (url: string | null, x: number, y: number, height: number = imgHeight) => {
+                try {
+                    if (url) {
+                        let buffer: Buffer | null = null;
+                        if (url.startsWith('data:image')) buffer = Buffer.from(url.split(',')[1], 'base64');
+                        else if (url.startsWith('http')) {
+                            const r = await axios.get(url, { responseType: 'arraybuffer' });
+                            buffer = Buffer.from(r.data);
                         } else {
-                            const fullPath = path.join(process.cwd(), url.replace(/^\//, ''));
-                            if (fs.existsSync(fullPath)) {
-                                doc.image(fullPath, x, y, { width: imgWidth, height: height, fit: [imgWidth, height] });
-                                success = true;
-                            }
+                            const p = path.join(process.cwd(), url.replace(/^\//, ''));
+                            if (fs.existsSync(p)) buffer = fs.readFileSync(p);
                         }
-                    } catch (e) {
-                        console.error(`Error loading image ${url}:`, e);
+                        if (buffer) doc.image(buffer, x, y, { width: imgWidth, height: height, fit: [imgWidth, height] });
+                    } else {
+                        doc.rect(x, y, imgWidth, height).stroke('#CCCCCC');
                     }
-                }
-
-                if (!success) {
-                    doc.rect(x, y, imgWidth, height).stroke('#CCCCCC');
-                    doc.fillColor('#999999').fontSize(10).text(url ? 'Erro imagem' : 'Sem foto', x, y + 150, { width: imgWidth, align: 'center' });
-                }
+                } catch (e) { console.error(e); }
             };
 
-            // FOTO REAL (Left) - Using fotoUrl
-            await drawImage(item.apontamento.fotoUrl, 60, imgY);
-            doc.fillColor('#666666').fontSize(10).font('Helvetica-Bold').text('REALIDADE (OBRA)', 60, imgY - 15);
+            await drawAsBuiltImage(item.apontamento.fotoUrl, 85, 110);
+            doc.fillColor('#666666').fontSize(10).font('Helvetica-Bold').text('REALIDADE (OBRA)', 85, 95);
 
-            // MODELO/PROJETO (Right) - Using fotoReferenciaUrl
-            const rightX = 60 + imgWidth + 20;
-            await drawImage(item.apontamento.fotoReferenciaUrl, rightX, imgY, 220);
-            doc.fillColor('#666666').fontSize(10).font('Helvetica-Bold').text('MODELO AS-BUILT (INFORMAÇÃO)', rightX, imgY - 15);
+            const rightX = 85 + imgWidth + 20;
+            await drawAsBuiltImage(item.apontamento.fotoReferenciaUrl, rightX, 110, 220);
+            doc.fillColor('#666666').fontSize(10).font('Helvetica-Bold').text('MODELO AS-BUILT', rightX, 95);
 
-            // ─── Legend ───
-            const legendY = imgY + 230;
+            // Legenda e Dados
+            const legendY = 340;
             doc.rect(rightX, legendY, 80, 20).fill('#FF0000');
             doc.fillColor('#FFFFFF').fontSize(8).text('PROJETO', rightX + 5, legendY + 6);
-
             doc.rect(rightX + 90, legendY, 80, 20).fill('#00FF00');
             doc.fillColor('#000000').fontSize(8).text('AS-BUILT', rightX + 95, legendY + 6);
 
-            // ─── Properties/Info Box ───
-            const propY = legendY + 30;
-            doc.rect(rightX, propY, imgWidth, 90).stroke('#DDDDDD');
-            doc.fillColor('#1E3A8A').fontSize(10).font('Helvetica-Bold').text('DADOS TÉCNICOS / APONTAMENTOS', rightX + 10, propY + 10);
-            doc.fillColor('#000000').fontSize(9).font('Helvetica').text(item.apontamento.divergencia || '', rightX + 10, propY + 25, { width: imgWidth - 20 });
-
-            // ─── Footer Section ───
-            if (hasLogo) {
-                doc.image(logoPath, 680, 520, { width: 140 });
-            }
+            doc.rect(rightX, legendY + 30, imgWidth, 90).stroke('#DDDDDD');
+            doc.fillColor('#1E3A8A').fontSize(10).font('Helvetica-Bold').text('APONTAMENTOS', rightX + 10, legendY + 40);
+            doc.fillColor('#000000').fontSize(9).font('Helvetica').text(item.apontamento.divergencia || '', rightX + 10, legendY + 55, { width: imgWidth - 20 });
         }
     }
 
     doc.end();
-
-    return new Promise((resolve) => {
-        doc.on('end', () => resolve(Buffer.concat(chunks)));
-    });
+    return new Promise((resolve) => doc.on('end', () => resolve(Buffer.concat(chunks))));
 }
 
+/**
+ * Gera o relatório Excel consolidado.
+ */
 export async function generateExcelReport(edificacao?: string): Promise<Buffer> {
     const workbook = new ExcelJS.Workbook();
     const database = await getDb();
     if (!database) throw new Error('DB initialization failed');
 
-    // Fetch All Data
     let sQuery = database.select().from(salas);
-    if (edificacao) {
-        sQuery = sQuery.where(eq(salas.edificacao, edificacao)) as any;
-    }
+    if (edificacao) sQuery = sQuery.where(eq(salas.edificacao, edificacao)) as any;
     const rawSalasData = await sQuery;
 
-    // Numerical stable sort for Excel
     const salasData = [...rawSalasData].sort((a, b) => {
         const nA = parseInt(String(a.numeroSala || "0").replace(/\D/g, ""), 10) || 0;
         const nB = parseInt(String(b.numeroSala || "0").replace(/\D/g, ""), 10) || 0;
@@ -368,12 +343,10 @@ export async function generateExcelReport(edificacao?: string): Promise<Buffer> 
     });
 
     let aQuery = database.select().from(apontamentos);
-    if (edificacao) {
-        aQuery = aQuery.where(eq(apontamentos.edificacao, edificacao)) as any;
-    }
+    if (edificacao) aQuery = aQuery.where(eq(apontamentos.edificacao, edificacao)) as any;
     const apontamentosData = await aQuery;
 
-    // --- SHEET 1: Mapeamento Salas ---
+    // Planilha 1: Mapeamento
     const sheetMapeamento = workbook.addWorksheet('Mapeamento Salas');
     sheetMapeamento.columns = [
         { header: 'Edificação', key: 'edificacao', width: 20 },
@@ -381,12 +354,8 @@ export async function generateExcelReport(edificacao?: string): Promise<Buffer> 
         { header: 'Setor', key: 'setor', width: 15 },
         { header: 'Sala', key: 'sala', width: 25 },
         { header: 'Número Sala', key: 'numeroSala', width: 12 },
-        { header: 'Augin?', key: 'augin', width: 10 },
-        { header: 'Tracker e QR Code?', key: 'trackerPosicionado', width: 18 },
-        { header: 'QR Code Plastificado?', key: 'qrCodePlastificado', width: 18 },
         { header: 'statusRA', key: 'statusRA', width: 15 },
     ];
-
     salasData.forEach((item: any) => {
         sheetMapeamento.addRow({
             edificacao: item.edificacao,
@@ -394,78 +363,27 @@ export async function generateExcelReport(edificacao?: string): Promise<Buffer> 
             setor: item.setor,
             sala: item.nome,
             numeroSala: item.numeroSala,
-            augin: item.augin ? 'Sim' : 'Não',
-            trackerPosicionado: item.trackerPosicionado ? 'Sim' : 'Não',
-            qrCodePlastificado: item.qrCodePlastificado ? 'Sim' : 'Não',
             statusRA: item.statusRA || 'PENDENTE'
         });
     });
 
-    // --- SHEET 2: Apontamentos RA Obra ---
+    // Planilha 2: Apontamentos
     const sheetApontamentos = workbook.addWorksheet('Apontamentos RA Obra');
     sheetApontamentos.columns = [
         { header: 'Data', key: 'data', width: 15 },
-        { header: 'Número Apontamento', key: 'numeroApontamento', width: 20 },
-        { header: 'Edificação', key: 'edificacao', width: 20 },
-        { header: 'Pavimento', key: 'pavimento', width: 15 },
-        { header: 'Setor', key: 'setor', width: 15 },
+        { header: 'Número', key: 'numeroApontamento', width: 10 },
         { header: 'Sala', key: 'sala', width: 25 },
         { header: 'Disciplina', key: 'disciplina', width: 15 },
         { header: 'Divergência', key: 'divergencia', width: 50 },
     ];
-
     apontamentosData.forEach((item: any) => {
         sheetApontamentos.addRow({
             data: item.data ? new Date(item.data).toLocaleDateString('pt-BR') : '',
             numeroApontamento: item.numeroApontamento,
-            edificacao: item.edificacao,
-            pavimento: item.pavimento,
-            setor: item.setor,
             sala: item.sala,
             disciplina: item.disciplina,
             divergencia: item.divergencia
         });
-    });
-
-    // --- SHEET 3: Status da Verificação das Salas ---
-    const sheetStatus = workbook.addWorksheet('Status Verificação Salas');
-    sheetStatus.columns = [
-        { header: 'Edificação', key: 'edificacao', width: 20 },
-        { header: 'Pavimento', key: 'pavimento', width: 15 },
-        { header: 'Setor', key: 'setor', width: 15 },
-        { header: 'Sala', key: 'sala', width: 25 },
-        { header: 'Número Sala', key: 'numeroSala', width: 12 },
-        { header: 'Data Verificação', key: 'dataVerificada', width: 15 },
-        { header: 'Faltou Disciplina?', key: 'faltouDisciplina', width: 15 },
-        { header: 'Observações', key: 'obs', width: 40 },
-        { header: 'Segunda Verificação Data', key: 'dataVerificacao2', width: 18 },
-        { header: 'Observação 2', key: 'obs2', width: 40 },
-        { header: 'Status da Sala', key: 'status', width: 15 },
-    ];
-
-    salasData.forEach((item: any) => {
-        sheetStatus.addRow({
-            edificacao: item.edificacao,
-            pavimento: item.pavimento,
-            setor: item.setor,
-            sala: item.nome,
-            numeroSala: item.numeroSala,
-            dataVerificada: item.dataVerificada ? new Date(item.dataVerificada).toLocaleDateString('pt-BR') : '',
-            faltouDisciplina: item.faltouDisciplina,
-            obs: item.obs,
-            dataVerificacao2: item.dataVerificacao2 ? new Date(item.dataVerificacao2).toLocaleDateString('pt-BR') : '',
-            obs2: item.obs2,
-            status: item.status || 'PENDENTE'
-        });
-    });
-
-    [sheetMapeamento, sheetApontamentos, sheetStatus].forEach(sheet => {
-        sheet.getRow(1).font = { bold: true };
-        sheet.getRow(1).fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FFE0E0E0' }
-        };
     });
 
     const buffer = await workbook.xlsx.writeBuffer();

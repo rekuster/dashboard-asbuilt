@@ -39,6 +39,7 @@ export default function ValidationTab() {
     const { data: salas = [] } = trpc.dashboard.getSalas.useQuery();
     const { data: escopos = [] } = trpc.dashboard.getEscopos.useQuery();
     const { data: apontamentos = [] } = trpc.dashboard.getApontamentos.useQuery();
+    const { data: allVerificacoes = [] } = trpc.dashboard.getAllVerificacoes.useQuery();
 
     // Map of pending apuntamentos per sala and discipline
     const pendingBySalaAndDisc = useMemo(() => {
@@ -221,25 +222,36 @@ export default function ValidationTab() {
                                                 );
                                             })()}
                                         </TableCell>
-                                         <TableCell className="text-center">
-                                             {(() => {
-                                                 const reqs = requiredByEdificacao[normalizeEdificacao(sala.edificacao)] || [];
-                                                 if (reqs.length === 0) return (
-                                                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-400 uppercase">
-                                                         SEM REQUISITOS
-                                                     </span>
-                                                 );
-                                                 
-                                                 // This would ideally come from a joined query, but for now we'll handle it if we have context
-                                                 // Since we are in a loop, we can't easily fetch individual verifications without a lot of queries
-                                                 // We'll leave it as "Pendente" until we add a "allVerificacoes" query
-                                                 return (
-                                                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-400 uppercase">
-                                                         Pendente
-                                                     </span>
-                                                 );
-                                             })()}
-                                         </TableCell>
+                                          <TableCell className="text-center">
+                                              {(() => {
+                                                  const edifNorm = normalizeEdificacao(sala.edificacao);
+                                                  const reqs = requiredByEdificacao[edifNorm] || [];
+                                                  
+                                                  if (reqs.length === 0) return (
+                                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-400 uppercase">
+                                                          SEM REQUISITOS
+                                                      </span>
+                                                  );
+                                                  
+                                                  const salaVers = allVerificacoes.filter((v: any) => v.salaId === sala.id);
+                                                  const oks = salaVers.filter((v: any) => v.status === "OK").length;
+                                                  const total = reqs.length;
+                                                  
+                                                  const isComplete = oks >= total && total > 0;
+                                                  
+                                                  return (
+                                                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase transition-all ${
+                                                          isComplete 
+                                                              ? "bg-emerald-100 text-emerald-700 shadow-sm shadow-emerald-100" 
+                                                              : oks > 0 
+                                                                  ? "bg-amber-100 text-amber-700" 
+                                                                  : "bg-slate-100 text-slate-400"
+                                                      }`}>
+                                                          {isComplete ? "COMPLETO" : `${oks}/${total} OK`}
+                                                      </span>
+                                                  );
+                                              })()}
+                                          </TableCell>
                                     </TableRow>
                                 ))}
                             </TableBody>
@@ -252,7 +264,7 @@ export default function ValidationTab() {
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 sala={selectedSala}
-                disciplines={selectedSala ? Object.keys(pendingBySalaAndDisc[selectedSala.nome] || {}) : []}
+                disciplines={selectedSala ? (requiredByEdificacao[normalizeEdificacao(selectedSala.edificacao)] || []) : []}
                 pendingApontamentos={selectedSala ? (pendingBySalaAndDisc[selectedSala.nome] || {}) : {}}
             />
         </div>

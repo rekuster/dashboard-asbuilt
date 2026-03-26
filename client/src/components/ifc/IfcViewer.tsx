@@ -22,6 +22,7 @@ export default function IfcViewer({ modelUrl }: IfcViewerProps) {
         setSelectedRoom,
         mappingMode,
         setMappingMode,
+        properties,
         floors,
         clipAtElevation,
         resetClip,
@@ -94,7 +95,7 @@ export default function IfcViewer({ modelUrl }: IfcViewerProps) {
     }, [isLoaded, modelUrl, loadIfcModel]);
 
     return (
-        <div className="relative w-full h-full min-h-[600px] bg-slate-900 rounded-xl overflow-hidden border border-slate-800 shadow-2xl group">
+        <div className="relative w-full h-full min-h-[450px] bg-slate-900 rounded-xl overflow-hidden border border-slate-800 shadow-2xl group">
             {/* 3D Canvas Container */}
             <div ref={containerRef} className="w-full h-full cursor-move" />
 
@@ -182,28 +183,63 @@ export default function IfcViewer({ modelUrl }: IfcViewerProps) {
                 <ColorLegend />
             </div>
 
-            {/* Selected Room Info (Bottom Right) */}
+            {/* Painel de Informações da Sala Selecionada (Canto Inferior Direito) */}
             {selectedRoom && !mappingMode && (
-                <div className="absolute bottom-4 right-4 max-w-xs z-10 animate-in slide-in-from-bottom-4 duration-300">
-                    <div className="bg-slate-800/95 backdrop-blur-md p-4 rounded-xl border border-slate-700 shadow-2xl space-y-3">
-                        <div className="flex items-center gap-2 border-b border-slate-700 pb-2">
-                            <Info className="w-4 h-4 text-primary" />
-                            <h3 className="font-bold text-white text-sm">{selectedRoom.nome}</h3>
+                <div className="absolute bottom-4 right-4 w-72 z-10 animate-in slide-in-from-bottom-4 duration-300">
+                    <div className="bg-slate-800/95 backdrop-blur-md p-4 rounded-xl border border-slate-700 shadow-2xl space-y-4">
+                        <div className="flex items-center justify-between border-b border-slate-700 pb-2">
+                            <div className="flex items-center gap-2">
+                                <Info className="w-4 h-4 text-primary" />
+                                <h3 className="font-bold text-white text-sm">{selectedRoom.nome}</h3>
+                            </div>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setSelectedRoom(null)}>
+                                <X className="w-3 h-3 text-slate-400" />
+                            </Button>
                         </div>
+
+                        {/* Status da Sala (Vindo do Banco de Dados/Excel) */}
                         <div className="grid grid-cols-2 gap-2 text-[10px] uppercase font-bold text-slate-500">
-                            <div>Status</div>
-                            <div className="text-right">Apontamentos</div>
+                            <div>Status do Projeto</div>
+                            <div className="text-right">Ação</div>
                         </div>
-                        <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="grid grid-cols-2 gap-2 text-xs items-center">
                             <div className="flex items-center gap-2">
                                 <div
-                                    className="w-2 h-2 rounded-full"
-                                    style={{ backgroundColor: selectedRoom.color }}
+                                    className="w-2.5 h-2.5 rounded-full shadow-[0_0_8px_rgba(var(--primary-rgb),0.5)]"
+                                    style={{ backgroundColor: selectedRoom.color || '#64748b' }}
                                 ></div>
-                                <span className="text-slate-200">{selectedRoom.status}</span>
+                                <span className="text-slate-200 font-medium">{selectedRoom.status || 'Não Definido'}</span>
                             </div>
-                            <div className="text-right text-slate-200">{selectedRoom.numApontamentos}</div>
+                            <div className="text-right text-slate-400 italic">Capturado do Excel</div>
                         </div>
+
+                        {/* Propriedades Técnicas do IFC (Vindo do Modelo 3D) */}
+                        {properties && (
+                            <div className="pt-2 border-t border-slate-700/50 space-y-2">
+                                <p className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1">
+                                    <Box className="w-3 h-3" /> Propriedades do Modelo 3D
+                                </p>
+                                <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin scrollbar-thumb-slate-700">
+                                    {Object.entries(properties).map(([key, value]) => {
+                                        // Filtramos propriedades internas ou muito técnicas que poluem a tela
+                                        if (['localId', 'type'].includes(key)) return null;
+                                        if (typeof value === 'object') return null;
+                                        
+                                        return (
+                                            <div key={key} className="flex justify-between gap-4 text-[11px] py-1 border-b border-slate-700/30 last:border-0">
+                                                <span className="text-slate-400 capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</span>
+                                                <span className="text-slate-200 font-mono text-right truncate max-w-[120px]" title={String(value)}>
+                                                    {String(value)}
+                                                </span>
+                                            </div>
+                                        );
+                                    })}
+                                    {Object.keys(properties).length <= 2 && (
+                                        <p className="text-[10px] text-slate-500 italic">Sem metadados adicionais</p>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

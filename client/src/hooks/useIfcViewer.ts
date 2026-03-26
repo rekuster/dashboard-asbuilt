@@ -4,6 +4,7 @@ import * as OBC from "@thatopen/components";
 import * as OBCF from "@thatopen/components-front";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import JSZip from "jszip"; 
 
 export function useIfcViewer() {
     const componentsRef = useRef<OBC.Components | null>(null);
@@ -13,11 +14,13 @@ export function useIfcViewer() {
     const worldRef = useRef<OBC.SimpleWorld<OBC.SimpleScene, OBC.SimpleCamera, OBC.SimpleRenderer> | null>(null);
     const clipperRef = useRef<OBC.Clipper | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+    const fragmentsInitialized = useRef(false);
     
     const [isLoaded, setIsLoaded] = useState(false);
     const [isModelLoaded, setIsModelLoaded] = useState(false);
     const [selectedRoom, setSelectedRoom] = useState<any>(null);
-    const [floors] = useState<{ name: string, elevation: number }[]>([]);
+    const [floors, setFloors] = useState<{ name: string, elevation: number }[]>([]);
+    const [properties, setProperties] = useState<any>(null);
     const [xRay, setXRay] = useState(false);
     const [mappingMode, setMappingMode] = useState(false);
     
@@ -48,65 +51,101 @@ export function useIfcViewer() {
 
         // Fragments & IFC Loader
         const fragments = components.get(OBC.FragmentsManager);
-        // In v3 components are initialized by calling components.init() which init all plugins
+
+        // Initializing fragments with official local worker
+        const setupAll = async () => {
+            try {
+                // Usar o worker local que copiamos do node_modules para garantir compatibilidade 100%
+                const workerUrl = window.location.origin + "/worker.mjs";
+                await fragments.init(workerUrl);
+                fragmentsInitialized.current = true;
+                
+                const loader = components.get(OBC.IfcLoader);
+                
+                // Usar a versão 0.0.75 em pasta dedicada com cache-busting
+                loader.settings.wasm = {
+                    path: window.location.origin + "/wasm-75/", 
+                    absolute: true
+                };
+                
+                loader.setup();
+                loaderRef.current = loader;
+
+                // Highlighter for selection
+                const highlighter = components.get(OBCF.Highlighter);
+                highlighter.setup({ world });
+                highlighterRef.current = highlighter;
+
+                // Clipper
+                try {
+                    const clipper = components.get(OBC.Clipper);
+                    if (clipper) {
+                        clipper.enabled = true;
+                        clipperRef.current = clipper;
+                    }
+                } catch (e) {
+                    console.warn("Clipper not found or failed to initialize", e);
+                }
+
+                // Selection Logic
+                highlighter.events.select.onHighlight.add(async (selection) => {
+                    if (!fragmentsInitialized.current) return;
+
+                    const fragmentID = Object.keys(selection)[0];
+                    const expressIDs = Array.from(selection[fragmentID]);
+                    const expressID = expressIDs[0];
+                    
+                    if (expressID) {
+                        try {
+                            const dataMap = await fragments.getData(selection);
+                            const modelData = dataMap[Object.keys(dataMap)[0]];
+                            if (modelData && modelData[0]) {
+                                setProperties(modelData[0]);
+                            }
+                        } catch (e) {
+                            console.warn("Failed to fetch properties", e);
+                        }
+
+                        const room = (roomColors as any[])?.find(r => 
+                            String(r.ifcExpressId || '').split(',').map(s => s.trim()).includes(String(expressID))
+                        );
+                        
+                        if (room) {
+                            setSelectedRoom(room);
+                        } else {
+                            setSelectedRoom({ ifcExpressId: expressID, nome: `Objeto ${expressID}` } as any);
+                        }
+                    }
+                });
+
+                highlighter.events.select.onClear.add(() => {
+                    setSelectedRoom(null);
+                    setProperties(null);
+                });
+
+                setIsLoaded(true);
+                console.log("✅ [useIfcViewer] FragmentsManager initialized & System Ready.");
+            } catch (e) {
+                console.error("❌ Failed to initialize 3D system", e);
+            }
+        };
+        
+        setupAll();
         fragmentsRef.current = fragments;
 
-        const loader = components.get(OBC.IfcLoader);
-        loader.setup();
-        loaderRef.current = loader;
-
-        // Setup WASM for Vercel
-        loader.settings.wasm = {
-            path: "https://unpkg.com/web-ifc@0.0.75/", 
-            absolute: true
-        };
-
-        // Highlighter for selection
-        const highlighter = components.get(OBCF.Highlighter);
-        highlighter.setup({ world });
-        highlighterRef.current = highlighter;
-
-        // Clipper
-        try {
-            const clipper = components.get(OBC.Clipper);
-            if (clipper) {
-                clipper.enabled = true;
-                clipperRef.current = clipper;
-            }
-        } catch (e) {
-            console.warn("Clipper not found or failed to initialize", e);
-        }
-
-        // Selection Logic
-        highlighter.events.select.onHighlight.add((selection) => {
-            const fragmentID = Object.keys(selection)[0];
-            const expressIDs = Array.from(selection[fragmentID]);
-            const expressID = expressIDs[0];
-            
-            if (expressID) {
-                const room = (roomColors as any[])?.find(r => 
-                    String(r.ifcExpressId || '').split(',').map(s => s.trim()).includes(String(expressID))
-                );
-                
-                if (room) {
-                    setSelectedRoom(room);
-                } else {
-                    setSelectedRoom({ ifcExpressId: expressID, nome: `Objeto ${expressID}` } as any);
-                }
-            }
-        });
-
-        highlighter.events.select.onClear.add(() => {
-            setSelectedRoom(null);
-        });
-
-        setIsLoaded(true);
+        fragmentsRef.current = fragments;
 
         return () => {
             try {
-                components.dispose();
+                if (fragmentsInitialized.current) {
+                    components.dispose();
+                } else {
+                    // If not initialized, we might still want to clean up other things
+                    // but calling components.dispose() will likely fail on FragmentsManager
+                    console.log("⚠️ [useIfcViewer] Skipping components.dispose() as FragmentsManager was not ready.");
+                }
             } catch (e) {
-                console.warn("Error during components disposal", e);
+                console.warn("Soft handling: Error during components disposal", e);
             }
             worldRef.current = null;
             componentsRef.current = null;
@@ -118,17 +157,66 @@ export function useIfcViewer() {
     }, [roomColors]); 
 
     const loadIfcModel = useCallback(async (url: string) => {
-        if (!loaderRef.current || !worldRef.current || !highlighterRef.current) return;
+        // Check if fragments are initialized before proceeding
+        if (!loaderRef.current || !fragmentsInitialized.current || !worldRef.current || !highlighterRef.current) {
+            console.log("⏳ [useIfcViewer] Waiting for fragments to be ready before loading...");
+            return;
+        }
 
         try {
             setIsModelLoaded(false);
             const file = await fetch(url);
             const data = await file.arrayBuffer();
-            const buffer = new Uint8Array(data);
+            let buffer = new Uint8Array(data);
+
+            // Se for um arquivo ZIP (.ifczip), precisamos extrair o IFC de dentro dele
+            if (url.toLowerCase().endsWith(".ifczip")) {
+                console.log("📦 [useIfcViewer] Unzipping .ifczip file...");
+                const zip = new JSZip();
+                const zipContent = await zip.loadAsync(buffer);
+                const ifcFile = Object.values(zipContent.files).find(f => f.name.toLowerCase().endsWith(".ifc"));
+                
+                if (ifcFile) {
+                    const ifcData = await ifcFile.async("uint8array");
+                    buffer = ifcData;
+                    console.log("🔓 [useIfcViewer] IFC extracted successfully.");
+                } else {
+                    throw new Error("No .ifc file found inside the .ifczip package.");
+                }
+            }
             
             const model = await loaderRef.current.load(buffer, true, "model");
-            worldRef.current.scene.three.add((model as any).mesh);
             
+            // @ts-ignore - OBC v3 returns FragmentsModel which has an .object property representing the THREE.Group
+            const modelObject = (model as any).object || model;
+            worldRef.current.scene.three.add(modelObject);
+            
+            // Focar a câmera no modelo carregado
+            if (worldRef.current.camera.controls) {
+                // @ts-ignore
+                worldRef.current.camera.controls.fitToSphere(modelObject, true);
+            }
+            
+            // Extract Floors using Classifier
+            const components = componentsRef.current;
+            if (components) {
+                const classifier = components.get(OBC.Classifier);
+                await classifier.byIfcBuildingStorey();
+                
+                const storeys = classifier.list.get("storeys");
+                if (storeys) {
+                    const floorsData: any[] = [];
+                    storeys.forEach((_, name: string) => {
+                        floorsData.push({
+                            name,
+                            elevation: 0 // Classifier doesn't give elevation directly v3
+                        });
+                    });
+                    setFloors(floorsData);
+                    console.log("🏢 Storeys classified:", floorsData);
+                }
+            }
+
             toast.success("Modelo IFC carregado com sucesso!");
             setIsModelLoaded(true);
 
@@ -259,6 +347,7 @@ export function useIfcViewer() {
         isModelLoaded,
         selectedRoom,
         setSelectedRoom,
+        properties,
         applyColors,
         floors,
         clipAtElevation,
