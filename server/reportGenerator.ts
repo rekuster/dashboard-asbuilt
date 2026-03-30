@@ -32,7 +32,7 @@ function getDisciplineFullName(sigla: string): string {
  * Função para desenhar a capa do relatório.
  */
 async function drawCoverPage(doc: any, logoPath: string, hasLogo: boolean, edificacao?: string, startDate?: string, endDate?: string) {
-    const coverPath = path.join(process.cwd(), 'Tema Layout interface Stecla', 'Layout Capa.png');
+    const coverPath = path.resolve(__dirname, '..', 'Tema Layout interface Stecla', 'Layout Capa.png');
     
     if (fs.existsSync(coverPath)) {
         doc.image(coverPath, 0, 0, { width: 842, height: 595 });
@@ -101,7 +101,7 @@ async function drawCoverPage(doc: any, logoPath: string, hasLogo: boolean, edifi
  * Função para desenhar a página separadora de disciplina.
  */
 async function drawDisciplineSeparator(doc: any, disciplina: string) {
-    const separatorPath = path.join(process.cwd(), 'Tema Layout interface Stecla', 'Layout Disciplina.png');
+    const separatorPath = path.resolve(__dirname, '..', 'Tema Layout interface Stecla', 'Layout Disciplina.png');
     
     if (fs.existsSync(separatorPath)) {
         doc.image(separatorPath, 0, 0, { width: 842, height: 595 });
@@ -133,10 +133,10 @@ async function drawSummaryPage(doc: any, data: any[], backgroundPath: string, ha
 
     // Título do Sumário
     doc.fillColor('#444444').fontSize(10).font('Helvetica').text('REALIDADE AUMENTADA', 85, 40);
-    doc.fillColor('#000000').fontSize(22).font('Helvetica-Bold').text('SUMÁRIO E ÍNDICE REMISSIVO', 85, 52);
+    doc.fillColor('#000000').fontSize(22).font('Helvetica-Bold').text('SUMÁRIO E ÍNDICE REMISSIVO', 85, 55);
 
     // 1. Índice de Disciplinas
-    doc.fontSize(12).font('Helvetica-Bold').text('ÍNDICE POR DISCIPLINA', 85, 100);
+    doc.fontSize(12).font('Helvetica-Bold').text('ÍNDICE POR DISCIPLINA', 85, 105);
     const uniqueDisciplines: string[] = Array.from(new Set(data.map(i => i.apontamento.disciplina || 'OUTROS'))).sort();
     
     let currentY = 120;
@@ -151,10 +151,16 @@ async function drawSummaryPage(doc: any, data: any[], backgroundPath: string, ha
     doc.fontSize(12).font('Helvetica-Bold').text('RELAÇÃO DE SALAS COM APONTAMENTOS', 85, currentY);
     currentY += 20;
 
-    const uniqueSalas = data.filter((v, i, a) => a.findIndex(t => t.numeroSala === v.numeroSala) === i);
+    const uniqueSalas = data
+        .filter((v, i, a) => a.findIndex(t => t.numeroSala === v.numeroSala) === i)
+        .sort((a, b) => {
+            const salaA = String(a.numeroSala || "0");
+            const salaB = String(b.numeroSala || "0");
+            return salaA.localeCompare(salaB, undefined, { numeric: true, sensitivity: 'base' });
+        });
     
     const startX = 85;
-    const startY = currentY;
+    const startY = currentY + 10;
     const colWidth = 170;
     const rowHeight = 15;
     const maxRows = 22;
@@ -293,8 +299,8 @@ export async function generatePDFReport(filters?: {
         return salaA.localeCompare(salaB, undefined, { numeric: true, sensitivity: 'base' });
     });
 
-    const logoPath = path.join(process.cwd(), 'client', 'public', 'logos_stecla', 'versão horizontal.png');
-    const backgroundPath = path.join(process.cwd(), 'Tema Layout interface Stecla', 'Layout Fundo.png');
+    const logoPath = path.resolve(__dirname, '..', 'client', 'public', 'logos_stecla', 'versão horizontal.png');
+    const backgroundPath = path.resolve(__dirname, '..', 'Tema Layout interface Stecla', 'Layout Fundo.png');
     const hasLogo = fs.existsSync(logoPath);
     const hasBackground = fs.existsSync(backgroundPath);
 
@@ -304,6 +310,7 @@ export async function generatePDFReport(filters?: {
         await drawCoverPage(doc, logoPath, hasLogo, filters?.edificacao, filters?.startDate, filters?.endDate);
         
         // Nova Página: Sumário de Salas
+        doc.addPage();
         await drawSummaryPage(doc, data, backgroundPath, hasBackground);
 
         let currentDiscipline = "";
@@ -312,13 +319,16 @@ export async function generatePDFReport(filters?: {
             const item = data[i];
             
             // Lógica de Separador de Disciplina
-            const itemDiscipline = item.apontamento.disciplina || "OUTROS";
+            const itemDiscipline = (item.apontamento.disciplina || "OUTROS").toUpperCase();
             if (itemDiscipline !== currentDiscipline) {
-                if (i > 0) doc.addPage();
+                // Sempre garante uma nova página antes do divisor
+                doc.addPage();
                 await drawDisciplineSeparator(doc, itemDiscipline);
                 currentDiscipline = itemDiscipline;
+                // O conteúdo do primeiro item da disciplina virá na página adicionada por drawDisciplineSeparator
             } else {
-                if (i > 0) doc.addPage();
+                // Mesma disciplina, apenas adiciona página para o próximo item
+                doc.addPage();
             }
 
             // --- Fundo e Layout ---
@@ -473,15 +483,17 @@ export async function generateAsBuiltReport(filters?: {
     }
     const data = await query;
 
-    const backgroundPath = path.join(process.cwd(), 'Tema Layout interface Stecla', 'Layout Fundo.png');
+    const backgroundPath = path.resolve(__dirname, '..', 'Tema Layout interface Stecla', 'Layout Fundo.png');
     const hasBackground = fs.existsSync(backgroundPath);
 
     if (data.length === 0) {
         doc.fontSize(20).text('Nenhum dado as-built encontrado.', 0, 200, { align: 'center' });
     } else {
+        await drawCoverPage(doc, "", false, filters?.edificacao, filters?.startDate, filters?.endDate);
+
         for (let i = 0; i < data.length; i++) {
             const item = data[i];
-            if (i > 0) doc.addPage();
+            doc.addPage();
 
             if (hasBackground) {
                 doc.image(backgroundPath, 0, 0, { width: 842, height: 595 });
