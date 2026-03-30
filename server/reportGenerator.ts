@@ -8,21 +8,48 @@ import fs from 'fs';
 import axios from 'axios';
 
 /**
+ * Mapeia as siglas das disciplinas para seus nomes completos.
+ */
+function getDisciplineFullName(sigla: string): string {
+    const mapping: Record<string, string> = {
+        'ELE': 'ELÉTRICA',
+        'HID': 'HIDROSSANITÁRIO',
+        'EST': 'ESTRUTURA DE CONCRETO',
+        'ARQ': 'ARQUITETURA',
+        'UTI': 'UTILIDADES',
+        'AUT': 'AUTOMAÇÃO',
+        'PCI': 'PCI',
+        'SDAI': 'SDAI',
+        'SPDA': 'SPDA',
+        'MET': 'ESTRUTURA METÁLICA',
+        'CLI': 'CLIMATIZAÇÃO',
+        'LOG': 'CFTV E LÓGICA'
+    };
+    return mapping[sigla.toUpperCase()] || sigla.toUpperCase();
+}
+
+/**
  * Função para desenhar a capa do relatório.
  */
-async function drawCoverPage(doc: any, logoPath: string, hasLogo: boolean, edificacao?: string) {
-    // Desenha formas decorativas na capa
-    doc.save();
-    doc.translate(700, 100);
-    doc.rotate(-35);
-    doc.fillColor('#D1D5DB').roundedRect(-200, -150, 500, 300, 40).fill();
-    doc.restore();
+async function drawCoverPage(doc: any, logoPath: string, hasLogo: boolean, edificacao?: string, startDate?: string, endDate?: string) {
+    const coverPath = path.join(process.cwd(), 'Tema Layout interface Stecla', 'Layout Capa.png');
+    
+    if (fs.existsSync(coverPath)) {
+        doc.image(coverPath, 0, 0, { width: 842, height: 595 });
+    } else {
+        // Fallback se a imagem da capa não existir
+        doc.save();
+        doc.translate(700, 100);
+        doc.rotate(-35);
+        doc.fillColor('#D1D5DB').roundedRect(-200, -150, 500, 300, 40).fill();
+        doc.restore();
 
-    doc.save();
-    doc.translate(600, 550);
-    doc.rotate(-45);
-    doc.fillColor('#A31D1D').roundedRect(-150, -150, 300, 300, 40).fill();
-    doc.restore();
+        doc.save();
+        doc.translate(600, 550);
+        doc.rotate(-45);
+        doc.fillColor('#A31D1D').roundedRect(-150, -150, 300, 300, 40).fill();
+        doc.restore();
+    }
 
     // Título Principal
     doc.fillColor('#444444').fontSize(40).font('Helvetica-Bold').text('RELATÓRIO DE DIVERGÊNCIAS', 60, 320);
@@ -35,8 +62,29 @@ async function drawCoverPage(doc: any, logoPath: string, hasLogo: boolean, edifi
     const obraText = edificacao && edificacao !== "Todas" ? `Obra: SUPERNOVA - ${edificacao}` : 'Obra: SUPERNOVA';
     doc.text(obraText, 60, 405);
 
-    const dataAtual = new Date().toLocaleDateString('pt-BR');
-    doc.text(`Atualização: [${dataAtual}]`, 60, 450);
+    const formatDate = (dateStr?: string) => {
+        if (!dateStr) return null;
+        try {
+            const d = new Date(dateStr);
+            return d.toLocaleDateString('pt-BR');
+        } catch {
+            return dateStr;
+        }
+    };
+
+    let periodText = "";
+    const start = formatDate(startDate);
+    const end = formatDate(endDate);
+
+    if (start && end) {
+        periodText = `${start} - ${end}`;
+    } else if (start) {
+        periodText = `A partir de ${start}`;
+    } else {
+        periodText = new Date().toLocaleDateString('pt-BR');
+    }
+
+    doc.text(`Atualização: [${periodText}]`, 60, 450);
 
     // Logo no canto inferior esquerdo
     if (hasLogo) {
@@ -62,7 +110,9 @@ async function drawDisciplineSeparator(doc: any, disciplina: string) {
         doc.rect(0, 0, 842, 595).fill('#A31D1D');
     }
 
-    doc.fillColor('#FFFFFF').fontSize(50).font('Helvetica-Bold').text(disciplina.toUpperCase(), 0, 270, {
+    const fullName = getDisciplineFullName(disciplina);
+
+    doc.fillColor('#FFFFFF').fontSize(36).font('Helvetica-Bold').text(fullName.toUpperCase(), 0, 280, {
         align: 'center',
         width: 842
     });
@@ -91,10 +141,8 @@ async function drawSummaryPage(doc: any, data: any[], backgroundPath: string, ha
     
     let currentY = 120;
     uniqueDisciplines.forEach(disc => {
-        // Estimativa de página: Capa(1) + Sumário(2) + Separadores + Itens
-        // Mas como os separadores são inseridos dinamicamente, precisamos de uma lógica mais precisa ou apenas listar a ordem.
-        // Por ora, vamos focar na lista organizada.
-        doc.fontSize(10).font('Helvetica').text(`${disc.toUpperCase()}`, 85, currentY);
+        const fullName = getDisciplineFullName(disc);
+        doc.fontSize(10).font('Helvetica').text(`${fullName.toUpperCase()}`, 85, currentY);
         currentY += 15;
     });
 
@@ -194,10 +242,14 @@ export async function generatePDFReport(filters?: {
     // Filtros adicionais via JavaScript
     if (filters) {
         if (filters.disciplina && filters.disciplina !== "Todas") {
-            data = data.filter((i: any) => i.apontamento.disciplina === filters.disciplina);
+            data = data.filter((i: any) => 
+                (i.apontamento.disciplina || "").toUpperCase() === filters.disciplina?.toUpperCase()
+            );
         }
         if (filters.responsavel && filters.responsavel !== "Todos") {
-            data = data.filter((i: any) => i.apontamento.responsavel === filters.responsavel);
+            data = data.filter((i: any) => 
+                (i.apontamento.responsavel || "").toUpperCase() === filters.responsavel?.toUpperCase()
+            );
         }
         if (filters.sala) {
             const search = filters.sala.toLowerCase();
@@ -249,7 +301,7 @@ export async function generatePDFReport(filters?: {
     if (data.length === 0) {
         doc.fontSize(20).text('Nenhum apontamento encontrado.', 0, 200, { align: 'center' });
     } else {
-        await drawCoverPage(doc, logoPath, hasLogo, filters?.edificacao);
+        await drawCoverPage(doc, logoPath, hasLogo, filters?.edificacao, filters?.startDate, filters?.endDate);
         
         // Nova Página: Sumário de Salas
         await drawSummaryPage(doc, data, backgroundPath, hasBackground);
@@ -292,7 +344,7 @@ export async function generatePDFReport(filters?: {
             const infoX = 610; // Moved from 580 to avoid overlap
             const infoY = 100;
             doc.fillColor('#000000').fontSize(11).font('Helvetica');
-            doc.text(`Disciplina: ${item.apontamento.disciplina}`, infoX, infoY);
+            doc.text(`Disciplina: ${getDisciplineFullName(item.apontamento.disciplina)}`, infoX, infoY);
             doc.text(`Responsável: ${item.apontamento.responsavel || 'Não definido'}`, infoX, infoY + 20);
 
             doc.font('Helvetica-Bold').text('Apontamento:', infoX, infoY + 50);

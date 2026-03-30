@@ -345,6 +345,8 @@ export const appRouter = router({
                 startDate: z.string().optional(),
                 endDate: z.string().optional(),
                 apenasNaoEnviados: z.boolean().optional(),
+                disciplina: z.string().optional(),
+                responsavel: z.string().optional(),
             }).optional())
             .query(async ({ input }) => {
                 const buffer = await generatePDFReport({ 
@@ -353,6 +355,8 @@ export const appRouter = router({
                     startDate: input?.startDate,
                     endDate: input?.endDate,
                     apenasNaoEnviados: input?.apenasNaoEnviados,
+                    disciplina: input?.disciplina,
+                    responsavel: input?.responsavel,
                 });
                 return buffer.toString('base64');
             }),
