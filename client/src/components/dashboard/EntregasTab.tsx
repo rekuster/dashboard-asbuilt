@@ -37,7 +37,6 @@ import {
 import dayjs from "dayjs";
 import KPICard from "./KPICard";
 import ValidationTab from "./ValidationTab";
-import DisciplineValidationTab from "./DisciplineValidationTab";
 
 const STATUS_LABELS: Record<string, { label: string, color: string, icon: any }> = {
     'AGUARDANDO': { label: 'Mapeado', color: 'bg-slate-100 text-slate-600 border-slate-200', icon: Clock },
@@ -130,13 +129,9 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
                                     <History className="w-4 h-4 mr-2" />
                                     Gestão de Entregas
                                 </TabsTrigger>
-                                <TabsTrigger value="discipline" className="rounded-lg data-[state=active]:bg-[#940707] data-[state=active]:text-white">
-                                    <ShieldCheck className="w-4 h-4 mr-2" />
-                                    Validação por Disciplina
-                                </TabsTrigger>
-                                <TabsTrigger value="validation" className="rounded-lg data-[state=active]:bg-[#940707] data-[state=active]:text-white">
+                                <TabsTrigger value="validation" className="rounded-lg data-[state=active]:bg-[#940707] data-[state=active]:text-white col-span-2">
                                     <ClipboardCheck className="w-4 h-4 mr-2" />
-                                    Validação por Sala
+                                    Validação por Disciplina / Sala
                                 </TabsTrigger>
                                 <TabsTrigger value="scope" className="rounded-lg data-[state=active]:bg-[#940707] data-[state=active]:text-white">
                                     <FileText className="w-4 h-4 mr-2" />
@@ -285,10 +280,6 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
                                     </Table>
                                 </CardContent>
                             </Card>
-                        </TabsContent>
-
-                        <TabsContent value="discipline">
-                            <DisciplineValidationTab />
                         </TabsContent>
 
                         <TabsContent value="validation">
