@@ -33,7 +33,6 @@ export default function ValidationTab() {
     const [isModalOpen, setIsModalOpen] = useState(false);
 
     const { data: salas = [] } = trpc.dashboard.getSalas.useQuery();
-    const { data: escopos = [] } = trpc.dashboard.getEscopos.useQuery();
     const { data: pointingStats = [] } = trpc.dashboard.getApontamentos.useQuery();
     const { data: allVerificacoes = [] } = trpc.dashboard.getAllVerificacoes.useQuery();
 
@@ -58,13 +57,19 @@ export default function ValidationTab() {
         });
     }, [salas, filterEdificacao, search]);
 
-    // Disciplinas do escopo para esta edificação
+    // Disciplinas que POSSUEM PENDÊNCIAS ATIVAS
     const availableDisciplines = useMemo(() => {
-        const relevantEscopos = (escopos as any[]).filter((e: any) => 
-            filterEdificacao === "Todas" || e.edificacao === filterEdificacao
-        );
-        return Array.from(new Set(relevantEscopos.map((e: any) => e.disciplina))).sort() as string[];
-    }, [escopos, filterEdificacao]);
+        const discWithIssues = new Set<string>();
+        
+        // Só mostra disciplinas que têm apontamentos pendentes
+        (pointingStats as any[]).forEach((a: any) => {
+            if (a.status === 'PENDENTE') {
+                discWithIssues.add(a.disciplina);
+            }
+        });
+
+        return Array.from(discWithIssues).sort() as string[];
+    }, [pointingStats]);
 
     // Mapeamento de status: Sala + Disciplina -> Status
     const statusMap = useMemo(() => {
@@ -145,18 +150,23 @@ export default function ValidationTab() {
             <div className="space-y-4">
                 {availableDisciplines.map(discipline => {
                     const isExpanded = expandedDisciplines.includes(discipline);
-                    const roomTotal = filteredSalas.length;
+                    // Calcular estatísticas APENAS das salas que têm pendência nesta disciplina
+                    const roomsWithIssues = filteredSalas.filter(sala => 
+                        activeApontamentos[`${sala.nome}-${discipline}`] > 0
+                    );
+
+                    const roomTotal = roomsWithIssues.length;
                     
-                    const roomStats = filteredSalas.reduce((acc: any, sala: any) => {
+                    // Se não houver salas com pendência, não deveríamos nem estar vendo esta disciplina 
+                    // (devido ao filtro no availableDisciplines), mas por segurança:
+                    if (roomTotal === 0) return null;
+
+                    const roomStats = roomsWithIssues.reduce((acc: any, sala: any) => {
                         const status = statusMap[`${sala.id}-${discipline}`];
-                        const hasApontamento = activeApontamentos[`${sala.nome}-${discipline}`];
-                        
                         if (status === "OK") acc.ok++;
-                        else if (status === "NAO_CONFORME" || hasApontamento) acc.issue++;
-                        else acc.pending++;
-                        
+                        else acc.issue++;
                         return acc;
-                    }, { ok: 0, issue: 0, pending: 0 });
+                    }, { ok: 0, issue: 0 });
 
                     const progress = Math.round((roomStats.ok / roomTotal) * 100) || 0;
 
@@ -174,8 +184,8 @@ export default function ValidationTab() {
                                     <div className="flex-1">
                                         <div className="flex items-center gap-2">
                                             <h3 className="font-bold text-slate-700 uppercase tracking-tight">{discipline}</h3>
-                                            <Badge variant="outline" className="text-[10px] bg-slate-100 border-slate-200 py-0 h-4 text-slate-500">
-                                                {roomTotal} salas
+                                            <Badge variant="outline" className="text-[10px] bg-slate-100 border-slate-200 py-0 h-4 text-[#940707] font-black">
+                                                {roomTotal} PENDÊNCIAS
                                             </Badge>
                                         </div>
                                         <div className="flex items-center gap-4 mt-1">
@@ -207,53 +217,80 @@ export default function ValidationTab() {
                                 </div>
                             </div>
 
-                            {/* Discipline Content (Room Grid) */}
+                            {/* Discipline Content (Room Grid grouped by Edificacao) */}
                             {isExpanded && (
-                                <CardContent className="p-6 bg-slate-50/20">
-                                    <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 xl:grid-cols-12 gap-2">
-                                        {filteredSalas.map((sala: any) => {
-                                            const status = statusMap[`${sala.id}-${discipline}`];
-                                            const hasApontamento = activeApontamentos[`${sala.nome}-${discipline}`];
-                                            
-                                            let bgClass = "bg-white border-slate-200 text-slate-400 hover:border-[#940707] hover:text-[#940707]";
-                                            let icon = null;
+                                <CardContent className="p-6 bg-slate-50/20 space-y-6">
+                                    {(() => {
+                                        // 1. Filtrar apenas salas que têm pendência nesta disciplina
+                                        const roomsWithIssues = filteredSalas.filter(sala => 
+                                            activeApontamentos[`${sala.nome}-${discipline}`] > 0
+                                        );
 
-                                            if (status === "OK") {
-                                                bgClass = "bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100";
-                                                icon = <CheckCircle2 className="w-2.5 h-2.5 absolute top-1 right-1" />;
-                                            } else if (hasApontamento) {
-                                                bgClass = "bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100 animate-pulse";
-                                                icon = <XCircle className="w-2.5 h-2.5 absolute top-1 right-1" />;
-                                            } else if (status === "NAO_CONFORME") {
-                                                bgClass = "bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100";
-                                                icon = <XCircle className="w-2.5 h-2.5 absolute top-1 right-1" />;
-                                            }
+                                        // 2. Agrupar por Edificacao
+                                        const groupedByEdificacao: Record<string, any[]> = {};
+                                        roomsWithIssues.forEach(s => {
+                                            if (!groupedByEdificacao[s.edificacao]) groupedByEdificacao[s.edificacao] = [];
+                                            groupedByEdificacao[s.edificacao].push(s);
+                                        });
 
+                                        const edificacoes = Object.keys(groupedByEdificacao).sort();
+
+                                        if (edificacoes.length === 0) {
                                             return (
-                                                <button
-                                                    key={sala.id}
-                                                    onClick={() => handleRoomClick(sala, discipline)}
-                                                    className={`
-                                                        relative flex flex-col items-center justify-center h-12 rounded-xl border text-[10px] font-bold transition-all
-                                                        shadow-sm hover:translate-y-[-2px] hover:shadow-md
-                                                        ${bgClass}
-                                                    `}
-                                                    title={`${sala.numeroSala} - ${sala.nome}`}
-                                                >
-                                                    {icon}
-                                                    <span className="truncate w-full px-1">{sala.numeroSala}</span>
-                                                    <span className="text-[7px] opacity-40 leading-tight uppercase font-black">{sala.edificacao.split(' ')[1] || 'S'}</span>
-                                                </button>
+                                                <div className="flex flex-col items-center justify-center py-10 text-slate-400 italic">
+                                                    <Clock className="w-8 h-8 mb-2 opacity-20" />
+                                                    <span>Nenhuma pendência encontrada para os filtros atuais.</span>
+                                                </div>
                                             );
-                                        })}
-                                    </div>
-                                    
-                                    {filteredSalas.length === 0 && (
-                                        <div className="flex flex-col items-center justify-center py-10 text-slate-400 italic">
-                                            <Clock className="w-8 h-8 mb-2 opacity-20" />
-                                            <span>Nenhuma sala encontrada para os filtros atuais.</span>
-                                        </div>
-                                    )}
+                                        }
+
+                                        return edificacoes.map(edif => (
+                                            <div key={edif} className="space-y-3">
+                                                <div className="flex items-center gap-2 border-l-4 border-[#940707] pl-3">
+                                                    <h4 className="text-[10px] font-black uppercase text-slate-500 tracking-widest">{edif}</h4>
+                                                    <Badge variant="outline" className="bg-slate-200/50 border-transparent text-[9px] h-4 px-1.5 text-slate-500 font-bold">{groupedByEdificacao[edif].length} Itens</Badge>
+                                                </div>
+                                                
+                                                <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 xl:grid-cols-12 gap-2">
+                                                    {groupedByEdificacao[edif].map((sala: any) => {
+                                                        const status = statusMap[`${sala.id}-${discipline}`];
+                                                        const hasApontamento = activeApontamentos[`${sala.nome}-${discipline}`];
+                                                        
+                                                        let bgClass = "bg-white border-slate-200 text-slate-400 hover:border-[#940707] hover:text-[#940707]";
+                                                        let icon = null;
+
+                                                        if (status === "OK") {
+                                                            bgClass = "bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100";
+                                                            icon = <CheckCircle2 className="w-2.5 h-2.5 absolute top-1 right-1" />;
+                                                        } else if (hasApontamento) {
+                                                            bgClass = "bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100 animate-pulse";
+                                                            icon = <XCircle className="w-2.5 h-2.5 absolute top-1 right-1" />;
+                                                        } else if (status === "NAO_CONFORME") {
+                                                            bgClass = "bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100";
+                                                            icon = <XCircle className="w-2.5 h-2.5 absolute top-1 right-1" />;
+                                                        }
+
+                                                        return (
+                                                            <button
+                                                                key={sala.id}
+                                                                onClick={() => handleRoomClick(sala, discipline)}
+                                                                className={`
+                                                                    relative flex flex-col items-center justify-center h-12 rounded-xl border text-[10px] font-bold transition-all
+                                                                    shadow-sm hover:translate-y-[-2px] hover:shadow-md
+                                                                    ${bgClass}
+                                                                `}
+                                                                title={`${sala.numeroSala} - ${sala.nome}`}
+                                                            >
+                                                                {icon}
+                                                                <span className="truncate w-full px-1">{sala.numeroSala}</span>
+                                                                <span className="text-[8px] opacity-60 leading-tight uppercase font-black text-slate-400 truncate max-w-full px-1">{sala.nome.split(' ')[0]}</span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        ));
+                                    })()}
                                 </CardContent>
                             )}
                         </Card>
