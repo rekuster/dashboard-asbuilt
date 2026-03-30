@@ -2,7 +2,7 @@
 import PDFDocument from 'pdfkit';
 import ExcelJS from 'exceljs';
 import { getDb, apontamentos, salas } from './db';
-import { eq } from 'drizzle-orm';
+import { eq, and, gte, lte, asc } from 'drizzle-orm';
 import path from 'path';
 import fs from 'fs';
 import axios from 'axios';
@@ -95,7 +95,16 @@ async function drawSummaryPage(doc: any, data: any[], backgroundPath: string, ha
  * Gera o relatório de divergências em PDF.
  * Inclui o layout fundo padrão e ajusta a exibição conforme a orientação das imagens.
  */
-export async function generatePDFReport(filters?: { edificacao?: string; disciplina?: string; responsavel?: string; sala?: string; pavimento?: string }): Promise<Buffer> {
+export async function generatePDFReport(filters?: { 
+    edificacao?: string; 
+    disciplina?: string; 
+    responsavel?: string; 
+    sala?: string; 
+    pavimento?: string;
+    startDate?: string;
+    endDate?: string;
+    apenasNaoEnviados?: boolean;
+}): Promise<Buffer> {
     const doc = new PDFDocument({
         margin: 0,
         size: 'A4',
@@ -117,12 +126,30 @@ export async function generatePDFReport(filters?: { edificacao?: string; discipl
         .from(apontamentos)
         .innerJoin(salas, eq(apontamentos.sala, salas.nome));
 
+    const conditions: any[] = [];
+
     if (filters?.edificacao && filters.edificacao !== "Todas") {
-        query = query.where(eq(apontamentos.edificacao, filters.edificacao)) as any;
+        conditions.push(eq(apontamentos.edificacao, filters.edificacao));
     }
 
     if (filters?.pavimento && filters.pavimento !== "Todos") {
-        query = query.where(eq(apontamentos.pavimento, filters.pavimento)) as any;
+        conditions.push(eq(apontamentos.pavimento, filters.pavimento));
+    }
+
+    if (filters?.startDate) {
+        conditions.push(gte(apontamentos.data, new Date(filters.startDate)));
+    }
+
+    if (filters?.endDate) {
+        conditions.push(lte(apontamentos.data, new Date(filters.endDate)));
+    }
+
+    if (filters?.apenasNaoEnviados) {
+        conditions.push(eq(apontamentos.enviado, 0));
+    }
+
+    if (conditions.length > 0) {
+        query = query.where(and(...conditions)) as any;
     }
 
     let data = await query;
@@ -144,11 +171,37 @@ export async function generatePDFReport(filters?: { edificacao?: string; discipl
         }
     }
 
-    // Ordenação por número da sala
+    // Ordenação solicitada: Disciplina / Edificação / Pavimento / Salas
     data.sort((a: any, b: any) => {
-        const numA = parseInt(String(a.numeroSala || "0").replace(/\D/g, ""), 10) || 0;
-        const numB = parseInt(String(b.numeroSala || "0").replace(/\D/g, ""), 10) || 0;
-        return numA - numB;
+        // 1. Disciplina
+        const discA = a.apontamento.disciplina || "";
+        const discB = b.apontamento.disciplina || "";
+        const compDisc = discA.localeCompare(discB);
+        if (compDisc !== 0) return compDisc;
+
+        // 2. Edificação
+        const edA = a.apontamento.edificacao || "";
+        const edB = b.apontamento.edificacao || "";
+        const compEd = edA.localeCompare(edB);
+        if (compEd !== 0) return compEd;
+
+        // 3. Pavimento
+        const pavA = a.apontamento.pavimento || "";
+        const pavB = b.apontamento.pavimento || "";
+        const compPav = pavA.localeCompare(pavB);
+        if (compPav !== 0) return compPav;
+
+        // 4. Setor (ADICIONADO)
+        const setA = a.apontamento.setor || "";
+        const setB = b.apontamento.setor || "";
+        const compSet = setA.localeCompare(setB);
+        if (compSet !== 0) return compSet;
+
+        // 5. Salas (Número)
+        // Usamos localeCompare com numeric: true para ordenar 1, 2, 10 corretamente
+        const salaA = String(a.numeroSala || "0");
+        const salaB = String(b.numeroSala || "0");
+        return salaA.localeCompare(salaB, undefined, { numeric: true, sensitivity: 'base' });
     });
 
     const logoPath = path.join(process.cwd(), 'client', 'public', 'logos_stecla', 'versão horizontal.png');
@@ -274,7 +327,12 @@ export async function generatePDFReport(filters?: { edificacao?: string; discipl
  * Gera o relatório de verificação As-Built.
  * Também utiliza o novo layout padronizado da empresa.
  */
-export async function generateAsBuiltReport(filters?: { edificacao?: string; pavimento?: string }): Promise<Buffer> {
+export async function generateAsBuiltReport(filters?: { 
+    edificacao?: string; 
+    pavimento?: string;
+    startDate?: string;
+    endDate?: string;
+}): Promise<Buffer> {
     const doc = new PDFDocument({
         margin: 0,
         size: 'A4',
@@ -295,11 +353,23 @@ export async function generateAsBuiltReport(filters?: { edificacao?: string; pav
         .from(apontamentos)
         .innerJoin(salas, eq(apontamentos.sala, salas.nome));
 
+    const conditions: any[] = [];
+
     if (filters?.edificacao && filters.edificacao !== "Todas") {
-        query = query.where(eq(apontamentos.edificacao, filters.edificacao)) as any;
+        conditions.push(eq(apontamentos.edificacao, filters.edificacao));
     }
     if (filters?.pavimento && filters.pavimento !== "Todos") {
-        query = query.where(eq(apontamentos.pavimento, filters.pavimento)) as any;
+        conditions.push(eq(apontamentos.pavimento, filters.pavimento));
+    }
+    if (filters?.startDate) {
+        conditions.push(gte(apontamentos.data, new Date(filters.startDate)));
+    }
+    if (filters?.endDate) {
+        conditions.push(lte(apontamentos.data, new Date(filters.endDate)));
+    }
+
+    if (conditions.length > 0) {
+        query = query.where(and(...conditions)) as any;
     }
     const data = await query;
 

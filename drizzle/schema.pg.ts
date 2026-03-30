@@ -96,6 +96,8 @@ export const apontamentos = pgTable("apontamentos", {
     fotoReferenciaUrl: text("fotoReferenciaUrl"),
     status: text("status").default("PENDENTE").notNull(),
     responsavel: text("responsavel"),
+    dataEnvio: timestamp("dataEnvio"),
+    enviado: integer("enviado").default(0).notNull(), // 0 = Não enviado, 1 = Enviado
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
@@ -216,9 +218,28 @@ export const verificacaoModelo = pgTable("verificacaoModelo", {
     updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
+/**
+ * History of generated divergence reports sent to stakeholders
+ */
+export const relatoriosDivergencia = pgTable("relatoriosDivergencia", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("projectId").references(() => projects.id, { onDelete: 'cascade' }),
+    titulo: text("titulo").notNull(),
+    periodoInicio: timestamp("periodoInicio"),
+    periodoFim: timestamp("periodoFim"),
+    disciplina: text("disciplina"),
+    quantidadeItens: integer("quantidadeItens").default(0),
+    geradoPor: text("geradoPor").default("Sistema"),
+    arquivoUrl: text("arquivoUrl"),
+    status: text("status").default("ENVIADO").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
 export type Project = typeof projects.$inferSelect;
 export type InsertProject = typeof projects.$inferInsert;
 export type ProjectMember = typeof projectMembers.$inferSelect;
 export type InsertProjectMember = typeof projectMembers.$inferInsert;
 export type EntregaHistorico = typeof entregasHistorico.$inferSelect;
 export type InsertEntregaHistorico = typeof entregasHistorico.$inferInsert;
+export type RelatorioDivergencia = typeof relatoriosDivergencia.$inferSelect;
+export type InsertRelatorioDivergencia = typeof relatoriosDivergencia.$inferInsert;

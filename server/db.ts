@@ -18,7 +18,7 @@ import * as pgSchema from "../drizzle/schema.pg.ts";
 const isPostgres = true; // Hardcoded for production stability as we removed SQLite
 const activeSchema = pgSchema;
 
-export const { users, salas, apontamentos, ifcFiles, uploads, escopoAsBuilt, entregasAsBuilt, entregasHistorico, projects, projectMembers, verificacaoModelo } = activeSchema as any;
+export const { users, salas, apontamentos, ifcFiles, uploads, escopoAsBuilt, entregasAsBuilt, entregasHistorico, projects, projectMembers, verificacaoModelo, relatoriosDivergencia } = activeSchema as any;
 
 // Temporary type alignment (since we used to export from sqliteSchema)
 export type InsertUser = typeof pgSchema.users.$inferInsert;
@@ -1469,4 +1469,29 @@ export async function upsertVerificacao(salaId: number, disciplina: string, stat
             })
             .returning();
     }
+}
+
+/**
+ * Busca o histórico de relatórios gerados (Divergências)
+ */
+export async function getHistoricoRelatorios() {
+    const db = await getDb();
+    if (!db) return [];
+    return db.select()
+        .from(relatoriosDivergencia)
+        .orderBy(desc(relatoriosDivergencia.createdAt));
+}
+
+/**
+ * Registra um novo relatório no histórico
+ */
+export async function registrarRelatorioDivergencia(data: any) {
+    const db = await getDb();
+    if (!db) return null;
+    return await db.insert(relatoriosDivergencia)
+        .values({
+            ...data,
+            createdAt: new Date()
+        })
+        .returning();
 }
