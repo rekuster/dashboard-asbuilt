@@ -26,7 +26,10 @@ import {
     Building2,
     Pencil,
     Cpu,
-    Home
+    Home,
+    Network,
+    Hammer,
+    Gauge
 } from "lucide-react";
 import { VerificationModal } from "./VerificationModal";
 
@@ -86,6 +89,14 @@ export default function ValidationTab() {
         'INCÊNDIO': Flame,
         'AUT': Cpu,
         'AUTOMAÇÃO': Cpu,
+        'LOG': Network,
+        'LÓGICA': Network,
+        'REDE': Network,
+        'CFTV': Network,
+        'MET': Hammer,
+        'METÁLICA': Hammer,
+        'UTI': Gauge,
+        'UTILIDADES': Gauge,
     };
 
     // Disciplinas que POSSUEM PENDÊNCIAS ATIVAS
