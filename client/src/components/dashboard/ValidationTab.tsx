@@ -18,7 +18,15 @@ import {
     XCircle,
     Clock,
     LayoutGrid,
-    Filter
+    Filter,
+    Zap,
+    Wind,
+    Droplets,
+    Flame,
+    Building2,
+    Pencil,
+    Cpu,
+    Home
 } from "lucide-react";
 import { VerificationModal } from "./VerificationModal";
 
@@ -56,6 +64,29 @@ export default function ValidationTab() {
             return nA - nB;
         });
     }, [salas, filterEdificacao, search]);
+    
+    // Mapeamento de Ícones por Disciplina
+    const DISCIPLINE_ICONS: Record<string, any> = {
+        'ARQ': Home,
+        'ARQUITETURA': Home,
+        'EST': Building2,
+        'ESTRUTURA': Building2,
+        'ELE': Zap,
+        'ELEMT': Zap,
+        'ELÉTRICA': Zap,
+        'ELÉTRICA MÉDIA TENSÃO': Zap,
+        'CLI': Wind,
+        'CLIM': Wind,
+        'CLIMATIZAÇÃO': Wind,
+        'HID': Droplets,
+        'HIDRÁULICA': Droplets,
+        'HIDROSANITÁRIO': Droplets,
+        'PCI': Flame,
+        'SDAI': Flame,
+        'INCÊNDIO': Flame,
+        'AUT': Cpu,
+        'AUTOMAÇÃO': Cpu,
+    };
 
     // Disciplinas que POSSUEM PENDÊNCIAS ATIVAS
     const availableDisciplines = useMemo(() => {
@@ -178,9 +209,15 @@ export default function ValidationTab() {
                                 onClick={() => toggleDiscipline(discipline)}
                             >
                                 <div className="flex items-center gap-4 flex-1">
-                                    <div className={`p-2 rounded-xl border ${isExpanded ? 'bg-[#940707] text-white border-[#940707]' : 'bg-white text-slate-400 border-slate-200'}`}>
-                                        <LayoutGrid className="w-5 h-5" />
-                                    </div>
+                                    {(() => {
+                                        const DisciplineIcon = DISCIPLINE_ICONS[discipline.toUpperCase()] || DISCIPLINE_ICONS[discipline.split(' ')[0].toUpperCase()] || LayoutGrid;
+
+                                        return (
+                                            <div className={`p-2 rounded-xl border ${isExpanded ? 'bg-[#940707] text-white border-[#940707]' : 'bg-white text-slate-400 border-slate-200'}`}>
+                                                <DisciplineIcon className="w-5 h-5" />
+                                            </div>
+                                        );
+                                    })()}
                                     <div className="flex-1">
                                         <div className="flex items-center gap-2">
                                             <h3 className="font-bold text-slate-700 uppercase tracking-tight">{discipline}</h3>
