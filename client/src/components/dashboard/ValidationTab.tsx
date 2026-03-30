@@ -1,271 +1,282 @@
 
 /*
- * ESTE ARQUIVO É O "MAPEAMENTO AS-BUILT" POR SALA.
- * Foi criado a partir do DataHub, mas focado na validação final dos modelos.
- * Aqui você pode marcar disciplina por disciplina o que já foi conferido no As-Built.
+ * ESTE ARQUIVO É O "MAPEAMENTO AS-BUILT" POR SALA (Versão 2.0).
+ * Reorganizado por Disciplina com Grid de Salas expansível.
  */
 
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
     Search,
-    ListChecks,
-    Image as ImageIcon,
-    ClipboardCheck
+    ChevronDown,
+    ChevronRight,
+    ClipboardCheck,
+    CheckCircle2,
+    XCircle,
+    Clock,
+    LayoutGrid,
+    Filter
 } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { VerificationModal } from "./VerificationModal";
 
 export default function ValidationTab() {
     const [search, setSearch] = useState("");
     const [filterEdificacao, setFilterEdificacao] = useState("Todas");
-    const [filterPavimento, setFilterPavimento] = useState("Todos");
+    const [expandedDisciplines, setExpandedDisciplines] = useState<string[]>([]);
     
     // Checklist Modal State
     const [selectedSala, setSelectedSala] = useState<any>(null);
+    const [modalDiscipline, setModalDiscipline] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
 
     const { data: salas = [] } = trpc.dashboard.getSalas.useQuery();
     const { data: escopos = [] } = trpc.dashboard.getEscopos.useQuery();
-    const { data: apontamentos = [] } = trpc.dashboard.getApontamentos.useQuery();
+    const { data: pointingStats = [] } = trpc.dashboard.getApontamentos.useQuery();
     const { data: allVerificacoes = [] } = trpc.dashboard.getAllVerificacoes.useQuery();
 
-    // Map of pending apuntamentos per sala and discipline
-    const pendingBySalaAndDisc = useMemo(() => {
-        const map: Record<string, Record<string, number>> = {};
-        apontamentos.forEach((a: any) => {
-            if (a.status !== 'PENDENTE') return;
-            const sKey = a.sala;
-            const dKey = a.disciplina;
-            if (!map[sKey]) map[sKey] = {};
-            map[sKey][dKey] = (map[sKey][dKey] || 0) + 1;
-        });
-        return map;
-    }, [apontamentos]);
+    // Filtro de Edificações únicas
+    const uniqueEdificacoes = useMemo(() => 
+        Array.from(new Set((salas as any[]).map((s: any) => s.edificacao))).sort() as string[]
+    , [salas]);
 
-    // Helper to normalize edifice names between Salas and Escopo
-    const normalizeEdificacao = (name: string) => {
-        const n = (name || "").trim().toLowerCase();
-        if (n === "produção") return "Prédio Produção";
-        if (n === "suporte") return "Prédio Suporte";
-        if (n === "central utilidades") return "Central de Utilidades";
-        return name; // Return original if no mapping or already correct
-    };
-
-    const requiredByEdificacao: Record<string, string[]> = useMemo(() => {
-        const mapping: Record<string, string[]> = {};
-        escopos.forEach((item: any) => {
-            const ed = (item.edificacao || "").trim();
-            if (!ed) return;
-            if (!mapping[ed]) mapping[ed] = [];
-            if (!mapping[ed].includes(item.disciplina)) {
-                mapping[ed].push(item.disciplina);
-            }
-        });
-        return mapping;
-    }, [escopos]);
-
-    const sortedSalas = useMemo(() => {
-        const filtered = (salas || []).filter((s: any) => {
-            const searchLower = (search || "").toLowerCase();
-            const matchesSearch = (s.nome || "").toLowerCase().includes(searchLower) ||
-                (s.edificacao || "").toLowerCase().includes(searchLower) ||
-                (s.pavimento || "").toLowerCase().includes(searchLower) ||
-                (s.numeroSala || "").toLowerCase().includes(searchLower);
-
+    // Filtrar salas pela edificação e busca
+    const filteredSalas = useMemo(() => {
+        const searchLower = search.toLowerCase();
+        return (salas as any[]).filter((s: any) => {
             const matchesEdificacao = filterEdificacao === "Todas" || s.edificacao === filterEdificacao;
-            const matchesPavimento = filterPavimento === "Todos" || s.pavimento === filterPavimento;
-
-            return matchesSearch && matchesEdificacao && matchesPavimento;
-        });
-
-        return [...filtered].sort((a, b) => {
+            const matchesSearch = !search || 
+                (s.nome || "").toLowerCase().includes(searchLower) ||
+                (s.numeroSala || "").toLowerCase().includes(searchLower);
+            return matchesEdificacao && matchesSearch;
+        }).sort((a: any, b: any) => {
             const nA = parseInt(String(a.numeroSala || "0").replace(/\D/g, ""), 10) || 0;
             const nB = parseInt(String(b.numeroSala || "0").replace(/\D/g, ""), 10) || 0;
-            if (nA !== nB) return nA - nB;
-            return (a.nome || "").localeCompare(b.nome || "");
+            return nA - nB;
         });
-    }, [salas, search, filterEdificacao, filterPavimento]);
+    }, [salas, filterEdificacao, search]);
 
-    const uniqueEdificacoes = useMemo(() => Array.from(new Set(salas.map((s: any) => s.edificacao))).sort() as string[], [salas]);
-    const uniquePavimentos = useMemo(() => {
-        const filteredByBuilding = filterEdificacao === "Todas" ? salas : salas.filter((s: any) => s.edificacao === filterEdificacao);
-        return Array.from(new Set(filteredByBuilding.map((s: any) => s.pavimento))).sort() as string[];
-    }, [salas, filterEdificacao]);
+    // Disciplinas do escopo para esta edificação
+    const availableDisciplines = useMemo(() => {
+        const relevantEscopos = (escopos as any[]).filter((e: any) => 
+            filterEdificacao === "Todas" || e.edificacao === filterEdificacao
+        );
+        return Array.from(new Set(relevantEscopos.map((e: any) => e.disciplina))).sort() as string[];
+    }, [escopos, filterEdificacao]);
+
+    // Mapeamento de status: Sala + Disciplina -> Status
+    const statusMap = useMemo(() => {
+        const map: Record<string, string> = {};
+        (allVerificacoes as any[]).forEach((v: any) => {
+            map[`${v.salaId}-${v.disciplina}`] = v.status;
+        });
+        return map;
+    }, [allVerificacoes]);
+
+    // Apontamentos pendentes por sala e disciplina
+    const activeApontamentos = useMemo(() => {
+        const map: Record<string, number> = {};
+        (pointingStats as any[]).forEach((a: any) => {
+            if (a.status === 'PENDENTE') {
+                const key = `${a.sala}-${a.disciplina}`;
+                map[key] = (map[key] || 0) + 1;
+            }
+        });
+        return map;
+    }, [pointingStats]);
+
+    const toggleDiscipline = (disc: string) => {
+        setExpandedDisciplines(prev => 
+            prev.includes(disc) ? prev.filter(d => d !== disc) : [...prev, disc]
+        );
+    };
+
+    const handleRoomClick = (sala: any, discipline: string) => {
+        setSelectedSala(sala);
+        setModalDiscipline(discipline);
+        setIsModalOpen(true);
+    };
 
     return (
-        <div className="space-y-6 font-sans">
-            <Card className="border-none shadow-xl bg-white/70 backdrop-blur-md overflow-hidden">
-                <CardHeader className="bg-slate-50/50 border-b border-slate-100">
+        <div className="space-y-6 animate-in fade-in duration-500">
+            {/* Header / Filters Section */}
+            <Card className="border-none shadow-xl bg-white/70 backdrop-blur-md">
+                <CardHeader className="pb-4">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <div>
                             <CardTitle className="text-xl font-bold text-slate-800 flex items-center gap-2">
                                 <ClipboardCheck className="w-6 h-6 text-[#940707]" />
-                                Validação As-Built por Sala
+                                Validação por Disciplina
                             </CardTitle>
-                            <p className="text-xs text-slate-500 mt-1 uppercase tracking-wider font-semibold">
-                                Controle de Verificação de Modelos
-                            </p>
+                            <CardDescription>Clique nas salas para validar os modelos as-built entregues</CardDescription>
                         </div>
                         <div className="flex flex-wrap items-center gap-3">
                             <div className="relative">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                                 <Input
-                                    placeholder="Buscar sala..."
-                                    className="pl-9 w-[250px] bg-white border-slate-200 focus:ring-[#940707] transition-all rounded-full h-9 text-sm"
+                                    placeholder="Equipamento, tag ou nome..."
+                                    className="pl-9 w-[280px] bg-white border-slate-200 focus:ring-[#940707] transition-all rounded-full h-10 text-sm"
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
                                 />
                             </div>
 
-                            <select
-                                className="h-9 px-3 rounded-full border border-slate-200 bg-white text-sm focus:ring-[#940707] outline-none"
-                                value={filterEdificacao}
-                                onChange={(e) => {
-                                    setFilterEdificacao(e.target.value);
-                                    setFilterPavimento("Todos");
-                                }}
-                            >
-                                <option value="Todas">Todas Edificações</option>
-                                {uniqueEdificacoes.map(e => <option key={e} value={e}>{e}</option>)}
-                            </select>
-
-                            <select
-                                className="h-9 px-3 rounded-full border border-slate-200 bg-white text-sm focus:ring-[#940707] outline-none"
-                                value={filterPavimento}
-                                onChange={(e) => setFilterPavimento(e.target.value)}
-                            >
-                                <option value="Todos">Todos Pavimentos</option>
-                                {uniquePavimentos.map(p => <option key={p} value={p}>{p}</option>)}
-                            </select>
+                            <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-full border border-slate-200">
+                                <div className="pl-3 pr-1">
+                                    <Filter className="w-3.5 h-3.5 text-slate-500" />
+                                </div>
+                                <select
+                                    className="h-8 pr-8 pl-1 bg-transparent border-none text-xs font-bold text-slate-600 focus:ring-0 outline-none cursor-pointer"
+                                    value={filterEdificacao}
+                                    onChange={(e) => setFilterEdificacao(e.target.value)}
+                                >
+                                    <option value="Todas">Todas Edificações</option>
+                                    {uniqueEdificacoes.map(e => <option key={e} value={e}>{e}</option>)}
+                                </select>
+                            </div>
                         </div>
                     </div>
                 </CardHeader>
-
-                <CardContent className="p-0">
-                    <div className="overflow-x-auto">
-                        <Table>
-                            <TableHeader className="bg-slate-50/80">
-                                <TableRow className="hover:bg-transparent border-slate-100">
-                                    <TableHead className="w-[100px] text-[11px] font-bold text-slate-500 uppercase">Edific.</TableHead>
-                                    <TableHead className="w-[90px] text-[11px] font-bold text-slate-500 uppercase">Pav.</TableHead>
-                                    <TableHead className="text-[11px] font-bold text-slate-500 uppercase">Sala / Ambiente</TableHead>
-                                    <TableHead className="w-[60px] text-center text-[11px] font-bold text-slate-500 uppercase">Planta</TableHead>
-                                    <TableHead className="w-[100px] text-center text-[11px] font-bold text-slate-500 uppercase">Checklist</TableHead>
-                                    <TableHead className="w-[100px] text-center text-[11px] font-bold text-slate-500 uppercase">Status Final</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {sortedSalas.map((sala) => (
-                                    <TableRow key={sala.id} className="hover:bg-slate-50/50 transition-colors border-slate-50">
-                                        <TableCell className="font-medium text-slate-700">{sala.edificacao}</TableCell>
-                                        <TableCell className="text-slate-600">{sala.pavimento}</TableCell>
-                                        <TableCell className="py-3">
-                                            <div className="flex flex-col">
-                                                <span className="font-bold text-slate-800">{sala.nome}</span>
-                                                <span className="text-[10px] text-slate-400">Nº {sala.numeroSala}</span>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell className="text-center">
-                                            {sala.imagemPlantaUrl ? (
-                                                <Popover>
-                                                    <PopoverTrigger asChild>
-                                                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-700">
-                                                            <ImageIcon size={16} />
-                                                        </Button>
-                                                    </PopoverTrigger>
-                                                    <PopoverContent className="w-80 p-1">
-                                                        <img src={sala.imagemPlantaUrl} alt="Planta" className="rounded w-full" />
-                                                    </PopoverContent>
-                                                </Popover>
-                                            ) : (
-                                                <span className="text-[10px] text-slate-300 italic">N/A</span>
-                                            )}
-                                        </TableCell>
-                                        <TableCell className="text-center">
-                                            {(() => {
-                                                const pendingDiscs = Object.keys(pendingBySalaAndDisc[sala.nome] || {});
-                                                const totalReqs = pendingDiscs.length;
-                                                const hasMajorPendencies = totalReqs > 0;
-
-                                                return (
-                                                    <Button 
-                                                        variant="outline" 
-                                                        size="sm" 
-                                                        className={`h-8 w-8 p-0 border-slate-200 transition-all rounded-full relative ${
-                                                            hasMajorPendencies ? 'border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100' : 'hover:border-[#940707] hover:bg-[#940707] hover:text-white'
-                                                        }`}
-                                                        onClick={() => {
-                                                            setSelectedSala(sala);
-                                                            setIsModalOpen(true);
-                                                        }}
-                                                        title={`Checklist: ${totalReqs} modelos`}
-                                                    >
-                                                        <ListChecks className="w-4 h-4" />
-                                                        {totalReqs > 0 && (
-                                                            <span className="absolute -top-1 -right-1 bg-[#940707] text-white text-[8px] font-bold w-4 h-4 rounded-full flex items-center justify-center border border-white">
-                                                                {totalReqs}
-                                                            </span>
-                                                        )}
-                                                    </Button>
-                                                );
-                                            })()}
-                                        </TableCell>
-                                          <TableCell className="text-center">
-                                              {(() => {
-                                                  const edifNorm = normalizeEdificacao(sala.edificacao);
-                                                  const reqs = requiredByEdificacao[edifNorm] || [];
-                                                  
-                                                  if (reqs.length === 0) return (
-                                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-400 uppercase">
-                                                          SEM REQUISITOS
-                                                      </span>
-                                                  );
-                                                  
-                                                  const salaVers = allVerificacoes.filter((v: any) => v.salaId === sala.id);
-                                                  const oks = salaVers.filter((v: any) => v.status === "OK").length;
-                                                  const total = reqs.length;
-                                                  
-                                                  const isComplete = oks >= total && total > 0;
-                                                  
-                                                  return (
-                                                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase transition-all ${
-                                                          isComplete 
-                                                              ? "bg-emerald-100 text-emerald-700 shadow-sm shadow-emerald-100" 
-                                                              : oks > 0 
-                                                                  ? "bg-amber-100 text-amber-700" 
-                                                                  : "bg-slate-100 text-slate-400"
-                                                      }`}>
-                                                          {isComplete ? "COMPLETO" : `${oks}/${total} OK`}
-                                                      </span>
-                                                  );
-                                              })()}
-                                          </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </div>
-                </CardContent>
             </Card>
 
+            {/* Disciplines List */}
+            <div className="space-y-4">
+                {availableDisciplines.map(discipline => {
+                    const isExpanded = expandedDisciplines.includes(discipline);
+                    const roomTotal = filteredSalas.length;
+                    
+                    const roomStats = filteredSalas.reduce((acc: any, sala: any) => {
+                        const status = statusMap[`${sala.id}-${discipline}`];
+                        const hasApontamento = activeApontamentos[`${sala.nome}-${discipline}`];
+                        
+                        if (status === "OK") acc.ok++;
+                        else if (status === "NAO_CONFORME" || hasApontamento) acc.issue++;
+                        else acc.pending++;
+                        
+                        return acc;
+                    }, { ok: 0, issue: 0, pending: 0 });
+
+                    const progress = Math.round((roomStats.ok / roomTotal) * 100) || 0;
+
+                    return (
+                        <Card key={discipline} className="border-none shadow-lg overflow-hidden bg-white/80 transition-all duration-300">
+                            {/* Discipline Header Bar */}
+                            <div 
+                                className={`p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors ${isExpanded ? 'border-b border-slate-100 bg-slate-50/30' : ''}`}
+                                onClick={() => toggleDiscipline(discipline)}
+                            >
+                                <div className="flex items-center gap-4 flex-1">
+                                    <div className={`p-2 rounded-xl border ${isExpanded ? 'bg-[#940707] text-white border-[#940707]' : 'bg-white text-slate-400 border-slate-200'}`}>
+                                        <LayoutGrid className="w-5 h-5" />
+                                    </div>
+                                    <div className="flex-1">
+                                        <div className="flex items-center gap-2">
+                                            <h3 className="font-bold text-slate-700 uppercase tracking-tight">{discipline}</h3>
+                                            <Badge variant="outline" className="text-[10px] bg-slate-100 border-slate-200 py-0 h-4 text-slate-500">
+                                                {roomTotal} salas
+                                            </Badge>
+                                        </div>
+                                        <div className="flex items-center gap-4 mt-1">
+                                            <div className="flex-1 max-w-[200px] h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                                <div 
+                                                    className="h-full bg-[#940707] transition-all duration-500" 
+                                                    style={{ width: `${progress}%` }}
+                                                />
+                                            </div>
+                                            <span className="text-[10px] font-black text-slate-400">{progress}%</span>
+                                            
+                                            <div className="flex items-center gap-3 ml-2">
+                                                <div className="flex items-center gap-1">
+                                                    <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                                                    <span className="text-[10px] font-bold text-slate-500">{roomStats.ok} OK</span>
+                                                </div>
+                                                {roomStats.issue > 0 && (
+                                                    <div className="flex items-center gap-1">
+                                                        <div className="w-2 h-2 rounded-full bg-rose-500" />
+                                                        <span className="text-[10px] font-bold text-rose-500">{roomStats.issue} Pendente</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="ml-4">
+                                    {isExpanded ? <ChevronDown className="w-5 h-5 text-slate-400" /> : <ChevronRight className="w-5 h-5 text-slate-400" />}
+                                </div>
+                            </div>
+
+                            {/* Discipline Content (Room Grid) */}
+                            {isExpanded && (
+                                <CardContent className="p-6 bg-slate-50/20">
+                                    <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 xl:grid-cols-12 gap-2">
+                                        {filteredSalas.map((sala: any) => {
+                                            const status = statusMap[`${sala.id}-${discipline}`];
+                                            const hasApontamento = activeApontamentos[`${sala.nome}-${discipline}`];
+                                            
+                                            let bgClass = "bg-white border-slate-200 text-slate-400 hover:border-[#940707] hover:text-[#940707]";
+                                            let icon = null;
+
+                                            if (status === "OK") {
+                                                bgClass = "bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100";
+                                                icon = <CheckCircle2 className="w-2.5 h-2.5 absolute top-1 right-1" />;
+                                            } else if (hasApontamento) {
+                                                bgClass = "bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100 animate-pulse";
+                                                icon = <XCircle className="w-2.5 h-2.5 absolute top-1 right-1" />;
+                                            } else if (status === "NAO_CONFORME") {
+                                                bgClass = "bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100";
+                                                icon = <XCircle className="w-2.5 h-2.5 absolute top-1 right-1" />;
+                                            }
+
+                                            return (
+                                                <button
+                                                    key={sala.id}
+                                                    onClick={() => handleRoomClick(sala, discipline)}
+                                                    className={`
+                                                        relative flex flex-col items-center justify-center h-12 rounded-xl border text-[10px] font-bold transition-all
+                                                        shadow-sm hover:translate-y-[-2px] hover:shadow-md
+                                                        ${bgClass}
+                                                    `}
+                                                    title={`${sala.numeroSala} - ${sala.nome}`}
+                                                >
+                                                    {icon}
+                                                    <span className="truncate w-full px-1">{sala.numeroSala}</span>
+                                                    <span className="text-[7px] opacity-40 leading-tight uppercase font-black">{sala.edificacao.split(' ')[1] || 'S'}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    
+                                    {filteredSalas.length === 0 && (
+                                        <div className="flex flex-col items-center justify-center py-10 text-slate-400 italic">
+                                            <Clock className="w-8 h-8 mb-2 opacity-20" />
+                                            <span>Nenhuma sala encontrada para os filtros atuais.</span>
+                                        </div>
+                                    )}
+                                </CardContent>
+                            )}
+                        </Card>
+                    );
+                })}
+
+                {availableDisciplines.length === 0 && (
+                    <div className="p-20 text-center bg-white/50 rounded-3xl border-2 border-dashed border-slate-200">
+                        <XCircle className="w-12 h-12 mx-auto text-slate-200 mb-4" />
+                        <h3 className="text-lg font-bold text-slate-400 uppercase tracking-widest italic">Nenhuma disciplina cadastrada para este filtro</h3>
+                        <p className="text-sm text-slate-400 mt-2">Verifique as configurações do projeto ou o filtro de edificação.</p>
+                    </div>
+                )}
+            </div>
+
+            {/* Verification Modal Integration */}
             <VerificationModal 
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 sala={selectedSala}
-                disciplines={selectedSala ? (requiredByEdificacao[normalizeEdificacao(selectedSala.edificacao)] || []) : []}
-                pendingApontamentos={selectedSala ? (pendingBySalaAndDisc[selectedSala.nome] || {}) : {}}
+                // When we open from here, we can either restrict to just that discipline or show all
+                disciplines={selectedSala ? [modalDiscipline!] : []}
+                pendingApontamentos={selectedSala && modalDiscipline ? { [modalDiscipline]: activeApontamentos[`${selectedSala.nome}-${modalDiscipline}`] } : {}}
             />
         </div>
     );

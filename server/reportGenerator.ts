@@ -2,7 +2,7 @@
 import PDFDocument from 'pdfkit';
 import ExcelJS from 'exceljs';
 import { getDb, apontamentos, salas } from './db';
-import { eq, and, gte, lte, asc } from 'drizzle-orm';
+import { eq, and, gte, lte } from 'drizzle-orm';
 import path from 'path';
 import fs from 'fs';
 import axios from 'axios';
@@ -30,12 +30,10 @@ async function drawCoverPage(doc: any, logoPath: string, hasLogo: boolean, edifi
     // Informações da Obra
     doc.fillColor('#666666').fontSize(18).font('Helvetica');
     doc.text('Cliente: NEODENT', 60, 380);
-    doc.text('Obra: SUPERNOVA', 60, 405);
-    if (edificacao && edificacao !== "Todas") {
-        doc.fillColor('#A31D1D').fontSize(16).font('Helvetica-Bold');
-        doc.text(`Edificação: ${edificacao}`, 60, 430);
-        doc.fillColor('#666666').fontSize(18).font('Helvetica');
-    }
+    
+    // Obra com Edificação (se houver)
+    const obraText = edificacao && edificacao !== "Todas" ? `Obra: SUPERNOVA - ${edificacao}` : 'Obra: SUPERNOVA';
+    doc.text(obraText, 60, 405);
 
     const dataAtual = new Date().toLocaleDateString('pt-BR');
     doc.text(`Atualização: [${dataAtual}]`, 60, 450);
@@ -52,61 +50,68 @@ async function drawCoverPage(doc: any, logoPath: string, hasLogo: boolean, edifi
 }
 
 /**
- * Função para desenhar a página de separador de disciplina.
+ * Função para desenhar a página separadora de disciplina.
  */
 async function drawDisciplineSeparator(doc: any, disciplina: string) {
     const separatorPath = path.join(process.cwd(), 'Tema Layout interface Stecla', 'Layout Disciplina.png');
+    
     if (fs.existsSync(separatorPath)) {
         doc.image(separatorPath, 0, 0, { width: 842, height: 595 });
+    } else {
+        // Fallback se a imagem não existir
+        doc.rect(0, 0, 842, 595).fill('#A31D1D');
     }
 
-    // Título da Disciplina no Centro
-    doc.fillColor('#FFFFFF').fontSize(42).font('Helvetica-Bold');
-    doc.text(disciplina.toUpperCase(), 0, 270, { align: 'center', width: 842 });
-    
+    doc.fillColor('#FFFFFF').fontSize(50).font('Helvetica-Bold').text(disciplina.toUpperCase(), 0, 270, {
+        align: 'center',
+        width: 842
+    });
+
     doc.addPage();
 }
 
 /**
  * Função para desenhar a página de sumário (índice) das salas no relatório.
  */
-async function drawSummaryPage(doc: any, data: any[], backgroundPath: string, hasBackground: boolean, disciplinePages: { name: string; page: number }[]) {
+async function drawSummaryPage(doc: any, data: any[], backgroundPath: string, hasBackground: boolean) {
     if (hasBackground) {
         doc.image(backgroundPath, 0, 0, { width: 842, height: 595 });
     }
 
-    // Barra Lateral Vermelha (Consistência com o restante do relatório)
+    // Barra Lateral Vermelha
     doc.fillColor('#A31D1D').roundedRect(0, 55, 65, 485, 15).fill();
 
-    // 1. Índice por Disciplina
-    doc.fillColor('#A31D1D').fontSize(12).font('Helvetica-Bold').text('ÍNDICE POR DISCIPLINA', 85, 100);
-    doc.fontSize(10).font('Helvetica').fillColor('#333333');
+    // Título do Sumário
+    doc.fillColor('#444444').fontSize(10).font('Helvetica').text('REALIDADE AUMENTADA', 85, 40);
+    doc.fillColor('#000000').fontSize(22).font('Helvetica-Bold').text('SUMÁRIO E ÍNDICE REMISSIVO', 85, 52);
+
+    // 1. Índice de Disciplinas
+    doc.fontSize(12).font('Helvetica-Bold').text('ÍNDICE POR DISCIPLINA', 85, 100);
+    const uniqueDisciplines: string[] = Array.from(new Set(data.map(i => i.apontamento.disciplina || 'OUTROS'))).sort();
     
-    let discY = 115;
-    disciplinePages.forEach(dp => {
-        doc.text(`${dp.name}`, 85, discY);
-        doc.text(String(dp.page), 250, discY, { align: 'right', width: 20 });
-        doc.path(`M 150 ${discY + 7} L 245 ${discY + 7}`).dash(1, { space: 2 }).stroke('#CCCCCC').undash();
-        discY += 15;
+    let currentY = 120;
+    uniqueDisciplines.forEach(disc => {
+        // Estimativa de página: Capa(1) + Sumário(2) + Separadores + Itens
+        // Mas como os separadores são inseridos dinamicamente, precisamos de uma lógica mais precisa ou apenas listar a ordem.
+        // Por ora, vamos focar na lista organizada.
+        doc.fontSize(10).font('Helvetica').text(`${disc.toUpperCase()}`, 85, currentY);
+        currentY += 15;
     });
 
-    // 2. Lista de Salas (Ordenada Numericamente)
-    doc.fillColor('#A31D1D').fontSize(12).font('Helvetica-Bold').text('SALAS COM APONTAMENTOS', 350, 100);
-    doc.fontSize(10).font('Helvetica').fillColor('#333333');
+    // 2. Lista de Salas (Ordenada)
+    currentY += 20;
+    doc.fontSize(12).font('Helvetica-Bold').text('RELAÇÃO DE SALAS COM APONTAMENTOS', 85, currentY);
+    currentY += 20;
 
-    const uniqueSalas = data
-        .filter((v, i, a) => a.findIndex(t => t.numeroSala === v.numeroSala) === i)
-        .sort((a, b) => {
-            const salaA = String(a.numeroSala || "0");
-            const salaB = String(b.numeroSala || "0");
-            return salaA.localeCompare(salaB, undefined, { numeric: true, sensitivity: 'base' });
-        });
+    const uniqueSalas = data.filter((v, i, a) => a.findIndex(t => t.numeroSala === v.numeroSala) === i);
+    
+    const startX = 85;
+    const startY = currentY;
+    const colWidth = 170;
+    const rowHeight = 15;
+    const maxRows = 22;
 
-    const startX = 350;
-    const startY = 115;
-    const colWidth = 220;
-    const rowHeight = 16;
-    const maxRows = 25;
+    doc.fontSize(9).font('Helvetica').fillColor('#333333');
 
     uniqueSalas.forEach((item, index) => {
         const col = Math.floor(index / maxRows);
@@ -115,9 +120,8 @@ async function drawSummaryPage(doc: any, data: any[], backgroundPath: string, ha
         const x = startX + (col * (colWidth + 10));
         const y = startY + (row * rowHeight);
 
-        if (col < 2) { // 2 colunas para salas devido ao espaço do índice de disciplinas
-            const text = `${item.numeroSala} - ${item.salaNome}`;
-            doc.text(text, x, y, { width: colWidth, ellipsis: true });
+        if (col < 4) {
+            doc.text(`${item.numeroSala} - ${item.salaNome}`, x, y, { width: colWidth, ellipsis: true });
         }
     });
 
@@ -245,37 +249,24 @@ export async function generatePDFReport(filters?: {
     if (data.length === 0) {
         doc.fontSize(20).text('Nenhum apontamento encontrado.', 0, 200, { align: 'center' });
     } else {
-        // --- Pré-cálculo da Paginação ---
-        const disciplinePages: { name: string; page: number }[] = [];
-        let currentPage = 3; // Pág 1 Capa, Pág 2 Sumário
-        let lastDisc = "";
-        
-        data.forEach((item) => {
-            const disc = item.apontamento.disciplina || "Sem Disciplina";
-            if (disc !== lastDisc) {
-                disciplinePages.push({ name: disc, page: currentPage });
-                currentPage++; // Conta a página de separador
-                lastDisc = disc;
-            }
-            currentPage++; // Conta a página do item
-        });
-
         await drawCoverPage(doc, logoPath, hasLogo, filters?.edificacao);
         
         // Nova Página: Sumário de Salas
-        await drawSummaryPage(doc, data, backgroundPath, hasBackground, disciplinePages);
+        await drawSummaryPage(doc, data, backgroundPath, hasBackground);
 
-        let currentDiscInLoop = "";
+        let currentDiscipline = "";
+
         for (let i = 0; i < data.length; i++) {
             const item = data[i];
-            const disc = item.apontamento.disciplina || "Sem Disciplina";
-
-            // Verificar Mudança de Disciplina para Inserir Separador
-            if (disc !== currentDiscInLoop) {
-                await drawDisciplineSeparator(doc, disc);
-                currentDiscInLoop = disc;
+            
+            // Lógica de Separador de Disciplina
+            const itemDiscipline = item.apontamento.disciplina || "OUTROS";
+            if (itemDiscipline !== currentDiscipline) {
+                if (i > 0) doc.addPage();
+                await drawDisciplineSeparator(doc, itemDiscipline);
+                currentDiscipline = itemDiscipline;
             } else {
-                doc.addPage();
+                if (i > 0) doc.addPage();
             }
 
             // --- Fundo e Layout ---

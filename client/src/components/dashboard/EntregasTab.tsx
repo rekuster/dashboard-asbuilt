@@ -32,10 +32,12 @@ import {
     Layers,
     Briefcase,
     ClipboardCheck,
+    ShieldCheck,
 } from "lucide-react";
 import dayjs from "dayjs";
 import KPICard from "./KPICard";
 import ValidationTab from "./ValidationTab";
+import DisciplineValidationTab from "./DisciplineValidationTab";
 
 const STATUS_LABELS: Record<string, { label: string, color: string, icon: any }> = {
     'AGUARDANDO': { label: 'Mapeado', color: 'bg-slate-100 text-slate-600 border-slate-200', icon: Clock },
@@ -123,10 +125,14 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
 
                     <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                            <TabsList className="grid grid-cols-3 w-full max-w-2xl bg-slate-100 p-1 rounded-xl">
+                            <TabsList className="grid grid-cols-4 w-full max-w-4xl bg-slate-100 p-1 rounded-xl">
                                 <TabsTrigger value="list" className="rounded-lg data-[state=active]:bg-[#940707] data-[state=active]:text-white">
                                     <History className="w-4 h-4 mr-2" />
                                     Gestão de Entregas
+                                </TabsTrigger>
+                                <TabsTrigger value="discipline" className="rounded-lg data-[state=active]:bg-[#940707] data-[state=active]:text-white">
+                                    <ShieldCheck className="w-4 h-4 mr-2" />
+                                    Validação por Disciplina
                                 </TabsTrigger>
                                 <TabsTrigger value="validation" className="rounded-lg data-[state=active]:bg-[#940707] data-[state=active]:text-white">
                                     <ClipboardCheck className="w-4 h-4 mr-2" />
@@ -279,6 +285,10 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
                                     </Table>
                                 </CardContent>
                             </Card>
+                        </TabsContent>
+
+                        <TabsContent value="discipline">
+                            <DisciplineValidationTab />
                         </TabsContent>
 
                         <TabsContent value="validation">
@@ -1289,6 +1299,10 @@ function EntregaForm({ onClose, entrega, selectedEdificacao }: any) {
             isModelo = 1;
         } else if (val === "dwg") {
             tipo = "dwg";
+            isModelo = 0;
+        } else if (val === "pdf") {
+            tipo = "pdf";
+            isModelo = 0;
         }
 
         setFormData(prev => ({ 
@@ -1345,7 +1359,7 @@ function EntregaForm({ onClose, entrega, selectedEdificacao }: any) {
                         </div>
                         
                         <div className="space-y-2">
-                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Tipo e Formato *</label>
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Formato *</label>
                             <select 
                                 className="flex h-10 w-full rounded-xl border border-slate-200 bg-background px-3 py-2 text-sm" 
                                 value={formData.formato} 
