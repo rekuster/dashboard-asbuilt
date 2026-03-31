@@ -152,6 +152,7 @@ async function drawDisciplineSeparator(doc: any, disciplina: string) {
         // Fallback se a imagem não existir
         doc.rect(0, 0, 842, 595).fill('#A31D1D');
     }
+    const fullName = getDisciplineFullName(disciplina);
 
     doc.fillColor('#FFFFFF').fontSize(36).font('Helvetica-Bold').text(fullName.toUpperCase(), 0, 280, {
         align: 'center',

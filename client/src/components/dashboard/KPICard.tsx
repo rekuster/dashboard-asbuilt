@@ -48,7 +48,7 @@ export default function KPICard({ title, value, subtitle, icon: Icon, trend, var
             <CardContent>
                 <div className={`text-2xl font-bold ${valueColors[variant]}`}>{value}</div>
                 <div className="flex items-center space-x-2">
-                    <p className="text-xs text-muted-foreground">{subtitle}</p>
+                    <div className="text-xs text-muted-foreground">{subtitle}</div>
                     {trend && (
                         <span className={`text-xs font-medium ${trend.isPositive ? 'text-green-600' : 'text-red-600'}`}>
                             {trend.isPositive ? '+' : '-'}{trend.value}%
