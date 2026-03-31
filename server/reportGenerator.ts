@@ -100,13 +100,13 @@ async function drawCoverPage(doc: any, logoPath: string, hasLogo: boolean, edifi
     // Título Principal
     doc.fillColor('#444444').fontSize(36).font('Helvetica-Bold').text('RELATÓRIO DE DIVERGÊNCIAS', 60, 180);
 
-    // Informações da Obra (Agrupadas conforme feedback)
+    // Informações da Obra (Agrupadas e movidas para baixo conforme feedback)
     doc.fillColor('#666666').fontSize(16).font('Helvetica');
-    doc.text('Cliente: NEODENT', 60, 230);
+    doc.text('Cliente: NEODENT', 60, 320);
     
     // Obra com Edificação
     const obraText = edificacao && edificacao !== "Todas" ? `Obra: SUPERNOVA - ${edificacao}` : 'Obra: SUPERNOVA';
-    doc.text(obraText, 60, 255);
+    doc.text(obraText, 60, 345);
 
     const formatDate = (dateStr?: string) => {
         if (!dateStr) return null;
@@ -130,14 +130,9 @@ async function drawCoverPage(doc: any, logoPath: string, hasLogo: boolean, edifi
         periodText = new Date().toLocaleDateString('pt-BR');
     }
 
-    doc.text(`Atualização: [${periodText}]`, 60, 295);
+    doc.text(`Atualização: [${periodText}]`, 60, 385);
 
-    // Logo no canto inferior esquerdo (posicionado para não sobrepor formas no fundo)
-    if (hasLogo) {
-        const logoVertical = logoPath.replace('versão horizontal.png', 'versão vertical.png');
-        const logoPathToUse = fs.existsSync(logoVertical) ? logoVertical : logoPath;
-        doc.image(logoPathToUse, 60, 440, { width: 120 });
-    }
+    // Logo removido da capa conforme feedback (X na imagem)
 }
 
 /**
