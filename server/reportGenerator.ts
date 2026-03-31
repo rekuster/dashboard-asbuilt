@@ -11,6 +11,25 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 /**
+ * Resolve o caminho de um recurso (imagem, layout) de forma robusta.
+ */
+function getAssetPath(...parts: string[]): string {
+    // 1. Tenta a partir da raiz do projeto (CWD)
+    const cwdPath = path.join(process.cwd(), ...parts);
+    if (fs.existsSync(cwdPath)) return cwdPath;
+
+    // 2. Tenta a partir do diretório do script (contexto server/)
+    const dirPath = path.resolve(__dirname, '..', ...parts);
+    if (fs.existsSync(dirPath)) return dirPath;
+    
+    // 3. Tenta no próprio diretório (contexto bundled dist/)
+    const localPath = path.resolve(__dirname, ...parts);
+    if (fs.existsSync(localPath)) return localPath;
+
+    return cwdPath; // Fallback
+}
+
+/**
  * Mapeia as siglas das disciplinas para seus nomes completos.
  */
 function getDisciplineFullName(sigla: string): string {
@@ -35,7 +54,7 @@ function getDisciplineFullName(sigla: string): string {
  * Função para desenhar a capa do relatório.
  */
 async function drawCoverPage(doc: any, logoPath: string, hasLogo: boolean, edificacao?: string, startDate?: string, endDate?: string) {
-    const coverPath = path.resolve(__dirname, '..', 'Tema Layout interface Stecla', 'Layout Capa.png');
+    const coverPath = getAssetPath('Tema Layout interface Stecla', 'Layout Capa.png');
     
     if (fs.existsSync(coverPath)) {
         doc.image(coverPath, 0, 0, { width: 842, height: 595 });
@@ -104,7 +123,7 @@ async function drawCoverPage(doc: any, logoPath: string, hasLogo: boolean, edifi
  * Função para desenhar a página separadora de disciplina.
  */
 async function drawDisciplineSeparator(doc: any, disciplina: string) {
-    const separatorPath = path.resolve(__dirname, '..', 'Tema Layout interface Stecla', 'Layout Disciplina.png');
+    const separatorPath = getAssetPath('Tema Layout interface Stecla', 'Layout Disciplina.png');
     
     if (fs.existsSync(separatorPath)) {
         doc.image(separatorPath, 0, 0, { width: 842, height: 595 });
@@ -136,10 +155,10 @@ async function drawSummaryPage(doc: any, data: any[], backgroundPath: string, ha
 
     // Título do Sumário
     doc.fillColor('#444444').fontSize(10).font('Helvetica').text('REALIDADE AUMENTADA', 85, 40);
-    doc.fillColor('#000000').fontSize(22).font('Helvetica-Bold').text('SUMÁRIO E ÍNDICE REMISSIVO', 85, 55);
+    doc.fillColor('#000000').fontSize(22).font('Helvetica-Bold').text('SUMÁRIO E ÍNDICE REMISSIVO', 85, 60);
 
     // 1. Índice de Disciplinas
-    doc.fontSize(12).font('Helvetica-Bold').text('ÍNDICE POR DISCIPLINA', 85, 105);
+    doc.fontSize(12).font('Helvetica-Bold').text('ÍNDICE POR DISCIPLINA', 85, 110);
     const uniqueDisciplines: string[] = Array.from(new Set(data.map(i => i.apontamento.disciplina || 'OUTROS'))).sort();
     
     let currentY = 120;
@@ -302,8 +321,8 @@ export async function generatePDFReport(filters?: {
         return salaA.localeCompare(salaB, undefined, { numeric: true, sensitivity: 'base' });
     });
 
-    const logoPath = path.resolve(__dirname, '..', 'client', 'public', 'logos_stecla', 'versão horizontal.png');
-    const backgroundPath = path.resolve(__dirname, '..', 'Tema Layout interface Stecla', 'Layout Fundo.png');
+    const logoPath = getAssetPath('client', 'public', 'logos_stecla', 'versão horizontal.png');
+    const backgroundPath = getAssetPath('Tema Layout interface Stecla', 'Layout Fundo.png');
     const hasLogo = fs.existsSync(logoPath);
     const hasBackground = fs.existsSync(backgroundPath);
 
@@ -486,7 +505,7 @@ export async function generateAsBuiltReport(filters?: {
     }
     const data = await query;
 
-    const backgroundPath = path.resolve(__dirname, '..', 'Tema Layout interface Stecla', 'Layout Fundo.png');
+    const backgroundPath = getAssetPath('Tema Layout interface Stecla', 'Layout Fundo.png');
     const hasBackground = fs.existsSync(backgroundPath);
 
     if (data.length === 0) {
