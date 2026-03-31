@@ -11,22 +11,46 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 /**
- * Resolve o caminho de um recurso (imagem, layout) de forma robusta.
+ * Resolve o caminho de um recurso (imagem, layout) de forma robusta com "fuzzy match" para o folder.
  */
 function getAssetPath(...parts: string[]): string {
-    // 1. Tenta a partir da raiz do projeto (CWD)
-    const cwdPath = path.join(process.cwd(), ...parts);
-    if (fs.existsSync(cwdPath)) return cwdPath;
+    const logFile = path.join(process.cwd(), 'report_debug.log');
+    const log = (msg: string) => {
+        try { fs.appendFileSync(logFile, `${new Date().toISOString()} - ${msg}\n`); } catch(e) {}
+    };
 
-    // 2. Tenta a partir do diretório do script (contexto server/)
-    const dirPath = path.resolve(__dirname, '..', ...parts);
-    if (fs.existsSync(dirPath)) return dirPath;
-    
-    // 3. Tenta no próprio diretório (contexto bundled dist/)
-    const localPath = path.resolve(__dirname, ...parts);
-    if (fs.existsSync(localPath)) return localPath;
+    const tryPath = (p: string) => {
+        const absolute = path.resolve(p);
+        const exists = fs.existsSync(absolute);
+        log(`Trying: ${absolute} -> ${exists}`);
+        return exists ? absolute : null;
+    };
 
-    return cwdPath; // Fallback
+    // Tenta caminhos diretos
+    const p1 = tryPath(path.join(process.cwd(), ...parts));
+    if (p1) return p1;
+
+    const p2 = tryPath(path.resolve(__dirname, '..', ...parts));
+    if (p2) return p2;
+
+    const p3 = tryPath(path.resolve(__dirname, ...parts));
+    if (p3) return p3;
+
+    // Se falhar, tenta buscar a pasta por "similaridade" (ignora espaços extras ou case)
+    if (parts.length > 1) {
+        const folderToFind = parts[0].toLowerCase().trim();
+        const root = process.cwd();
+        try {
+            const files = fs.readdirSync(root);
+            const foundFolder = files.find(f => f.toLowerCase().trim() === folderToFind);
+            if (foundFolder) {
+                const p4 = tryPath(path.join(root, foundFolder, ...parts.slice(1)));
+                if (p4) return p4;
+            }
+        } catch(e) { log(`Error readdir: ${e}`); }
+    }
+
+    return path.join(process.cwd(), ...parts); // Fallback final
 }
 
 /**
@@ -145,7 +169,7 @@ async function drawDisciplineSeparator(doc: any, disciplina: string) {
 /**
  * Função para desenhar a página de sumário (índice) das salas no relatório.
  */
-async function drawSummaryPage(doc: any, data: any[], backgroundPath: string, hasBackground: boolean) {
+async function drawSummaryPage(doc: any, data: any[], backgroundPath: string, hasBackground: boolean, disciplinePages: Record<string, number>) {
     if (hasBackground) {
         doc.image(backgroundPath, 0, 0, { width: 842, height: 595 });
     }
@@ -161,11 +185,20 @@ async function drawSummaryPage(doc: any, data: any[], backgroundPath: string, ha
     doc.fontSize(12).font('Helvetica-Bold').text('ÍNDICE POR DISCIPLINA', 85, 110);
     const uniqueDisciplines: string[] = Array.from(new Set(data.map(i => i.apontamento.disciplina || 'OUTROS'))).sort();
     
-    let currentY = 120;
+    let currentY = 125;
     uniqueDisciplines.forEach(disc => {
         const fullName = getDisciplineFullName(disc);
-        doc.fontSize(10).font('Helvetica').text(`${fullName.toUpperCase()}`, 85, currentY);
-        currentY += 15;
+        const pageNum = disciplinePages[disc.toUpperCase()] || disciplinePages[disc] || 3;
+        
+        doc.fontSize(10).font('Helvetica').fillColor('#333333');
+        // Nome da Disciplina
+        doc.text(`${fullName.toUpperCase()}`, 85, currentY);
+        
+        // Linha pontilhada (estética) e Página
+        const dots = ".".repeat(140 - fullName.length * 1.5);
+        doc.text(`${dots} Pág. ${pageNum}`, 260, currentY, { align: 'left' });
+        
+        currentY += 14;
     });
 
     // 2. Lista de Salas (Ordenada)
@@ -329,11 +362,23 @@ export async function generatePDFReport(filters?: {
     if (data.length === 0) {
         doc.fontSize(20).text('Nenhum apontamento encontrado.', 0, 200, { align: 'center' });
     } else {
+        // Pré-calcular páginas por disciplina
+        // Pág 1: Capa, Pág 2: Sumário
+        let currentPage = 3; 
+        const disciplinePages: Record<string, number> = {};
+        const uniqueDisciplines: string[] = Array.from(new Set(data.map(i => i.apontamento.disciplina || 'OUTROS'))).sort();
+        
+        uniqueDisciplines.forEach(disc => {
+            disciplinePages[disc.toUpperCase()] = currentPage;
+            const itemsInDisc = data.filter(i => (i.apontamento.disciplina || 'OUTROS').toUpperCase() === disc.toUpperCase());
+            currentPage += (1 + itemsInDisc.length); // Separador + itens
+        });
+
         await drawCoverPage(doc, logoPath, hasLogo, filters?.edificacao, filters?.startDate, filters?.endDate);
         
         // Nova Página: Sumário de Salas
         doc.addPage();
-        await drawSummaryPage(doc, data, backgroundPath, hasBackground);
+        await drawSummaryPage(doc, data, backgroundPath, hasBackground, disciplinePages);
 
         let currentDiscipline = "";
 
