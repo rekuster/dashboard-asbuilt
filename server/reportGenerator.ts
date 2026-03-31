@@ -98,11 +98,11 @@ async function drawCoverPage(doc: any, logoPath: string, hasLogo: boolean, edifi
     }
 
     // Título Principal
-    doc.fillColor('#444444').fontSize(40).font('Helvetica-Bold').text('RELATÓRIO DE DIVERGÊNCIAS', 60, 320);
+    doc.fillColor('#444444').fontSize(36).font('Helvetica-Bold').text('RELATÓRIO DE DIVERGÊNCIAS', 60, 200);
 
     // Informações da Obra
-    doc.fillColor('#666666').fontSize(18).font('Helvetica');
-    doc.text('Cliente: NEODENT', 60, 380);
+    doc.fillColor('#666666').fontSize(16).font('Helvetica');
+    doc.text('Cliente: NEODENT', 60, 250);
     
     // Obra com Edificação (se houver)
     const obraText = edificacao && edificacao !== "Todas" ? `Obra: SUPERNOVA - ${edificacao}` : 'Obra: SUPERNOVA';
@@ -130,17 +130,14 @@ async function drawCoverPage(doc: any, logoPath: string, hasLogo: boolean, edifi
         periodText = new Date().toLocaleDateString('pt-BR');
     }
 
-    doc.text(`Atualização: [${periodText}]`, 60, 450);
+    doc.text(`Atualização: [${periodText}]`, 60, 310);
 
-    // Logo no canto inferior esquerdo
+    // Logo no canto inferior esquerdo (ajustado para não sobrepor formas)
     if (hasLogo) {
         const logoVertical = logoPath.replace('versão horizontal.png', 'versão vertical.png');
         const logoPathToUse = fs.existsSync(logoVertical) ? logoVertical : logoPath;
-        doc.image(logoPathToUse, 60, 500, { width: 140 });
+        doc.image(logoPathToUse, 60, 480, { width: 120 });
     }
-
-    doc.fillColor('#666666').fontSize(16).text('2026', 780, 540);
-    doc.addPage();
 }
 
 /**
@@ -156,14 +153,10 @@ async function drawDisciplineSeparator(doc: any, disciplina: string) {
         doc.rect(0, 0, 842, 595).fill('#A31D1D');
     }
 
-    const fullName = getDisciplineFullName(disciplina);
-
     doc.fillColor('#FFFFFF').fontSize(36).font('Helvetica-Bold').text(fullName.toUpperCase(), 0, 280, {
         align: 'center',
         width: 842
     });
-
-    doc.addPage();
 }
 
 /**
@@ -194,17 +187,16 @@ async function drawSummaryPage(doc: any, data: any[], backgroundPath: string, ha
         // Nome da Disciplina
         doc.text(`${fullName.toUpperCase()}`, 85, currentY);
         
-        // Linha pontilhada (estética) e Página
-        const dots = ".".repeat(140 - fullName.length * 1.5);
-        doc.text(`${dots} Pág. ${pageNum}`, 260, currentY, { align: 'left' });
+        // Alinhamento fixo para a página
+        doc.text(`Página ${pageNum}`, 350, currentY, { align: 'right', width: 400 });
         
-        currentY += 14;
+        currentY += 16;
     });
 
     // 2. Lista de Salas (Ordenada)
-    currentY += 20;
+    currentY += 15;
     doc.fontSize(12).font('Helvetica-Bold').text('RELAÇÃO DE SALAS COM APONTAMENTOS', 85, currentY);
-    currentY += 20;
+    currentY += 15;
 
     const uniqueSalas = data
         .filter((v, i, a) => a.findIndex(t => t.numeroSala === v.numeroSala) === i)
@@ -233,8 +225,6 @@ async function drawSummaryPage(doc: any, data: any[], backgroundPath: string, ha
             doc.text(`${item.numeroSala} - ${item.salaNome}`, x, y, { width: colWidth, ellipsis: true });
         }
     });
-
-    doc.addPage();
 }
 
 /**
@@ -388,11 +378,11 @@ export async function generatePDFReport(filters?: {
             // Lógica de Separador de Disciplina
             const itemDiscipline = (item.apontamento.disciplina || "OUTROS").toUpperCase();
             if (itemDiscipline !== currentDiscipline) {
-                // Sempre garante uma nova página antes do divisor
                 doc.addPage();
                 await drawDisciplineSeparator(doc, itemDiscipline);
                 currentDiscipline = itemDiscipline;
-                // O conteúdo do primeiro item da disciplina virá na página adicionada por drawDisciplineSeparator
+                // Movemos para a próxima página após o separador para o conteúdo
+                doc.addPage();
             } else {
                 // Mesma disciplina, apenas adiciona página para o próximo item
                 doc.addPage();
