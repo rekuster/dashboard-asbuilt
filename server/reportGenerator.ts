@@ -1,4 +1,3 @@
-
 import PDFDocument from 'pdfkit';
 import ExcelJS from 'exceljs';
 import { getDb, apontamentos, salas } from './db';
@@ -6,6 +5,10 @@ import { eq, and, gte, lte } from 'drizzle-orm';
 import path from 'path';
 import fs from 'fs';
 import axios from 'axios';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
  * Mapeia as siglas das disciplinas para seus nomes completos.
