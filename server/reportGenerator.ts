@@ -1,3 +1,12 @@
+/**
+ * ARQUIVO: reportGenerator.ts
+ * PARA QUE SERVE: Este arquivo é o "motor" que fabrica os relatórios da Stecla.
+ * Ele pega as informações que estão no banco de dados (fotos, nomes de salas, problemas encontrados)
+ * e organiza tudo dentro de um arquivo PDF bonito ou uma planilha Excel.
+ * É aqui que definimos onde cada foto aparece, quais cores usamos nas barras laterais
+ * e como o sumário (índice) é montado.
+ */
+
 import PDFDocument from 'pdfkit';
 import ExcelJS from 'exceljs';
 import { getDb, apontamentos, salas } from './db';
@@ -52,6 +61,10 @@ function getAssetPath(...parts: string[]): string {
 
     return path.join(process.cwd(), ...parts); // Fallback final
 }
+/** 
+ * EXPLICAÇÃO SIMPLES: Esta função serve para encontrar arquivos (como imagens e logos) dentro
+ * das pastas do computador, mesmo que o caminho mude um pouco. Ela é um "rastreador" inteligente.
+ */
 
 /**
  * Mapeia as siglas das disciplinas para seus nomes completos.
@@ -73,11 +86,15 @@ function getDisciplineFullName(sigla: string): string {
     };
     return mapping[sigla.toUpperCase()] || sigla.toUpperCase();
 }
+/** 
+ * EXPLICAÇÃO SIMPLES: Esta função traduz as siglas curtas (como 'ELE') para o nome 
+ * completo da disciplina (como 'ELÉTRICA') para que o relatório fique mais legível.
+ */
 
 /**
  * Função para desenhar a capa do relatório.
  */
-async function drawCoverPage(doc: any, logoPath: string, hasLogo: boolean, edificacao?: string, startDate?: string, endDate?: string) {
+async function drawCoverPage(doc: any, edificacao?: string, startDate?: string, endDate?: string) {
     const coverPath = getAssetPath('Tema Layout interface Stecla', 'Layout Capa.png');
     
     if (fs.existsSync(coverPath)) {
@@ -134,12 +151,16 @@ async function drawCoverPage(doc: any, logoPath: string, hasLogo: boolean, edifi
 
     // Logo removido da capa conforme feedback (X na imagem)
 }
+/** 
+ * EXPLICAÇÃO SIMPLES: Esta função desenha a primeira página do relatório (a capa),
+ * colocando o título, o nome da obra e o período de tempo selecionado.
+ */
 
 /**
  * Função para desenhar a página separadora de disciplina.
  */
 async function drawDisciplineSeparator(doc: any, disciplina: string) {
-    const separatorPath = getAssetPath('Tema Layout interface Stecla', 'Layout Disciplina.png');
+    const separatorPath = getAssetPath('Tema Layout interface Stecla', 'Layout Disciplina Certo.png');
     
     if (fs.existsSync(separatorPath)) {
         doc.image(separatorPath, 0, 0, { width: 842, height: 595 });
@@ -154,6 +175,11 @@ async function drawDisciplineSeparator(doc: any, disciplina: string) {
         width: 842
     });
 }
+/** 
+ * EXPLICAÇÃO SIMPLES: Esta função cria a "capa" de cada disciplina (como Elétrica, Hidráulica).
+ * Ela coloca um fundo bonito e escreve o nome da disciplina bem grande no meio.
+ * Atualmente usa a imagem 'Layout Disciplina Certo.png'.
+ */
 
 /**
  * Função para desenhar a página de sumário (índice) das salas no relatório.
@@ -172,7 +198,7 @@ async function drawSummaryPage(doc: any, data: any[], backgroundPath: string, ha
 
     // 1. Índice de Disciplinas
     doc.fontSize(12).font('Helvetica-Bold').text('ÍNDICE POR DISCIPLINA', 85, 110);
-    const uniqueDisciplines: string[] = Array.from(new Set(data.map(i => i.apontamento.disciplina || 'OUTROS'))).sort();
+    const uniqueDisciplines: string[] = Array.from(new Set(data.map((i: any) => i.apontamento.disciplina || 'OUTROS'))).sort() as string[];
     
     let currentY = 125;
     uniqueDisciplines.forEach(disc => {
@@ -189,43 +215,17 @@ async function drawSummaryPage(doc: any, data: any[], backgroundPath: string, ha
         currentY += 16;
     });
 
-    // 2. Lista de Salas (Ordenada)
-    currentY += 15;
-    doc.fontSize(12).font('Helvetica-Bold').text('RELAÇÃO DE SALAS COM APONTAMENTOS', 85, currentY);
-    currentY += 15;
-
-    const uniqueSalas = data
-        .filter((v, i, a) => a.findIndex(t => t.numeroSala === v.numeroSala) === i)
-        .sort((a, b) => {
-            const salaA = String(a.numeroSala || "0");
-            const salaB = String(b.numeroSala || "0");
-            return salaA.localeCompare(salaB, undefined, { numeric: true, sensitivity: 'base' });
-        });
-    
-    const startX = 85;
-    const startY = currentY + 10;
-    const colWidth = 170;
-    const rowHeight = 15;
-    const maxRows = 22;
-
-    doc.fontSize(9).font('Helvetica').fillColor('#333333');
-
-    uniqueSalas.forEach((item, index) => {
-        const col = Math.floor(index / maxRows);
-        const row = index % maxRows;
-        
-        const x = startX + (col * (colWidth + 10));
-        const y = startY + (row * rowHeight);
-
-        if (col < 4) {
-            doc.text(`${item.numeroSala} - ${item.salaNome}`, x, y, { width: colWidth, ellipsis: true });
-        }
-    });
+    // A lista de salas foi removida daqui a pedido do usuário para simplificar o sumário.
 }
+/** 
+ * EXPLICAÇÃO SIMPLES: Esta função cria o Sumário (ou Índice) do relatório.
+ * Agora ela mostra apenas as Disciplinas e as páginas onde elas começam.
+ */
 
 /**
- * Gera o relatório de divergências em PDF.
- * Inclui o layout fundo padrão e ajusta a exibição conforme a orientação das imagens.
+ * EXPLICAÇÃO SIMPLES: Esta é a função principal que "monta" o PDF de Divergências.
+ * Ela filtra os dados selecionados pelo usuário, organiza por disciplina e sala,
+ * e gera todas as páginas, incluindo fotos e mapas.
  */
 export async function generatePDFReport(filters?: { 
     edificacao?: string; 
@@ -352,15 +352,15 @@ export async function generatePDFReport(filters?: {
         // Pág 1: Capa, Pág 2: Sumário
         let currentPage = 3; 
         const disciplinePages: Record<string, number> = {};
-        const uniqueDisciplines: string[] = Array.from(new Set(data.map(i => i.apontamento.disciplina || 'OUTROS'))).sort();
+        const uniqueDisciplines: string[] = Array.from(new Set(data.map((i: any) => i.apontamento.disciplina || 'OUTROS'))).sort() as string[];
         
         uniqueDisciplines.forEach(disc => {
             disciplinePages[disc.toUpperCase()] = currentPage;
-            const itemsInDisc = data.filter(i => (i.apontamento.disciplina || 'OUTROS').toUpperCase() === disc.toUpperCase());
+            const itemsInDisc = data.filter((i: any) => (i.apontamento.disciplina || 'OUTROS').toUpperCase() === disc.toUpperCase());
             currentPage += (1 + itemsInDisc.length); // Separador + itens
         });
 
-        await drawCoverPage(doc, logoPath, hasLogo, filters?.edificacao, filters?.startDate, filters?.endDate);
+        await drawCoverPage(doc, filters?.edificacao, filters?.startDate, filters?.endDate);
         
         // Nova Página: Sumário de Salas
         doc.addPage();
@@ -485,10 +485,14 @@ export async function generatePDFReport(filters?: {
     doc.end();
     return new Promise((resolve) => doc.on('end', () => resolve(Buffer.concat(chunks))));
 }
+/** 
+ * EXPLICAÇÃO SIMPLES: Esta função é uma das engrenagens principais que "costura" o PDF final.
+ * Ela organiza as páginas, insere as fotos nos lugares certos e finaliza o arquivo para download.
+ */
 
 /**
- * Gera o relatório de verificação As-Built.
- * Também utiliza o novo layout padronizado da empresa.
+ * EXPLICAÇÃO SIMPLES: Semelhante à anterior, mas foca em gerar o relatório de 
+ * Verificação As-Built, que mostra o que foi modelado e o que foi feito na obra.
  */
 export async function generateAsBuiltReport(filters?: { 
     edificacao?: string; 
@@ -542,7 +546,7 @@ export async function generateAsBuiltReport(filters?: {
     if (data.length === 0) {
         doc.fontSize(20).text('Nenhum dado as-built encontrado.', 0, 200, { align: 'center' });
     } else {
-        await drawCoverPage(doc, "", false, filters?.edificacao, filters?.startDate, filters?.endDate);
+        await drawCoverPage(doc, filters?.edificacao, filters?.startDate, filters?.endDate);
 
         for (let i = 0; i < data.length; i++) {
             const item = data[i];
@@ -670,3 +674,7 @@ export async function generateExcelReport(edificacao?: string): Promise<Buffer> 
     const buffer = await workbook.xlsx.writeBuffer();
     return Buffer.from(buffer);
 }
+/** 
+ * EXPLICAÇÃO SIMPLES: Esta função gera um arquivo Excel (planilha) com todos os
+ * dados do relatório, permitindo que a equipe filtre e use as informações em tabelas.
+ */
