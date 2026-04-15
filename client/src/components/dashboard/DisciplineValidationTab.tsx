@@ -72,27 +72,27 @@ export default function DisciplineValidationTab() {
 
     // LÓGICA DE AGRUPAMENTO: Organiza os dados em Disciplina -> Edificação -> Sala
     const groupedData = useMemo(() => {
+        /**
+         * EXPLICAÇÃO PARA O USUÁRIO:
+         * Esta parte do código funciona como um "filtro inteligente". 
+         * Ela percorre todas as salas e disciplinas e só separa para mostrar aquelas 
+         * que possuem algum problema (apontamento) ainda não resolvido.
+         * Além disso, ela organiza as salas em ordem numérica (1, 2, 3...) para facilitar a busca.
+         */
+        
         const map: Record<string, Record<string, any[]>> = {};
+        const availableDisciplines = Array.from(new Set(escopos.map((e: any) => e.disciplina)));
 
-        // 1. Get all required disciplines from escopos
-        escopos.forEach((esc: any) => {
-            const disc = esc.disciplina;
-            const edif = esc.edificacao;
-            if (!map[disc]) map[disc] = {};
-            if (!map[disc][edif]) map[disc][edif] = [];
-        });
-
-        // 2. Populate rooms for each discipline/building
+        // 1. Populamos o mapa apenas com salas que possuem apontamentos
         salas.forEach((sala: any) => {
             const edifNorm = normalizeEdificacao(sala.edificacao);
             
-            // For each discipline in this building's scope
-            Object.keys(map).forEach(disc => {
-                const discInBuilding = escopos.find((e: any) => e.disciplina === disc && normalizeEdificacao(e.edificacao) === edifNorm);
+            availableDisciplines.forEach(disc => {
+                const discInBuilding = escopos.find((e: any) => 
+                    e.disciplina === disc && normalizeEdificacao(e.edificacao) === edifNorm
+                );
                 
                 if (discInBuilding) {
-                    if (!map[disc][sala.edificacao]) map[disc][sala.edificacao] = [];
-                    
                     const verification = allVerificacoes.find((v: any) => v.salaId === sala.id && v.disciplina === disc);
                     const pendingApontamentos = apontamentos.filter((a: any) => 
                         a.sala === sala.nome && 
@@ -100,43 +100,55 @@ export default function DisciplineValidationTab() {
                         a.status === 'PENDENTE'
                     );
 
-                    map[disc][sala.edificacao].push({
-                        ...sala,
-                        statusDisciplina: verification?.status || "PENDENTE",
-                        apontamentosCount: pendingApontamentos.length,
-                        hasPending: pendingApontamentos.length > 0 || !verification
-                    });
+                    // FILTRO: Só mostramos a sala se ela tiver pendências registradas
+                    if (pendingApontamentos.length > 0) {
+                        if (!map[disc]) map[disc] = {};
+                        if (!map[disc][sala.edificacao]) map[disc][sala.edificacao] = [];
+                        
+                        map[disc][sala.edificacao].push({
+                            ...sala,
+                            statusDisciplina: verification?.status || "PENDENTE",
+                            apontamentosCount: pendingApontamentos.length,
+                            hasPending: true
+                        });
+                    }
                 }
             });
         });
 
-        // Filter by search
-        if (search) {
-            const filteredMap: any = {};
-            const searchLower = search.toLowerCase();
-            Object.keys(map).forEach(disc => {
-                if (disc.toLowerCase().includes(searchLower)) {
-                    filteredMap[disc] = map[disc];
-                } else {
-                    const filteredEdifs: any = {};
-                    let hasMatch = false;
-                    Object.keys(map[disc]).forEach(edif => {
-                        const filteredSalas = map[disc][edif].filter((s: any) => 
-                            s.nome.toLowerCase().includes(searchLower) || 
-                            s.numeroSala.toLowerCase().includes(searchLower)
-                        );
-                        if (filteredSalas.length > 0) {
-                            filteredEdifs[edif] = filteredSalas;
-                            hasMatch = true;
-                        }
-                    });
-                    if (hasMatch) filteredMap[disc] = filteredEdifs;
+        // 2. Ordenação e Busca
+        const finalMap: any = {};
+        const searchLower = search.toLowerCase();
+
+        Object.keys(map).forEach(disc => {
+            const discData: any = {};
+            let hasMatchInDisc = false;
+            const matchesDiscName = disc.toLowerCase().includes(searchLower);
+
+            Object.keys(map[disc]).forEach(edif => {
+                // Filtramos por busca (se houver) e ordenamos numericamente
+                const filteredAndSorted = map[disc][edif]
+                    .filter((s: any) => 
+                        matchesDiscName || 
+                        s.nome.toLowerCase().includes(searchLower) || 
+                        s.numeroSala.toLowerCase().includes(searchLower)
+                    )
+                    .sort((a, b) => 
+                        String(a.numeroSala).localeCompare(String(b.numeroSala), undefined, { numeric: true, sensitivity: 'base' })
+                    );
+
+                if (filteredAndSorted.length > 0) {
+                    discData[edif] = filteredAndSorted;
+                    hasMatchInDisc = true;
                 }
             });
-            return filteredMap;
-        }
 
-        return map;
+            if (hasMatchInDisc) {
+                finalMap[disc] = discData;
+            }
+        });
+
+        return finalMap;
     }, [salas, escopos, apontamentos, allVerificacoes, search]);
 
     const disciplines = Object.keys(groupedData).sort();
