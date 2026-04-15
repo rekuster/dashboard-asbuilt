@@ -1,0 +1,33 @@
+Ajustes na parte de entregas As Built:
+-Imagem 1: antes de colocar a edificação
+-Imagem 2: quando começo a escrever, abrem essas opções que não entendi o sentido. Deveria ter um dropdown com as edificações
+-Formato e Tipo estão quase com os mesmos dados. Podemos deixar apenas um que englobe relatorio pdf, dwg, ifc, rvt?
+- Colocara uma lógica: se o formato/tipo for rvt ou ifc, automaticamente é um modelo bim
+- Nº Controle, deve continuar o núnmero da ultima entrega cadastrada
+- Pode colocar um campo para o modelo base (pode ser automático: busca na tabela "Lista de Entregas Final" cruzando os dados de edificação e disciplina inseridos no cadastro da entrega)
+- Imagem 3: disciplina e empreiteiro deve ter um drop down com as opções (vermelho). A conferencia de coordenação técnica (BEP) podemos deixar apenas ao abrir a entrega. A ideia do cadastro é colocar todos como recebidos e depois fazer a verificação com calma
+
+Filtros
+Verde: ultimas semanas
+Rosa: semanas anteriores
+Para acompanhamento a cada entrega
+
+Executado, executado alterado e não executado/planejado - definir
+
+O novo plano de refinamento do relatório foi detalhado em: 
+implementation_plan.md
+.
+
+🎨 O que vamos implementar:
+Capa Personalizada: Agora a capa mostrará o nome da Edificação (ex: Obra: SUPERNOVA - Bloco A).
+Separadores de Disciplina: Antes de começar os itens de Elétrica, Hidráulica, etc., o sistema inserirá uma página inteira com o fundo Layout Disciplina.png.
+Sumário Inteligente: O sumário terá um índice remissivo (Disciplina ....... Pág. X) e as salas serão listadas em ordem numérica perfeita (1, 2, 10...).
+Perguntas rápidas para o layout:
+
+Deseja que escrevamos o nome da disciplina no centro da página de separador (Layout Disciplina.png) ou prefere deixá-la "limpa"?
+Se o relatório for geral (sem filtro de edificação), como deseja que apareça na capa (ex: "Múltiplas Edificações" ou apenas o nome da obra)?
+Assim que você aprovar o plano, começo a codificar!
+
+- Deseja que escrevamos o nome da disciplina no centro da página de separador (Layout Disciplina.png) ou prefere deixá-la "limpa"? Escreva o nome da disciplina, como na imagem que está com o nome 'CLIMATIZAÇÃO'
+- Se o relatório for geral (sem filtro de edificação), como deseja que apareça na capa (ex: "Múltiplas Edificações" ou apenas o nome da obra)? Apenas o nome da obra
+Pode seguir

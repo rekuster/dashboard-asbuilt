@@ -7,7 +7,7 @@
 # 3. Sempre que você salvar a planilha, o dashboard será atualizado automaticamente!
 
 # CONFIGURAÇÕES
-$FilePath = "C:\Users\RenataViannaKüster\OneDrive - Stecla Engenharia\Obra - Neodent Supernova F3 - General\Obra - Neodent Supernova F3\23.01 - Obra Supernova F3\3. Projetos\022. BIM\11. RA\Mapeamento RA-As Built.xlsx"
+$FilePath = "D:\STECLA IA\Dashboard-AsBuilt-Custom\Planilhas\Mapeamento Modelos As Built.xlsx"
 $ApiUrl = "http://localhost:3008/api/external/upload-excel"
 $ApiKey = "antigravity-sync-2024"
 

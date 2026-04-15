@@ -1,9 +1,15 @@
 import * as XLSX from 'xlsx';
 import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat.js';
-import { InsertSala, InsertApontamento } from '../drizzle/schema';
+import { InsertSala, InsertApontamento, InsertEntregaAsBuilt } from '../drizzle/schema';
 
 dayjs.extend(customParseFormat);
+
+/**
+ * EXPLICAÇÃO PARA O USUÁRIO:
+ * Este arquivo é o "tradutor" do Excel. Ele lê as planilhas que você envia e transforma em dados
+ * que o sistema consegue entender e salvar no banco de dados.
+ */
 
 // Convert Excel serial date or string to JavaScript Date
 function excelDateToJSDate(excelDate: any): Date | null {
@@ -41,6 +47,7 @@ function excelDateToJSDate(excelDate: any): Date | null {
 export async function processExcelFile(fileBuffer: Buffer): Promise<{
     salas: InsertSala[];
     apontamentos: InsertApontamento[];
+    entregas?: any[]; // Using any to avoid complex type issues with cross-schema imports
 }> {
     try {
         const workbook = XLSX.read(fileBuffer, {
@@ -52,6 +59,7 @@ export async function processExcelFile(fileBuffer: Buffer): Promise<{
 
         const salas: InsertSala[] = [];
         const apontamentos: InsertApontamento[] = [];
+        const entregas: any[] = [];
 
         // Process "Mapeamento Salas" sheet
         if (workbook.SheetNames.includes('Mapeamento Salas')) {
@@ -61,10 +69,8 @@ export async function processExcelFile(fileBuffer: Buffer): Promise<{
             salaData.forEach((row: any, index: number) => {
                 if (row['Sala']) {
                     // Extremely robust mapping for statusRA (Column G)
-                    // 1. Try common known headers
                     let statusRA = row['Status RA'] || row['statusRa'] || row['statusRA'] || row['StatusRA'] || row['STATUS RA'];
 
-                    // 2. If not found, look for any key that contains both "Status" and "RA"
                     if (!statusRA) {
                         const keys = Object.keys(row);
                         const matchKey = keys.find(k =>
@@ -74,14 +80,8 @@ export async function processExcelFile(fileBuffer: Buffer): Promise<{
                         if (matchKey) statusRA = row[matchKey];
                     }
 
-                    // 3. Fallback to common mangled names from XLSX
                     if (!statusRA) {
-                        statusRA = row['__EMPTY_6']; // Column G is often __EMPTY_6 if header is missing
-                    }
-
-                    if (index === 0) {
-                        console.log('DEBUG: Mapping row keys:', Object.keys(row));
-                        console.log('DEBUG: Initial statusRA extraction:', statusRA);
+                        statusRA = row['__EMPTY_6'];
                     }
 
                     // Robust mapping for Data Verificada (Column H)
@@ -91,7 +91,7 @@ export async function processExcelFile(fileBuffer: Buffer): Promise<{
                         const matchKey = keys.find(k => k.toLowerCase().includes('data') && (k.toLowerCase().includes('verif') || k.toLowerCase().includes('progresso')));
                         if (matchKey) rawDate = row[matchKey];
                     }
-                    if (!rawDate) rawDate = row['__EMPTY_7']; // Column H fallback
+                    if (!rawDate) rawDate = row['__EMPTY_7'];
 
                     salas.push({
                         edificacao: row['Edificação'] || row['Edificacao'] || '',
@@ -133,7 +133,56 @@ export async function processExcelFile(fileBuffer: Buffer): Promise<{
             });
         }
 
-        return { salas, apontamentos };
+        // NOVO: Processar "Mapeamento Entrega As Built"
+        // Esta aba contém a Lista Mestra de entregas e documentos
+        if (workbook.SheetNames.includes('Mapeamento Entrega As Built')) {
+            const entregaSheet = workbook.Sheets['Mapeamento Entrega As Built'];
+            // Usamos raw: true para pegar os nomes das colunas exatamente como no Excel
+            const entregaData = XLSX.utils.sheet_to_json(entregaSheet);
+
+            entregaData.forEach((row: any) => {
+                /**
+                 * MAPEAMENTO FIEL ÀS COLUNAS:
+                 * A (Número)      -> numeroEntrega
+                 * B (Data)        -> dataRecebimento
+                 * C (Entrega)     -> identificadorEntrega
+                 * D (Responsável) -> empresaResponsavel
+                 * E (Edificação)  -> edificacao
+                 * F (Disciplina)  -> disciplina
+                 * G (Arquivo)     -> nomeDocumento
+                 * H (Formato)     -> formato
+                 * I (Modelo?)     -> isModelo
+                 */
+                const nomeDoc = row['Arquivo'] || row['G'] || row['nomeDocumento'] || row['Arquivo Entregue'];
+                
+                if (nomeDoc || row['Número'] || row['Numero']) {
+                    const rawDate = row['Data'] || row['B'] || row['Recebimento'];
+                    const dataEnt = excelDateToJSDate(rawDate);
+                    
+                    const formato = String(row['Formato'] || row['H'] || '').toLowerCase().trim();
+                    const isModeloRaw = String(row['Modelo?'] || row['I'] || '').toLowerCase().trim();
+
+                    entregas.push({
+                        numeroEntrega: Number(row['Número'] || row['Numero'] || row['A'] || 0),
+                        dataRecebimento: dataEnt,
+                        dataPrevista: dataEnt || new Date(), // Obrigatório no banco, usamos a data de recebimento como padrão
+                        identificadorEntrega: String(row['Entrega'] || row['C'] || row['Código'] || ''),
+                        empresaResponsavel: String(row['Responsável'] || row['Responsavel'] || row['D'] || 'Não informado'),
+                        edificacao: String(row['Edificação'] || row['Edificacao'] || row['E'] || ''),
+                        disciplina: String(row['Disciplina'] || row['F'] || ''),
+                        nomeDocumento: String(nomeDoc || ''),
+                        formato: formato,
+                        isModelo: (isModeloRaw === 'sim' || isModeloRaw === '1' || isModeloRaw === 'verdadeiro') ? 1 : 0,
+                        descricao: row['Observações'] || row['Observacao'] || null,
+                        // Status automático: se tem data, está recebido
+                        status: dataEnt ? 'RECEBIDO' : 'AGUARDANDO',
+                        tipoDocumento: (formato === 'rvt' || formato === 'ifc') ? 'rvt' : 'relatorio'
+                    });
+                }
+            });
+        }
+
+        return { salas, apontamentos, entregas };
     } catch (error) {
         console.error('Error processing Excel file:', error);
         throw new Error('Failed to process Excel file');
