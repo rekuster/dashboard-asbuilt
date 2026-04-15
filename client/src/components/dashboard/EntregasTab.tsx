@@ -209,18 +209,22 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
             
             return matchesSearch && matchesEdif && matchesEmpresa && matchesPacote;
         }).sort((a, b) => {
-            // Ordenação por DATA (mais recentes primeiro)
+            // Ordenação por DATA (Mais antigas primeiro - Cronológico)
             const dateA = a.dataRecebimento ? new Date(a.dataRecebimento).getTime() : 0;
             const dateB = b.dataRecebimento ? new Date(b.dataRecebimento).getTime() : 0;
-            if (dateB !== dateA) return dateB - dateA;
-            // Fallback para ID
-            return b.id - a.id;
+            if (dateA !== dateB) return dateA - dateB;
+            // Fallback para ID (Crescente)
+            return a.id - b.id;
         });
     }, [entregas, searchTerm, selectedEdificacao, filterEmpresa, filterPacote]);
 
-    // Opções únicas para os filtros
+    // Opções únicas para os filtros (Normalizadas para evitar duplicata de maiúsculas/minúsculas)
     const empresasUnicas = useMemo(() => {
-        const empresas = new Set(entregas.map(e => e.empresaResponsavel).filter(Boolean));
+        const empresas = new Set(entregas.map(e => {
+            // Se for OCLE (qualquer caixa), normalize para Ocle para o filtro
+            if (e.empresaResponsavel?.toUpperCase() === "OCLE") return "Ocle";
+            return e.empresaResponsavel;
+        }).filter(Boolean));
         return Array.from(empresas).sort();
     }, [entregas]);
 
