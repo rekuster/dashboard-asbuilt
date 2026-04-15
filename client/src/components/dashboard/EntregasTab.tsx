@@ -3,6 +3,11 @@
  * Aqui é onde você registra cada pacote de documentos ou modelos que os fornecedores (Thá, Ocle, AeB) enviam.
  * O sistema compara o que foi entregue com o "Escopo" (os 108 modelos) para te dizer o que falta.
  * Quando você valida uma entrega aqui, o Dashboard de Status é atualizado automaticamente.
+ * 
+ * EXPLICAÇÃO PARA O USUÁRIO:
+ * Este componente é como uma "Central de Recebimento". Imagine que cada vez que chega um caminhão
+ * com documentos ou modelos digitais, você anota aqui o que chegou. 
+ * O sistema então marca na "Lista Mestra" o que já temos e o que falta.
  */
 
 import React, { useState, useMemo, useEffect } from "react";
@@ -36,7 +41,8 @@ import {
 } from "lucide-react";
 import dayjs from "dayjs";
 import KPICard from "./KPICard";
-import ValidationTab from "./ValidationTab";
+// Trocamos a aba de validação antiga pela nova, que foca em disciplinas
+import DisciplineValidationTab from "./DisciplineValidationTab";
 
 const STATUS_LABELS: Record<string, { label: string, color: string, icon: any }> = {
     'AGUARDANDO': { label: 'Mapeado', color: 'bg-slate-100 text-slate-600 border-slate-200', icon: Clock },
@@ -55,6 +61,112 @@ const DOC_TYPES: Record<string, string> = {
     'ifc': 'IFC',
     'pdf': 'PDF'
 };
+
+/**
+ * COMPONENTE: VISÃO POR PACOTE (SM)
+ * Esta função organiza a lista de entregas agrupando-as por "SM" ou "Pasta".
+ * É útil para ver o que veio em cada remessa de uma vez só.
+ */
+function PacketsListView({ entregas, onViewDetail, onDelete }: { entregas: any[], onViewDetail: (e: any) => void, onDelete: (id: number, e: any) => void }) {
+    const packets = useMemo(() => {
+        const groups: Record<string, any[]> = {};
+        entregas.forEach(e => {
+            const id = e.identificadorEntrega || "Sem Identificação";
+            if (!groups[id]) groups[id] = [];
+            groups[id].push(e);
+        });
+        // Ordena pelos mais recentes (baseado no ID da primeira entrega do grupo)
+        return Object.entries(groups).sort((a, b) => b[1][0].id - a[1][0].id);
+    }, [entregas]);
+
+    if (packets.length === 0) {
+        return <div className="text-center py-20 bg-slate-50/50 rounded-3xl border-2 border-dashed border-slate-200 text-slate-400 italic">Nenhum pacote encontrado.</div>;
+    }
+
+    return (
+        <div className="space-y-6 pt-2">
+            {packets.map(([name, items]) => {
+                const statusCount = items.reduce((acc: any, item: any) => {
+                    acc[item.status] = (acc[item.status] || 0) + 1;
+                    return acc;
+                }, {});
+
+                return (
+                    <Card key={name} className="border border-slate-100 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden group/card">
+                        <CardHeader className="py-3 px-5 bg-slate-50/80 flex flex-row items-center justify-between border-b border-slate-100">
+                            <div className="flex items-center gap-4">
+                                <div className="p-2.5 bg-white border border-slate-200 rounded-xl shadow-sm group-hover/card:border-primary/30 transition-colors">
+                                    <Briefcase className="w-4 h-4 text-[#940707]" />
+                                </div>
+                                <div>
+                                    <CardTitle className="text-sm font-black text-slate-800 uppercase tracking-tight">{name}</CardTitle>
+                                    <CardDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                                        {items.length} {items.length === 1 ? 'modelo' : 'modelos'} • {items[0].empresaResponsavel}
+                                    </CardDescription>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {Object.entries(statusCount).map(([status, count]) => {
+                                    const info = STATUS_LABELS[status] || STATUS_LABELS['AGUARDANDO'];
+                                    return (
+                                        <Badge key={status} variant="outline" className={`text-[9px] font-black px-2 py-0.5 rounded-full ${info.color}`}>
+                                            {count} {info.label}
+                                        </Badge>
+                                    );
+                                })}
+                            </div>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                            <Table>
+                                <TableBody>
+                                    {items.map(item => {
+                                        const statusInfo = STATUS_LABELS[item.status] || STATUS_LABELS['AGUARDANDO'];
+                                        const StatusIcon = statusInfo.icon;
+                                        return (
+                                            <TableRow 
+                                                key={item.id} 
+                                                className="hover:bg-slate-50/30 cursor-pointer h-12 group/row transition-colors border-slate-50"
+                                                onClick={() => onViewDetail(item)}
+                                            >
+                                                <TableCell className="pl-6 text-[11px] font-bold text-slate-700 w-[35%]">
+                                                    <div className="flex flex-col">
+                                                        <span>{item.nomeDocumento}</span>
+                                                        <span className="text-[9px] text-slate-400 font-medium">Ref: {item.modeloBaseReferencia || 'N/A'}</span>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-[10px] text-slate-500 font-bold uppercase">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="px-1.5 py-0.5 bg-slate-100 rounded text-slate-500">{item.disciplina}</span>
+                                                        <span>{item.edificacao}</span>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <div className={`px-2 py-0.5 rounded-full border text-[9px] font-black uppercase flex items-center gap-1 w-fit ${statusInfo.color}`}>
+                                                        <StatusIcon className="w-2.5 h-2.5" />
+                                                        {statusInfo.label}
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-right pr-6">
+                                                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover/row:opacity-100 transition-opacity">
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-full" 
+                                                            onClick={(e) => { e.stopPropagation(); onDelete(item.id, e); }}>
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </Button>
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                );
+            })}
+        </div>
+    );
+}
+
 
 export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao?: string }) {
     const [searchTerm, setSearchTerm] = useState("");
@@ -199,91 +311,106 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
                                     </div>
                                 </CardHeader>
                                 <CardContent>
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow className="hover:bg-transparent border-slate-100 uppercase text-[10px] font-bold tracking-wider text-slate-500 italic">
-                                                <TableHead className="w-[50px]">Nº</TableHead>
-                                                <TableHead className="w-[120px]">Data de Entrega</TableHead>
-                                                <TableHead className="w-[120px]">Pacote / SM</TableHead>
-                                                <TableHead>Responsável</TableHead>
-                                                <TableHead>Edificação</TableHead>
-                                                <TableHead>Disciplina</TableHead>
-                                                <TableHead className="w-[200px]">Documento Entregue</TableHead>
-                                                <TableHead>Formato</TableHead>
-                                                <TableHead>Modelo Base</TableHead>
-                                                <TableHead>Ações pós Entrega</TableHead>
-                                                <TableHead>Status</TableHead>
-                                                <TableHead className="text-right">Ações</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {isLoading ? (
-                                                <TableRow>
-                                                    <TableCell colSpan={6} className="text-center py-10 text-slate-400 italic">Carregando entregas...</TableCell>
+                                    {/* 
+                                        AQUI É A LÓGICA DE VISÃO: 
+                                        Se estiver em "Individual", mostra a tabela linha a linha.
+                                        Se estiver em "Por Pacote", agrupa as entregas por SM/Pasta.
+                                    */}
+                                    {viewMode === "table" ? (
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow className="hover:bg-transparent border-slate-100 uppercase text-[10px] font-bold tracking-wider text-slate-500 italic">
+                                                    <TableHead className="w-[50px]">Nº</TableHead>
+                                                    <TableHead className="w-[120px]">Data de Entrega</TableHead>
+                                                    <TableHead className="w-[120px]">Pacote / SM</TableHead>
+                                                    <TableHead>Responsável</TableHead>
+                                                    <TableHead>Edificação</TableHead>
+                                                    <TableHead>Disciplina</TableHead>
+                                                    <TableHead className="w-[200px]">Documento Entregue</TableHead>
+                                                    <TableHead>Formato</TableHead>
+                                                    <TableHead>Modelo Base</TableHead>
+                                                    <TableHead>Ações pós Entrega</TableHead>
+                                                    <TableHead>Status</TableHead>
+                                                    <TableHead className="text-right">Ações</TableHead>
                                                 </TableRow>
-                                            ) : filteredEntregas.length === 0 ? (
-                                                <TableRow>
-                                                    <TableCell colSpan={6} className="text-center py-10 text-slate-400 italic">Nenhuma entrega encontrada.</TableCell>
-                                                </TableRow>
-                                            ) : (
-                                                filteredEntregas.map((entrega: any) => {
-                                                    const statusInfo = STATUS_LABELS[entrega.status] || STATUS_LABELS['AGUARDANDO'];
-                                                    const StatusIcon = statusInfo.icon;
+                                            </TableHeader>
+                                            <TableBody>
+                                                {isLoading ? (
+                                                    <TableRow>
+                                                        <TableCell colSpan={12} className="text-center py-10 text-slate-400 italic">Carregando entregas...</TableCell>
+                                                    </TableRow>
+                                                ) : filteredEntregas.length === 0 ? (
+                                                    <TableRow>
+                                                        <TableCell colSpan={12} className="text-center py-10 text-slate-400 italic">Nenhuma entrega encontrada.</TableCell>
+                                                    </TableRow>
+                                                ) : (
+                                                    filteredEntregas.map((entrega: any) => {
+                                                        const statusInfo = STATUS_LABELS[entrega.status] || STATUS_LABELS['AGUARDANDO'];
+                                                        const StatusIcon = statusInfo.icon;
 
-                                                    return (
-                                                        <TableRow
-                                                            key={entrega.id}
-                                                            className="hover:bg-slate-50/50 transition-colors border-slate-100 group cursor-pointer h-12"
-                                                            onClick={() => handleViewDetail(entrega)}
-                                                        >
-                                                            <TableCell className="text-[11px] font-bold text-slate-400">
-                                                                {entrega.numeroEntrega || "-"}
-                                                            </TableCell>
-                                                            <TableCell className="text-[11px] font-bold text-slate-700">
-                                                                {entrega.dataRecebimento ? dayjs(entrega.dataRecebimento).format('DD/MM/YYYY') : "-"}
-                                                            </TableCell>
-                                                            <TableCell className="text-[11px] font-bold text-[#940707]">
-                                                                {entrega.identificadorEntrega || "-"}
-                                                            </TableCell>
-                                                            <TableCell className="text-[11px] font-bold text-slate-700">{entrega.empresaResponsavel}</TableCell>
-                                                            <TableCell className="text-[11px] font-bold text-slate-700">{entrega.edificacao}</TableCell>
-                                                            <TableCell className="text-[11px] font-bold text-slate-700">{entrega.disciplina}</TableCell>
-                                                            <TableCell className="text-[11px] font-bold text-slate-700">{entrega.nomeDocumento}</TableCell>
-                                                            <TableCell className="text-[11px] font-bold text-slate-400 italic">
-                                                                {DOC_TYPES[entrega.formato] || entrega.formato || entrega.tipoDocumento}
-                                                            </TableCell>
-                                                            <TableCell className="text-[11px] font-bold text-slate-700 truncate max-w-[120px]">{entrega.modeloBaseReferencia || "-"}</TableCell>
-                                                            <TableCell className="text-[11px] font-bold text-rose-500">{entrega.acoesNecessarias || "-"}</TableCell>
-                                                            <TableCell>
-                                                                <div className={`px-2 py-0.5 rounded-full border text-[9px] font-black uppercase flex items-center gap-1 w-fit ${statusInfo.color}`}>
-                                                                    <StatusIcon className="w-2.5 h-2.5" />
-                                                                    {statusInfo.label}
-                                                                </div>
-                                                            </TableCell>
-                                                            <TableCell className="text-right">
-                                                                <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-primary hover:bg-primary/5 rounded-full"
-                                                                        onClick={(e) => { e.stopPropagation(); handleEdit(entrega); }}>
-                                                                        <Edit2 className="w-4 h-4" />
-                                                                    </Button>
-                                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-full"
-                                                                        onClick={(e) => handleDelete(entrega.id, e)}>
-                                                                        <Trash2 className="w-4 h-4" />
-                                                                    </Button>
-                                                                </div>
-                                                            </TableCell>
-                                                        </TableRow>
-                                                    );
-                                                })
-                                            )}
-                                        </TableBody>
-                                    </Table>
+                                                        return (
+                                                            <TableRow
+                                                                key={entrega.id}
+                                                                className="hover:bg-slate-50/50 transition-colors border-slate-100 group cursor-pointer h-12"
+                                                                onClick={() => handleViewDetail(entrega)}
+                                                            >
+                                                                <TableCell className="text-[11px] font-bold text-slate-400">
+                                                                    {entrega.numeroEntrega || "-"}
+                                                                </TableCell>
+                                                                <TableCell className="text-[11px] font-bold text-slate-700">
+                                                                    {entrega.dataRecebimento ? dayjs(entrega.dataRecebimento).format('DD/MM/YYYY') : "-"}
+                                                                </TableCell>
+                                                                <TableCell className="text-[11px] font-bold text-[#940707]">
+                                                                    {entrega.identificadorEntrega || "-"}
+                                                                </TableCell>
+                                                                <TableCell className="text-[11px] font-bold text-slate-700">{entrega.empresaResponsavel}</TableCell>
+                                                                <TableCell className="text-[11px] font-bold text-slate-700">{entrega.edificacao}</TableCell>
+                                                                <TableCell className="text-[11px] font-bold text-slate-700">{entrega.disciplina}</TableCell>
+                                                                <TableCell className="text-[11px] font-bold text-slate-700">{entrega.nomeDocumento}</TableCell>
+                                                                <TableCell className="text-[11px] font-bold text-slate-400 italic">
+                                                                    {DOC_TYPES[entrega.formato] || entrega.formato || entrega.tipoDocumento}
+                                                                </TableCell>
+                                                                <TableCell className="text-[11px] font-bold text-slate-700 truncate max-w-[120px]">{entrega.modeloBaseReferencia || "-"}</TableCell>
+                                                                <TableCell className="text-[11px] font-bold text-rose-500">{entrega.acoesNecessarias || "-"}</TableCell>
+                                                                <TableCell>
+                                                                    <div className={`px-2 py-0.5 rounded-full border text-[9px] font-black uppercase flex items-center gap-1 w-fit ${statusInfo.color}`}>
+                                                                        <StatusIcon className="w-2.5 h-2.5" />
+                                                                        {statusInfo.label}
+                                                                    </div>
+                                                                </TableCell>
+                                                                <TableCell className="text-right">
+                                                                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-primary hover:bg-primary/5 rounded-full"
+                                                                            onClick={(e) => { e.stopPropagation(); handleEdit(entrega); }}>
+                                                                            <Edit2 className="w-4 h-4" />
+                                                                        </Button>
+                                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-full"
+                                                                            onClick={(e) => handleDelete(entrega.id, e)}>
+                                                                            <Trash2 className="w-4 h-4" />
+                                                                        </Button>
+                                                                    </div>
+                                                                </TableCell>
+                                                            </TableRow>
+                                                        );
+                                                    })
+                                                )}
+                                            </TableBody>
+                                        </Table>
+                                    ) : (
+                                        /* VISÃO POR PACOTE (SM) */
+                                        <PacketsListView 
+                                            entregas={filteredEntregas} 
+                                            onViewDetail={handleViewDetail} 
+                                            onDelete={handleDelete}
+                                        />
+                                    )}
                                 </CardContent>
                             </Card>
                         </TabsContent>
 
                         <TabsContent value="validation">
-                            <ValidationTab />
+                            {/* Agora usamos a visão por disciplina, mais organizada para a conferência final */}
+                            <DisciplineValidationTab />
                         </TabsContent>
 
                         <TabsContent value="scope">

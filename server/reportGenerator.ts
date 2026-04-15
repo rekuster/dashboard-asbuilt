@@ -94,7 +94,7 @@ function getDisciplineFullName(sigla: string): string {
 /**
  * Função para desenhar a capa do relatório.
  */
-async function drawCoverPage(doc: any, edificacao?: string, startDate?: string, endDate?: string) {
+async function drawCoverPage(doc: any, edificacao?: string, startDate?: string, endDate?: string, pavimento?: string, disciplina?: string, responsavel?: string) {
     const coverPath = getAssetPath('Tema Layout interface Stecla', 'Layout Capa.png');
     
     if (fs.existsSync(coverPath)) {
@@ -117,13 +117,31 @@ async function drawCoverPage(doc: any, edificacao?: string, startDate?: string, 
     // Título Principal
     doc.fillColor('#444444').fontSize(36).font('Helvetica-Bold').text('RELATÓRIO DE DIVERGÊNCIAS', 60, 180);
 
-    // Informações da Obra (Agrupadas e movidas para baixo conforme feedback)
+    // Informações da Obra
     doc.fillColor('#666666').fontSize(16).font('Helvetica');
     doc.text('Cliente: NEODENT', 60, 320);
     
     // Obra com Edificação
     const obraText = edificacao && edificacao !== "Todas" ? `Obra: SUPERNOVA - ${edificacao}` : 'Obra: SUPERNOVA';
     doc.text(obraText, 60, 345);
+
+    // --- Novos filtros na capa (condicionais) ---
+    let currentY = 370;
+
+    if (pavimento && pavimento !== "Todos") {
+        doc.text(`Pavimento: ${pavimento}`, 60, currentY);
+        currentY += 25;
+    }
+
+    if (disciplina && disciplina !== "Todas") {
+        doc.text(`Disciplina: ${getDisciplineFullName(disciplina)}`, 60, currentY);
+        currentY += 25;
+    }
+
+    if (responsavel && responsavel !== "Todos") {
+        doc.text(`Responsável: ${responsavel}`, 60, currentY);
+        currentY += 25;
+    }
 
     const formatDate = (dateStr?: string) => {
         if (!dateStr) return null;
@@ -147,10 +165,16 @@ async function drawCoverPage(doc: any, edificacao?: string, startDate?: string, 
         periodText = new Date().toLocaleDateString('pt-BR');
     }
 
-    doc.text(`Atualização: [${periodText}]`, 60, 385);
+    // Ajusta posição da atualização se houver muitos filtros
+    doc.text(`Atualização: [${periodText}]`, 60, currentY + 10);
 
     // Logo removido da capa conforme feedback (X na imagem)
 }
+/** 
+ * EXPLICAÇÃO SIMPLES: Esta função agora também mostra na capa o que você filtrou.
+ * Se você filtrar por um pavimento, uma disciplina ou um responsável específico,
+ * essa informação aparecerá logo abaixo da Obra na primeira página.
+ */
 /** 
  * EXPLICAÇÃO SIMPLES: Esta função desenha a primeira página do relatório (a capa),
  * colocando o título, o nome da obra e o período de tempo selecionado.
@@ -360,7 +384,7 @@ export async function generatePDFReport(filters?: {
             currentPage += (1 + itemsInDisc.length); // Separador + itens
         });
 
-        await drawCoverPage(doc, filters?.edificacao, filters?.startDate, filters?.endDate);
+        await drawCoverPage(doc, filters?.edificacao, filters?.startDate, filters?.endDate, filters?.pavimento, filters?.disciplina, filters?.responsavel);
         
         // Nova Página: Sumário de Salas
         doc.addPage();
@@ -546,7 +570,7 @@ export async function generateAsBuiltReport(filters?: {
     if (data.length === 0) {
         doc.fontSize(20).text('Nenhum dado as-built encontrado.', 0, 200, { align: 'center' });
     } else {
-        await drawCoverPage(doc, filters?.edificacao, filters?.startDate, filters?.endDate);
+        await drawCoverPage(doc, filters?.edificacao, filters?.startDate, filters?.endDate, filters?.pavimento);
 
         for (let i = 0; i < data.length; i++) {
             const item = data[i];
