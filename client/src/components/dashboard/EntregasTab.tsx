@@ -326,7 +326,6 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
                                                 onChange={(e) => setSearchTerm(e.target.value)}
                                             />
                                         </div>
-                                        </div>
                                         
                                         {/* Novos Filtros */}
                                         <div className="flex items-center gap-2">
