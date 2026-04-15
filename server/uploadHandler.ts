@@ -32,21 +32,19 @@ export async function handleExcelUpload(fileBuffer: Buffer, fileName: string = '
             }
         });
 
-        // Clear existing data - Limpamos tudo para garantir que o Excel seja a única fonte da verdade
+        // COMENTADO: O Dashboard agora é independente. Não apagamos dados ao importar por segurança.
+        /*
         try {
-            await db.delete(apontamentos);
-            await db.delete(salas);
-            if (entregasData && entregasData.length > 0) {
-                await db.delete(entregasAsBuilt);
+            if (salasData && salasData.length > 0) {
+                await db.delete(salas).where(sql`1 = 1`);
             }
-        } catch (delError) {
-            console.log("Delete failed, likely empty or permissions. Attempting with where clause...");
-            await db.delete(apontamentos).where(sql`1 = 1`);
-            await db.delete(salas).where(sql`1 = 1`);
             if (entregasData && entregasData.length > 0) {
                 await db.delete(entregasAsBuilt).where(sql`1 = 1`);
             }
+        } catch (delError) {
+            console.error("Erro durante a limpeza seletiva:", delError);
         }
+        */
 
         // Insert salas in chunks
         if (salasData.length > 0) {
@@ -64,7 +62,8 @@ export async function handleExcelUpload(fileBuffer: Buffer, fileName: string = '
             }
         }
 
-        // Insert apontamentos in chunks
+        // BLOQUEADO: Os apontamentos não são mais sincronizados via Excel para evitar perda de dados manuais.
+        /*
         if (apontamentosData.length > 0) {
             const chunkSize = 100;
             for (let i = 0; i < apontamentosData.length; i += chunkSize) {
@@ -72,6 +71,7 @@ export async function handleExcelUpload(fileBuffer: Buffer, fileName: string = '
                 await db.insert(apontamentos).values(chunk);
             }
         }
+        */
 
         // NOVO: Inserir Entregas As-Built (Lista Mestra)
         if (entregasData && entregasData.length > 0) {
@@ -88,14 +88,14 @@ export async function handleExcelUpload(fileBuffer: Buffer, fileName: string = '
             fileSize: fileBuffer.length,
             uploadedBy,
             totalSalas: salasData.length,
-            totalApontamentos: apontamentosData.length,
+            totalApontamentos: 0, // Zero pois o Dashboard agora é o mestre
             status: 'PROCESSADO',
         });
 
         return {
             success: true,
             totalSalas: salasData.length,
-            totalApontamentos: apontamentosData.length,
+            totalApontamentos: 0,
             totalEntregas: entregasData?.length || 0
         };
     } catch (error) {

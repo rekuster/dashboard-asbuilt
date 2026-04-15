@@ -38,7 +38,15 @@ import {
     Briefcase,
     ClipboardCheck,
     ShieldCheck,
+    Filter,
 } from "lucide-react";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import dayjs from "dayjs";
 import KPICard from "./KPICard";
 // Trocamos a aba de validação antiga pela nova, que foca em disciplinas
@@ -176,6 +184,8 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
     const [viewingDetail, setViewingDetail] = useState<any>(null);
     const [activeTab, setActiveTab] = useState("list");
     const [viewMode, setViewMode] = useState<"table" | "packets">("table");
+    const [filterEmpresa, setFilterEmpresa] = useState("todas");
+    const [filterPacote, setFilterPacote] = useState("todos");
 
     const utils = trpc.useUtils();
     const { data: entregas = [], isLoading } = trpc.dashboard.getEntregas.useQuery();
@@ -185,13 +195,39 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
         onSuccess: () => utils.dashboard.getEntregas.invalidate()
     });
 
-    const filteredEntregas = entregas.filter((e: any) => {
-        const matchesSearch = e.nomeDocumento.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            e.empresaResponsavel.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            e.disciplina.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesEdif = !selectedEdificacao || e.edificacao === selectedEdificacao;
-        return matchesSearch && matchesEdif;
-    });
+    const filteredEntregas = useMemo(() => {
+        return entregas.filter((e: any) => {
+            const matchesSearch = !searchTerm || 
+                e.nomeDocumento.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                e.empresaResponsavel.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                e.disciplina.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (e.identificadorEntrega && e.identificadorEntrega.toLowerCase().includes(searchTerm.toLowerCase()));
+            
+            const matchesEdif = !selectedEdificacao || e.edificacao === selectedEdificacao;
+            const matchesEmpresa = filterEmpresa === "todas" || e.empresaResponsavel === filterEmpresa;
+            const matchesPacote = filterPacote === "todos" || e.identificadorEntrega === filterPacote;
+            
+            return matchesSearch && matchesEdif && matchesEmpresa && matchesPacote;
+        }).sort((a, b) => {
+            // Ordenação por DATA (mais recentes primeiro)
+            const dateA = a.dataRecebimento ? new Date(a.dataRecebimento).getTime() : 0;
+            const dateB = b.dataRecebimento ? new Date(b.dataRecebimento).getTime() : 0;
+            if (dateB !== dateA) return dateB - dateA;
+            // Fallback para ID
+            return b.id - a.id;
+        });
+    }, [entregas, searchTerm, selectedEdificacao, filterEmpresa, filterPacote]);
+
+    // Opções únicas para os filtros
+    const empresasUnicas = useMemo(() => {
+        const empresas = new Set(entregas.map(e => e.empresaResponsavel).filter(Boolean));
+        return Array.from(empresas).sort();
+    }, [entregas]);
+
+    const pacotesUnicos = useMemo(() => {
+        const pacotes = new Set(entregas.map(e => e.identificadorEntrega).filter(Boolean));
+        return Array.from(pacotes).sort();
+    }, [entregas]);
 
     const handleEdit = (entrega: any) => {
         setEditingEntrega(entrega);
@@ -290,14 +326,35 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
                                                 onChange={(e) => setSearchTerm(e.target.value)}
                                             />
                                         </div>
-                                        <Button
-                                            variant="outline"
-                                            className="rounded-full gap-2 border-slate-200 hover:bg-slate-50"
-                                            onClick={() => setIsBatchFormOpen(true)}
-                                        >
-                                            <Layers className="w-4 h-4 text-[#940707]" />
-                                            Registrar em Lote
-                                        </Button>
+                                        </div>
+                                        
+                                        {/* Novos Filtros */}
+                                        <div className="flex items-center gap-2">
+                                            <Select value={filterEmpresa} onValueChange={setFilterEmpresa}>
+                                                <SelectTrigger className="w-[140px] h-9 rounded-full bg-white/50 border-slate-200 text-[11px] font-bold">
+                                                    <SelectValue placeholder="Empresa" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="todas">Todas Empresas</SelectItem>
+                                                    {empresasUnicas.map(emp => (
+                                                        <SelectItem key={emp} value={emp}>{emp}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+
+                                            <Select value={filterPacote} onValueChange={setFilterPacote}>
+                                                <SelectTrigger className="w-[180px] h-9 rounded-full bg-white/50 border-slate-200 text-[11px] font-bold">
+                                                    <SelectValue placeholder="Pacote / SM" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="todos">Todos Pacotes</SelectItem>
+                                                    {pacotesUnicos.map(p => (
+                                                        <SelectItem key={p} value={p}>{p}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
                                         <Button
                                             className="rounded-full gap-2 shadow-lg shadow-primary/20 bg-[#940707] hover:bg-[#7a0606] text-white"
                                             onClick={() => {
