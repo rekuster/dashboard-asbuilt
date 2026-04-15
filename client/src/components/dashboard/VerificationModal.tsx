@@ -22,6 +22,29 @@ interface VerificationModalProps {
     pendingApontamentos?: Record<string, number>; // Mapa de divergências pendentes por disciplina
 }
 
+// MAPEAMENTO DE DISCIPLINAS (REPLICADO PARA O MODAL)
+const DISCIPLINE_MAPPING: Record<string, string> = {
+    'ELE': 'Instalações Elétricas',
+    'LOG': 'CFTV e Lógica',
+    'HID': 'Instalações Hidrossanitárias',
+    'UTI': 'Utilidades',
+    'CLI': 'Climatização',
+    'EST': 'Estrutura de Concreto',
+    'MET': 'Estrutura Metálica',
+    'ARQ': 'Arquitetura',
+    'ELEMT': 'Média Tensão e Barramentos',
+    'PCI': 'PCI',
+    'SDAI': 'SDAI'
+};
+
+const isSameDiscipline = (apontamentoDisc: string, escopoDisc: string) => {
+    const a = (apontamentoDisc || "").trim().toUpperCase();
+    const e = (escopoDisc || "").trim().toUpperCase();
+    if (a === e) return true;
+    const mapped = DISCIPLINE_MAPPING[a];
+    return mapped && mapped.toUpperCase() === e;
+};
+
 export function VerificationModal({ isOpen, onClose, sala, disciplines, pendingApontamentos = {} }: VerificationModalProps) {
     const utils = trpc.useUtils();
     
@@ -30,6 +53,9 @@ export function VerificationModal({ isOpen, onClose, sala, disciplines, pendingA
         { salaId: sala?.id },
         { enabled: !!sala?.id }
     );
+
+    // BUSCA DETALHADA DE APONTAMENTOS PARA MOSTRAR FOTOS
+    const { data: allApontamentos = [] } = trpc.dashboard.getApontamentos.useQuery();
 
     // Mutação para salvar/atualizar o status da checklist
     const upsertMutation = trpc.dashboard.upsertVerificacao.useMutation({
@@ -77,18 +103,18 @@ export function VerificationModal({ isOpen, onClose, sala, disciplines, pendingA
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-[500px] font-sans rounded-3xl">
-                <DialogHeader>
+            <DialogContent className="sm:max-w-[700px] font-sans rounded-3xl overflow-hidden flex flex-col max-h-[90vh]">
+                <DialogHeader className="px-6 py-4 border-b border-slate-100">
                     <DialogTitle className="flex items-center gap-2 text-xl font-bold text-slate-800">
                         <CheckCircle2 className="w-6 h-6 text-[#940707]" />
                         Checklist As-Built: {sala?.nome}
                     </DialogTitle>
-                    <DialogDescription className="text-slate-500">
-                        Verifique a conformidade dos modelos para a sala {sala?.numeroSala} ({sala?.edificacao}).
+                    <DialogDescription className="text-slate-500 font-medium">
+                        Verifique a conformidade para a sala {sala?.numeroSala} ({sala?.edificacao}).
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-4 my-4 max-h-[450px] overflow-y-auto pr-2 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 custom-scrollbar">
                     {disciplines.length === 0 && (
                         <div className="flex flex-col items-center justify-center py-10 text-center space-y-2">
                             <Info className="w-8 h-8 text-slate-300" />
@@ -99,55 +125,103 @@ export function VerificationModal({ isOpen, onClose, sala, disciplines, pendingA
                     {disciplines.map((disc) => {
                         const ver = verifications.find((v: any) => v.disciplina === disc);
                         const isOk = ver?.status === "OK";
-                        const pendingCount = pendingApontamentos[disc] || 0;
+                        
+                        // FILTRO PARA PEGAR OS APONTAMENTOS REAIS DESTA SALA E DISCIPLINA
+                        const roomApontamentos = allApontamentos.filter((a: any) => 
+                            a.sala === sala?.nome && 
+                            isSameDiscipline(a.disciplina, disc) &&
+                            a.status === 'PENDENTE'
+                        );
+                        
+                        const pendingCount = roomApontamentos.length;
                         
                         return (
                             <div 
                                 key={disc} 
-                                className={`border rounded-2xl p-4 space-y-3 transition-all duration-300 ${
+                                className={`border rounded-2xl overflow-hidden transition-all duration-300 ${
                                     pendingCount > 0 
-                                        ? 'border-amber-200 bg-amber-50/30' 
+                                        ? 'border-amber-200 bg-amber-50/20' 
                                         : isOk 
-                                            ? 'border-emerald-100 bg-emerald-50/20' 
+                                            ? 'border-emerald-100 bg-emerald-50/10' 
                                             : 'border-slate-100 bg-slate-50/50'
                                 }`}
                             >
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <Checkbox 
-                                            id={`check-${disc}`} 
-                                            checked={isOk}
-                                            onCheckedChange={() => handleToggle(disc, ver?.status || "PENDENTE")}
-                                            className="w-5 h-5 rounded-md border-slate-300 data-[state=checked]:bg-[#940707] data-[state=checked]:border-[#940707]"
-                                        />
-                                        <div className="flex flex-col">
-                                            <label htmlFor={`check-${disc}`} className="text-sm font-bold cursor-pointer text-slate-700">
-                                                {disc}
-                                            </label>
-                                            {pendingCount > 0 && (
-                                                <span className="text-[10px] font-bold text-amber-600 flex items-center gap-1">
-                                                    <Info className="w-3 h-3" />
-                                                    {pendingCount} divergência(s) pendente(s)
-                                                </span>
-                                            )}
+                                <div className="p-4 bg-white/40">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <Checkbox 
+                                                id={`check-${disc}`} 
+                                                checked={isOk}
+                                                onCheckedChange={() => handleToggle(disc, ver?.status || "PENDENTE")}
+                                                className="w-5 h-5 rounded-md border-slate-300 data-[state=checked]:bg-[#940707] data-[state=checked]:border-[#940707]"
+                                            />
+                                            <div className="flex flex-col">
+                                                <label htmlFor={`check-${disc}`} className="text-sm font-bold cursor-pointer text-slate-700">
+                                                    {disc}
+                                                </label>
+                                                {pendingCount > 0 && (
+                                                    <span className="text-[10px] font-bold text-amber-600 flex items-center gap-1">
+                                                        <AlertCircle className="w-3.5 h-3.5" />
+                                                        {pendingCount} DIVERGÊNCIA(S) ENCONTRADA(S)
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col items-end gap-1">
+                                            <Badge 
+                                                variant={isOk ? "secondary" : "outline"} 
+                                                className={`rounded-full px-3 py-0.5 text-[10px] uppercase tracking-wider font-bold ${
+                                                    isOk ? "bg-emerald-100 text-emerald-700 border-none" : "text-slate-400 bg-white"
+                                                }`}
+                                            >
+                                                {isOk ? "Verificado" : "Pendente"}
+                                            </Badge>
                                         </div>
                                     </div>
-                                    <div className="flex flex-col items-end gap-1">
-                                        <Badge 
-                                            variant={isOk ? "secondary" : "outline"} 
-                                            className={`rounded-full px-3 py-0.5 text-[10px] uppercase tracking-wider font-bold ${
-                                                isOk ? "bg-emerald-100 text-emerald-700 border-none" : "text-slate-400 bg-white"
-                                            }`}
-                                        >
-                                            {isOk ? "Verificado" : "Aguardando"}
-                                        </Badge>
-                                        {pendingCount > 0 && !disciplines.includes(disc) && (
-                                            <span className="text-[8px] font-bold text-amber-500 uppercase tracking-tighter">
-                                                Divergência de Campo
-                                            </span>
-                                        )}
-                                    </div>
                                 </div>
+
+                                {/* LISTA DETALHADA COM FOTOS (REQUISIÇÃO DO USUÁRIO) */}
+                                {pendingCount > 0 && (
+                                    <div className="border-t border-amber-100 bg-white/60 p-4 space-y-4">
+                                        <p className="text-[10px] uppercase font-black text-amber-500 tracking-widest mb-2">Detalhes das Divergências:</p>
+                                        {roomApontamentos.map((apont, idx) => (
+                                            <div key={apont.id} className="space-y-3 bg-white p-3 rounded-xl border border-amber-100 shadow-sm">
+                                                <div className="flex gap-2 items-start">
+                                                    <Badge className="bg-amber-500 h-5 w-5 rounded-full flex items-center justify-center p-0 shrink-0">{idx + 1}</Badge>
+                                                    <p className="text-[11px] text-slate-700 font-medium leading-relaxed italic">
+                                                        "{apont.divergencia}"
+                                                    </p>
+                                                </div>
+
+                                                {/* Comparativo de Imagens */}
+                                                <div className="grid grid-cols-2 gap-3 pt-1">
+                                                    <div className="space-y-1">
+                                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Projeto / Referência RA</p>
+                                                        <div className="aspect-video bg-slate-100 rounded-lg overflow-hidden border border-slate-200">
+                                                            {apont.fotoReferenciaUrl ? (
+                                                                <img src={apont.fotoReferenciaUrl} alt="Referência" className="w-full h-full object-cover hover:scale-105 transition-transform cursor-zoom-in" 
+                                                                    onClick={() => window.open(apont.fotoReferenciaUrl, '_blank')}/>
+                                                            ) : (
+                                                                <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400 italic">Sem imagem</div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Execução Real / Obra</p>
+                                                        <div className="aspect-video bg-slate-100 rounded-lg overflow-hidden border border-slate-200">
+                                                            {apont.fotoUrl ? (
+                                                                <img src={apont.fotoUrl} alt="Campo" className="w-full h-full object-cover hover:scale-105 transition-transform cursor-zoom-in" 
+                                                                    onClick={() => window.open(apont.fotoUrl, '_blank')}/>
+                                                            ) : (
+                                                                <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400 italic">Sem imagem</div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                                 
                                 {ver?.observacao && !editingDisc && (
                                     <div className="text-[11px] text-slate-600 bg-white/80 p-3 rounded-xl border border-slate-100 italic flex gap-2 items-start shadow-sm">

@@ -39,6 +39,32 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { VerificationModal } from "./VerificationModal";
 
+/**
+ * MAPEAMENTO DE DISCIPLINAS (SIGLA -> NOME COMPLETO)
+ * O campo de obras usa siglas (ELE, HID) e o escopo usa nomes completos.
+ */
+const DISCIPLINE_MAPPING: Record<string, string> = {
+    'ELE': 'Instalações Elétricas',
+    'LOG': 'CFTV e Lógica',
+    'HID': 'Instalações Hidrossanitárias',
+    'UTI': 'Utilidades',
+    'CLI': 'Climatização',
+    'EST': 'Estrutura de Concreto',
+    'MET': 'Estrutura Metálica',
+    'ARQ': 'Arquitetura',
+    'ELEMT': 'Média Tensão e Barramentos',
+    'PCI': 'PCI',
+    'SDAI': 'SDAI'
+};
+
+const isSameDiscipline = (apontamentoDisc: string, escopoDisc: string) => {
+    const a = (apontamentoDisc || "").trim().toUpperCase();
+    const e = (escopoDisc || "").trim().toUpperCase();
+    if (a === e) return true;
+    const mapped = DISCIPLINE_MAPPING[a];
+    return mapped && mapped.toUpperCase() === e;
+};
+
 export default function DisciplineValidationTab() {
     const [search, setSearch] = useState("");
     const [expandedDisciplines, setExpandedDisciplines] = useState<string[]>([]);
@@ -77,7 +103,7 @@ export default function DisciplineValidationTab() {
          * Esta parte do código funciona como um "filtro inteligente". 
          * Ela percorre todas as salas e disciplinas e só separa para mostrar aquelas 
          * que possuem algum problema (apontamento) ainda não resolvido.
-         * Além disso, ela organiza as salas em ordem numérica (1, 2, 3...) para facilitar a busca.
+         * Além disso, ela utiliza o mapeamento de siglas (ELE -> Elétrica) para não perder nenhum dado.
          */
         
         const map: Record<string, Record<string, any[]>> = {};
@@ -94,13 +120,15 @@ export default function DisciplineValidationTab() {
                 
                 if (discInBuilding) {
                     const verification = allVerificacoes.find((v: any) => v.salaId === sala.id && v.disciplina === disc);
+                    
+                    // FILTRAGEM INTELIGENTE: Considera siglas (ELE) e nomes completos
                     const pendingApontamentos = apontamentos.filter((a: any) => 
                         a.sala === sala.nome && 
-                        a.disciplina === disc && 
+                        isSameDiscipline(a.disciplina, disc) && 
                         a.status === 'PENDENTE'
                     );
 
-                    // FILTRO: Só mostramos a sala se ela tiver pendências registradas
+                    // Só mostramos a sala se ela tiver pendências registradas
                     if (pendingApontamentos.length > 0) {
                         if (!map[disc]) map[disc] = {};
                         if (!map[disc][sala.edificacao]) map[disc][sala.edificacao] = [];
