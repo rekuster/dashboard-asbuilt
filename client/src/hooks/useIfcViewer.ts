@@ -178,7 +178,7 @@ export function useIfcViewer() {
                 
                 if (ifcFile) {
                     const ifcData = await ifcFile.async("uint8array");
-                    buffer = ifcData;
+                    buffer = ifcData as any;
                     console.log("🔓 [useIfcViewer] IFC extracted successfully.");
                 } else {
                     throw new Error("No .ifc file found inside the .ifczip package.");

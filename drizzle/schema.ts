@@ -138,3 +138,6 @@ export const entregasHistorico = sqliteTable("entregasHistorico", {
 
 export type EntregaHistorico = typeof entregasHistorico.$inferSelect;
 export type InsertEntregaHistorico = typeof entregasHistorico.$inferInsert;
+
+export type EntregaAsBuilt = typeof entregasAsBuilt.$inferSelect;
+export type InsertEntregaAsBuilt = typeof entregasAsBuilt.$inferInsert;

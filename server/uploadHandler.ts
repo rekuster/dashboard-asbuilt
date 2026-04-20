@@ -1,5 +1,4 @@
-import { sql, eq } from 'drizzle-orm';
-import { getDb, salas, apontamentos, uploads, entregasAsBuilt } from './db';
+import { getDb, salas, uploads, entregasAsBuilt } from './db';
 import { processExcelFile } from './excelProcessor';
 
 /**
@@ -16,7 +15,7 @@ export async function handleExcelUpload(fileBuffer: Buffer, fileName: string = '
     totalEntregas?: number;
 }> {
     try {
-        const { salas: salasData, apontamentos: apontamentosData, entregas: entregasData } = await processExcelFile(fileBuffer);
+        const { salas: salasData, entregas: entregasData } = await processExcelFile(fileBuffer);
 
         const db = await getDb();
         if (!db) {

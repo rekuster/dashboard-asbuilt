@@ -123,17 +123,19 @@ export default function DisciplineValidationTab() {
                     
                     // FILTRAGEM INTELIGENTE: Considera siglas (ELE) e nomes completos
                     const pendingApontamentos = apontamentos.filter((a: any) => 
-                        a.sala === sala.nome && 
-                        isSameDiscipline(a.disciplina, disc) && 
+                        a.sala === sala?.nome && 
+                        isSameDiscipline(a.disciplina, (disc as any)) && 
                         a.status === 'PENDENTE'
                     );
 
                     // Só mostramos a sala se ela tiver pendências registradas
                     if (pendingApontamentos.length > 0) {
-                        if (!map[disc]) map[disc] = {};
-                        if (!map[disc][sala.edificacao]) map[disc][sala.edificacao] = [];
+                        const discKey = (disc as any);
+                        const edifKey = (sala.edificacao as any);
+                        if (!map[discKey]) map[discKey] = {};
+                        if (!map[discKey][edifKey]) map[discKey][edifKey] = [];
                         
-                        map[disc][sala.edificacao].push({
+                        map[discKey][edifKey].push({
                             ...sala,
                             statusDisciplina: verification?.status || "PENDENTE",
                             apontamentosCount: pendingApontamentos.length,
@@ -223,7 +225,7 @@ export default function DisciplineValidationTab() {
                         let pendingSalas = 0;
                         
                         edifs.forEach(ed => {
-                            groupedData[disc][ed].forEach(s => {
+                            groupedData[disc][ed].forEach((s: any) => {
                                 totalSalas++;
                                 if (s.statusDisciplina === "OK") okSalas++;
                                 if (s.apontamentosCount > 0) pendingSalas++;

@@ -10,12 +10,21 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import KPICard from "./KPICard";
 import { 
+    Building2,
     Box, 
     CheckCircle, 
     Clock, 
     AlertCircle, 
     FileCode,
-    ArrowRightLeft
+    ArrowRightLeft,
+    Layers,
+    Briefcase,
+    TrendingUp,
+    FileCheck,
+    Info,
+    Calendar,
+    Settings2,
+    BarChart3
 } from "lucide-react";
 import {
     PieChart,
@@ -23,19 +32,24 @@ import {
     Cell,
     Tooltip,
     ResponsiveContainer,
-    Legend
+    Legend,
+    BarChart,
+    Bar,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    AreaChart,
+    Area,
+    LabelList
 } from "recharts";
+import { Progress } from "@/components/ui/progress";
 
 /**
- * Dashboard específico para Status das Entregas As-Built.
- * Foca no controle da Lista Mestra (108 modelos) e rastreio de arquivos RVT.
+ * Foca no controle da Lista Mestra (108 modelos) e rastreio de arquivos.
  */
 export default function AsBuiltDashboard({ selectedEdificacao }: { selectedEdificacao: string | null }) {
     const { data: stats, isLoading } = trpc.dashboard.getAsBuiltStatus.useQuery({ 
         edificacao: selectedEdificacao || undefined 
-    });
-    const { data: deliveryStats } = trpc.dashboard.getEntregasStats.useQuery({
-        edificacao: selectedEdificacao || undefined
     });
 
     if (isLoading || !stats) {
@@ -43,254 +57,284 @@ export default function AsBuiltDashboard({ selectedEdificacao }: { selectedEdifi
     }
 
     const rvtData = [
-        { name: "Possui RVT Original", value: stats.comRvt, color: "#22c55e" },
+        { name: "Possui RVT Original", value: stats.comRvt, color: "#940707" },
         { name: "Pendente de RVT", value: stats.semRvt, color: "#f59e0b" },
     ];
 
     const modelStatusData = [
-        { name: "Modelos Validados", value: stats.modelosValidados, color: "#10b981" },
-        { name: "Em Recebimento", value: stats.modelosRecebidos - stats.modelosValidados, color: "#3b82f6" },
+        { name: "Modelos Validados", value: stats.modelosValidados, color: "#940707" },
+        { name: "Em Recebimento", value: stats.modelosRecebidos, color: "#475569" },
         { name: "Pendentes", value: stats.modelosPendentes, color: "#94a3b8" },
     ];
 
+    const renderCustomizedLabel = ({ percent }: { percent: number }) => {
+        return `${(percent * 100).toFixed(0)}%`;
+    };
+
+    const renderTooltip = (value: number, name: string, data: any[]) => {
+        const total = data.reduce((acc, curr) => acc + (curr.value || curr.count || 0), 0);
+        const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+        return [`${value} (${percentage}%)`, name];
+    };
+
     return (
-        <div className="space-y-8 animate-in fade-in duration-500">
-            {/* Explicação Leiga para o Usuário */}
-            <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl text-sm text-blue-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <p><strong>Nota Técnica:</strong> Este painel monitora a entrega final dos modelos (As-Built). Diferente do painel de Realidade Aumentada, aqui controlamos se os modelos contratados foram entregues corretamente com os arquivos nativos (.rvt) para manutenção futura.</p>
-                {selectedEdificacao && (
-                    <Badge className="bg-blue-600 text-white border-none shrink-0 self-start md:self-auto">
-                        Filtrado: {selectedEdificacao}
-                    </Badge>
-                )}
-            </div>
-
-            {/* Consolidation Summary Card (Projeto vs As-Built) */}
-            <Card className="border-none shadow-lg bg-gradient-to-r from-slate-800 to-slate-900 text-white overflow-hidden relative">
-                <div className="absolute top-0 right-0 p-8 opacity-10">
-                    <ArrowRightLeft className="w-32 h-32" />
-                </div>
-                <CardContent className="p-6 relative z-10">
-                    <div className="flex flex-col md:flex-row items-center justify-around gap-8">
-                        <div className="text-center group">
-                            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1 group-hover:text-blue-400 transition-colors">Modelos de Projeto</p>
-                            <h3 className="text-4xl font-black">{stats.projectModels}</h3>
-                            <p className="text-[10px] text-slate-500 mt-1">Identificados originalmente</p>
-                        </div>
-                        
-                        <div className="flex items-center justify-center p-3 bg-white/10 rounded-full">
-                            <ArrowRightLeft className="w-6 h-6 text-blue-400 animate-pulse" />
-                        </div>
-
-                        <div className="text-center group">
-                            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1 group-hover:text-emerald-400 transition-colors">Modelos As-Built</p>
-                            <h3 className="text-4xl font-black text-emerald-400">{stats.asBuiltModels}</h3>
-                            <p className="text-[10px] text-slate-500 mt-1">Alvos de entrega final</p>
-                        </div>
-
-                        <div className="h-12 w-px bg-white/10 hidden md:block" />
-
-                        <div className="text-center">
-                            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Fator de Consolidação</p>
-                            <div className="flex items-center justify-center gap-2">
-                                <span className="text-2xl font-bold">-{stats.consolidationFactor}</span>
-                                <Badge className="bg-emerald-500/20 text-emerald-400 border-none text-[10px]">Otimizado</Badge>
-                            </div>
-                            <p className="text-[10px] text-slate-500 mt-1">Redução de arquivos para entrega</p>
-                        </div>
+        <div className="bg-white p-8 rounded-none shadow-none min-h-[900px] flex flex-col gap-8 border border-slate-100 overflow-hidden" id="asbuilt-presentation-slide">
+            {/* Header / Branding (Matching PresentationTab) */}
+            <div className="flex justify-between items-start border-b-2 border-slate-100 pb-4">
+                <div>
+                    <h1 className="text-3xl font-black text-slate-900 tracking-tight">
+                        Status das Entregas As-Built
+                    </h1>
+                    <div className="flex items-center gap-2 mt-1 text-slate-500 font-medium">
+                        <Building2 className="w-4 h-4 text-[#940707]" />
+                        <span className="text-sm uppercase tracking-widest font-bold">
+                            {selectedEdificacao ? `EDIFICAÇÃO: ${selectedEdificacao}` : 'GERAL - TODAS AS EDIFICAÇÕES'}
+                        </span>
                     </div>
-                </CardContent>
-            </Card>
-
-            {/* KPIs Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <KPICard
-                    title="Cobertura As-Built"
-                    value={`${stats.percentualCobertura.toFixed(1)}%`}
-                    subtitle={`${stats.modelosValidados} de ${stats.totalModelos} modelos`}
-                    icon={CheckCircle}
-                    variant="green"
-                />
-                <KPICard
-                    title="Modelos Recebidos"
-                    value={stats.modelosRecebidos}
-                    subtitle="Aguardando validação técnica"
-                    icon={Box}
-                    variant="blue"
-                />
-                <KPICard
-                    title="Pendência de RVT"
-                    value={stats.semRvt}
-                    subtitle="Modelos sem arquivo nativo"
-                    icon={FileCode}
-                    variant="orange"
-                />
-                <KPICard
-                    title="Atrasos Previstos"
-                    value={deliveryStats?.atrasados || 0}
-                    subtitle="Entregas fora do prazo"
-                    icon={Clock}
-                    variant="red"
+                </div>
+                <img
+                    src="/logos_stecla/versao_horizontal@4x.png"
+                    alt="Stecla Engenharia"
+                    className="h-10 object-contain"
                 />
             </div>
 
-            {/* Reconciliation Section (Thá vs Stecla) */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <Card className="lg:col-span-1 border-amber-200 bg-amber-50/20">
-                    <CardHeader>
-                        <CardTitle className="text-lg flex items-center gap-2">
-                            <ArrowRightLeft className="w-5 h-5 text-amber-600" />
-                            Divergências de Controle
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="space-y-4">
-                            <div className="flex justify-between items-end">
-                                <div>
-                                    <p className="text-sm text-muted-foreground">Thá reporta:</p>
-                                    <p className="text-2xl font-bold text-amber-600">{stats.thaPostados} Modelos</p>
-                                </div>
-                                <div className="text-right">
-                                    <p className="text-sm text-muted-foreground">Não Validados:</p>
-                                    <p className="text-2xl font-bold text-red-600">{stats.thaDivergentes}</p>
-                                </div>
-                            </div>
-                            
-                            <div className="pt-4 border-t border-amber-100">
-                                <p className="text-[10px] uppercase font-bold text-amber-700 mb-2">Resumo da Reconciliação</p>
-                                <p className="text-xs text-amber-800 leading-relaxed">
-                                    Existem <strong>{stats.thaDivergentes}</strong> modelos que a Thá informa ter "POSTADO" no controle R07, mas que ainda não possuem uma entrega validada em nosso sistema.
-                                </p>
-                            </div>
-                        </div>
-                    </CardContent>
+            {/* Top Row: Main KPIs (Matching PresentationTab Cards Style) */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <Card className="bg-slate-50 border-none shadow-sm rounded-xl p-4 border-l-4 border-slate-300">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Arquivos Totais</p>
+                    <div className="flex items-baseline gap-2">
+                        <span className="text-3xl font-black text-slate-900">{stats.totalArquivos}</span>
+                        <span className="text-slate-400 font-medium text-xs">Entregas</span>
+                    </div>
                 </Card>
 
-                <Card className="lg:col-span-2">
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-lg">Lista de Divergências (Thá x Stecla)</CardTitle>
-                        <Badge variant="outline" className="text-[10px] font-normal">Sincronizado com R07</Badge>
-                    </CardHeader>
-                    <CardContent className="max-h-[250px] overflow-y-auto">
-                        <div className="space-y-2">
-                            {stats.divergenciasTha && stats.divergenciasTha.length > 0 ? (
-                                stats.divergenciasTha.map((item: any) => (
-                                    <div key={item.id} className="flex items-center justify-between p-3 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors border border-slate-100">
-                                        <div className="min-w-0 flex-1 pr-4">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <span className="text-xs font-bold text-slate-700">{item.edificacao}</span>
-                                                <span className="text-[10px] px-1.5 py-0.5 bg-slate-200 rounded text-slate-600 font-medium uppercase">{item.disciplina}</span>
-                                            </div>
-                                            <p className="text-xs font-medium text-slate-900 truncate">{item.nomeModeloFinal || item.nomeModelo}</p>
-                                        </div>
-                                        <div className="flex flex-col items-end shrink-0">
-                                            <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 border-amber-200 text-[10px]">
-                                                Planilha Thá: {item.statusTha}
-                                            </Badge>
-                                            <span className="text-[9px] text-red-500 font-bold mt-1 uppercase tracking-tight">Pendente Validação</span>
-                                        </div>
+                <Card className="bg-emerald-50/50 border-none shadow-sm rounded-xl p-4 border-l-4 border-emerald-500">
+                    <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest mb-1 font-black">Cobertura de Modelos</p>
+                    <div className="flex items-baseline gap-2">
+                        <span className="text-3xl font-black text-slate-900">{stats.modelosComEntrega}</span>
+                        <span className="text-emerald-600 font-bold bg-emerald-100 px-1.5 py-0.5 rounded text-[10px]">
+                            {stats.percentualEntregasIniciadas.toFixed(1)}%
+                        </span>
+                    </div>
+                </Card>
+
+                <Card className="bg-rose-50/50 border-none shadow-sm rounded-xl p-4 border-l-4 border-rose-500">
+                    <p className="text-[10px] font-bold text-rose-700 uppercase tracking-widest mb-1 font-black">Pendência de RVT</p>
+                    <div className="flex items-baseline gap-2">
+                        <span className="text-3xl font-black text-slate-900">{stats.semRvt}</span>
+                        <span className="text-rose-600 font-bold bg-rose-100 px-1.5 py-0.5 rounded text-[10px]">
+                            {((stats.semRvt / (stats.totalModelos || 1)) * 100).toFixed(0)}%
+                        </span>
+                    </div>
+                </Card>
+
+                <Card className="bg-[#f0f9f1] border-none shadow-sm rounded-xl p-4 border-l-4 border-[#166534]">
+                    <p className="text-[10px] font-bold text-[#166534] uppercase tracking-widest mb-1 font-black">Eficiência</p>
+                    <div className="flex items-baseline gap-2">
+                        <span className="text-3xl font-black text-slate-900">{stats.taxaAprovacao.toFixed(1)}%</span>
+                        <span className="text-[#166534] font-medium text-[11px] ml-2">1ª Passagem</span>
+                    </div>
+                </Card>
+            </div>
+
+            <div className="grid grid-cols-12 gap-8 flex-1">
+                {/* Saúde por Disciplina (Left Column - 8/12) */}
+                <div className="col-span-12 lg:col-span-8 flex flex-col gap-6">
+                    <Card className="border-none shadow-sm bg-white border border-slate-100 rounded-2xl p-6">
+                        <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                            <Layers className="w-3.5 h-3.5 text-[#940707]" />
+                            Saúde Técnica por Disciplina
+                        </h2>
+                        <div className="h-[400px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={stats.statsPorDisciplina} layout="vertical" margin={{ left: 20, right: 30, top: 0, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
+                                    <XAxis type="number" hide />
+                                    <YAxis dataKey="name" type="category" width={100} axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 'bold' }} />
+                                    <Tooltip 
+                                        cursor={{fill: '#f8fafc'}}
+                                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                    />
+                                    <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ paddingBottom: '20px', fontSize: '10px', textTransform: 'uppercase', fontWeight: 'bold' }} />
+                                    <Bar dataKey="validado" name="Validados" stackId="a" fill="#940707" radius={[0, 0, 0, 0]} barSize={20}>
+                                        <LabelList 
+                                            dataKey="validado" 
+                                            position="center" 
+                                            fill="#fff" 
+                                            fontSize={9} 
+                                            fontWeight="bold"
+                                            formatter={(val: any, entry: any) => {
+                                                if (!entry || !entry.payload) return '';
+                                                const total = (entry.payload.validado || 0) + (entry.payload.recebido || 0) + (entry.payload.pendente || 0);
+                                                return val > 0 && total > 0 ? `${((val/total)*100).toFixed(1)}%` : '';
+                                            }}
+                                        />
+                                    </Bar>
+                                    <Bar dataKey="recebido" name="Em Análise" stackId="a" fill="#475569" barSize={20}>
+                                        <LabelList 
+                                            dataKey="recebido" 
+                                            position="center" 
+                                            fill="#fff" 
+                                            fontSize={9} 
+                                            fontWeight="bold"
+                                            formatter={(val: any, entry: any) => {
+                                                if (!entry || !entry.payload) return '';
+                                                const total = (entry.payload.validado || 0) + (entry.payload.recebido || 0) + (entry.payload.pendente || 0);
+                                                return val > 0 && total > 0 ? `${((val/total)*100).toFixed(1)}%` : '';
+                                            }}
+                                        />
+                                    </Bar>
+                                    <Bar dataKey="pendente" name="Pendentes" stackId="a" fill="#e2e8f0" radius={[0, 4, 4, 0]} barSize={20} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </Card>
+
+                    {/* Timeline de Recebimento */}
+                    <Card className="border-none shadow-sm bg-white border border-slate-100 rounded-2xl p-6">
+                        <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                            <Calendar className="w-3.5 h-3.5 text-[#940707]" />
+                            Arquivos Recebidos (Frequência Quinzenal)
+                        </h2>
+                        <div className="h-[250px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart data={stats.timelineRecebimento} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                                    <defs>
+                                        <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#940707" stopOpacity={0.1}/>
+                                            <stop offset="95%" stopColor="#940707" stopOpacity={0}/>
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                    <XAxis dataKey="mes" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 'bold' }} />
+                                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 'bold' }} />
+                                    <Tooltip 
+                                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                    />
+                                    <Area type="monotone" dataKey="count" name="Arquivos" stroke="#940707" strokeWidth={3} fillOpacity={1} fill="url(#colorCount)">
+                                        <LabelList dataKey="count" position="top" offset={10} fontSize={10} fontWeight="bold" fill="#940707" />
+                                    </Area>
+                                </AreaChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </Card>
+                </div>
+
+                {/* Right Column (4/12) */}
+                <div className="col-span-12 lg:col-span-4 flex flex-col gap-6">
+                    {/* Ranking de Fornecedores */}
+                    <Card className="border-none shadow-sm bg-white border border-slate-100 rounded-2xl p-6">
+                        <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-6 flex items-center gap-2">
+                            <Briefcase className="w-3.5 h-3.5 text-[#940707]" />
+                            Progresso Fornecedores
+                        </h2>
+                        <div className="space-y-6">
+                            {(stats.statsPorEmpresa || []).map((emp: any) => (
+                                <div key={emp.name} className="space-y-2">
+                                    <div className="flex items-center justify-between text-[11px] font-black uppercase tracking-tight">
+                                        <span className="text-slate-700 truncate max-w-[150px]">{emp.name}</span>
+                                        <span className="text-[#940707]">{emp.percent.toFixed(1)}%</span>
                                     </div>
-                                ))
-                            ) : (
-                                <div className="h-40 flex flex-col items-center justify-center text-muted-foreground bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
-                                    <CheckCircle className="w-8 h-8 text-emerald-500 mb-2 opacity-20" />
-                                    <p className="text-sm">Nenhuma divergência encontrada</p>
-                                    <p className="text-[10px]">Todos os envios da Thá foram validados ou não há envios pendentes.</p>
+                                    <div className="relative">
+                                        <Progress value={emp.percent} className="h-2 rounded-full bg-slate-100" />
+                                        <style dangerouslySetInnerHTML={{ __html: `
+                                            [role="progressbar"] > div { background-color: #940707 !important; }
+                                        `}} />
+                                    </div>
+                                    <div className="flex justify-between items-center text-[10px] text-slate-400">
+                                        <span>{emp.concluido} validados</span>
+                                        <span>Meta: {emp.total}</span>
+                                    </div>
                                 </div>
-                            )}
+                            ))}
                         </div>
-                    </CardContent>
-                </Card>
-            </div>
+                    </Card>
 
-            {/* Charts Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Status dos Modelos (Lista Mestra) */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="text-lg">Progresso da Lista Mestra</CardTitle>
-                    </CardHeader>
-                    <CardContent className="h-[300px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                                <Pie
-                                    data={modelStatusData}
-                                    innerRadius={60}
-                                    outerRadius={80}
-                                    paddingAngle={5}
-                                    dataKey="value"
-                                    nameKey="name"
-                                >
-                                    {modelStatusData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={entry.color} />
-                                    ))}
-                                </Pie>
-                                <Tooltip />
-                                <Legend />
-                            </PieChart>
-                        </ResponsiveContainer>
-                    </CardContent>
-                </Card>
-
-                {/* Saúde Técnica (RVT Original) */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="text-lg">Saúde Técnica (Arquivos .RVT)</CardTitle>
-                    </CardHeader>
-                    <CardContent className="h-[300px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                                <Pie
-                                    data={rvtData}
-                                    innerRadius={60}
-                                    outerRadius={80}
-                                    paddingAngle={5}
-                                    dataKey="value"
-                                    nameKey="name"
-                                >
-                                    {rvtData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={entry.color} />
-                                    ))}
-                                </Pie>
-                                <Tooltip />
-                                <Legend />
-                            </PieChart>
-                        </ResponsiveContainer>
-                    </CardContent>
-                </Card>
+                    {/* Saúde Técnica Pie */}
+                    <Card className="border-none shadow-sm bg-white border border-slate-100 rounded-2xl p-6 flex-1">
+                        <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                            <FileCode className="w-3.5 h-3.5 text-[#940707]" />
+                            Arquivos Nativos (.RVT)
+                        </h2>
+                        <div className="h-[250px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie
+                                        data={rvtData}
+                                        innerRadius={60}
+                                        outerRadius={80}
+                                        paddingAngle={5}
+                                        dataKey="value"
+                                        nameKey="name"
+                                        label={renderCustomizedLabel}
+                                    >
+                                        {rvtData.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={entry.color} />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip formatter={(val: number, name: string) => renderTooltip(val, name, rvtData)} />
+                                    <Legend 
+                                        verticalAlign="bottom" 
+                                        align="center"
+                                        formatter={(value: string) => {
+                                            const item = rvtData.find(d => d.name === value);
+                                            const total = rvtData.reduce((acc, curr) => acc + curr.value, 0);
+                                            const percentage = total > 0 && item ? ((item.value / total) * 100).toFixed(1) : 0;
+                                            return <span className="text-[10px] font-bold uppercase">{value} ({percentage}%)</span>;
+                                        }}
+                                    />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </Card>
+                </div>
             </div>
             
-            {/* Alerta Específico sobre a Qualidade (Ajuda Thá/Ocle) */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Card className="border-l-4 border-amber-500">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-bold flex items-center gap-2">
-                            <AlertCircle className="w-4 h-4 text-amber-500" />
-                            Atenção: Qualidade das Entregas
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <p className="text-xs text-muted-foreground leading-relaxed">
-                            Modelos recebidos apenas em IFC sem o arquivo RVT dificultam a manutenção futura. 
-                            Verifique na aba "Entregas" os modelos marcados como pendentes de nativo.
-                        </p>
-                    </CardContent>
-                </Card>
+            {/* Guia de Conferência Técnica (Bottom Slide Section) */}
+            <div className="pt-6 border-t-2 border-slate-100">
+                <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-6">
+                    <Settings2 className="w-4 h-4 text-[#940707]" />
+                    Guia de Conferência Técnica (Apoio ao Recebimento)
+                </h3>
                 
-                <Card className="border-l-4 border-emerald-500">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-bold flex items-center gap-2">
-                            <CheckCircle className="w-4 h-4 text-emerald-500" />
-                            Próximos Passos
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <p className="text-xs text-muted-foreground leading-relaxed">
-                            Ao validar uma entrega na aba ao lado, o sistema vinculará automaticamente as 
-                            divergências de campo resolvidas, atualizando este gráfico em tempo real.
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="border-l-4 border-emerald-500 bg-emerald-50/20 p-4 rounded-r-xl">
+                        <p className="text-[10px] font-black text-emerald-700 uppercase tracking-widest mb-2 flex items-center gap-2">
+                            <FileCheck className="w-3.5 h-3.5" />
+                            1. Requisitos de Arquivo
                         </p>
-                    </CardContent>
-                </Card>
+                        <ul className="text-[11px] font-bold text-slate-700 space-y-1 ml-1">
+                            <li>• Nomenclatura conforme BEP</li>
+                            <li>• Check de Versão do Revit</li>
+                            <li>• Arquivo RVT Nativo (Editável)</li>
+                        </ul>
+                    </div>
+
+                    <div className="border-l-4 border-blue-500 bg-blue-50/20 p-4 rounded-r-xl">
+                        <p className="text-[10px] font-black text-blue-700 uppercase tracking-widest mb-2 flex items-center gap-2">
+                            <Box className="w-3.5 h-3.5" />
+                            2. Geometria e Dados
+                        </p>
+                        <ul className="text-[11px] font-bold text-slate-700 space-y-1 ml-1">
+                            <li>• Georreferenciamento Preciso</li>
+                            <li>• Parâmetros As-Built preenchidos</li>
+                            <li>• Nível de Detalhe (LOD 500)</li>
+                        </ul>
+                    </div>
+                    
+                    <div className="border-l-4 border-purple-500 bg-purple-50/20 p-4 rounded-r-xl">
+                        <p className="text-[10px] font-black text-purple-700 uppercase tracking-widest mb-2 flex items-center gap-2">
+                            <BarChart3 className="w-3.5 h-3.5" />
+                            3. Fechamento de Ciclo
+                        </p>
+                        <ul className="text-[11px] font-bold text-slate-700 space-y-1 ml-1">
+                            <li>• Documentação DWG/PDF OK</li>
+                            <li>• Divergências de campo sanadas</li>
+                            <li>• Registro na Lista Mestra OK</li>
+                        </ul>
+                    </div>
+                </div>
             </div>
         </div>
     );

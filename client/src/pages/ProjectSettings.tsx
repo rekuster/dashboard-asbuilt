@@ -361,7 +361,7 @@ function MasterListTab({ projectId, inputClass }: { projectId: string; inputClas
 
     // Group existing rooms by edificacao → pavimento → setor
     type GroupedRooms = Record<string, Record<string, Record<string, any[]>>>;
-    const groupedExisting: GroupedRooms = (existingRooms || []).reduce<GroupedRooms>((acc, sala: any) => {
+    const groupedExisting = (existingRooms || []).reduce((acc: GroupedRooms, sala: any) => {
         const edif = sala.edificacao || 'Sem Edificação';
         const pav = sala.pavimento || 'Sem Pavimento';
         const setor = sala.setor || 'Sem Setor';
@@ -417,13 +417,13 @@ function MasterListTab({ projectId, inputClass }: { projectId: string; inputClas
                     ) : (
                         <div className="space-y-2">
                             {Object.entries(groupedExisting).sort(([, pavA], [, pavB]) => {
-                                const minA = Math.min(...Object.values(pavA).flatMap(s => Object.values(s).flat().map((r: any) => parseInt(r.numeroSala, 10) || 0)));
-                                const minB = Math.min(...Object.values(pavB).flatMap(s => Object.values(s).flat().map((r: any) => parseInt(r.numeroSala, 10) || 0)));
+                                const minA = Math.min(...Object.values(pavA as any).flatMap((s: any) => Object.values(s as any).flat().map((r: any) => parseInt(r.numeroSala, 10) || 0)));
+                                const minB = Math.min(...Object.values(pavB as any).flatMap((s: any) => Object.values(s as any).flat().map((r: any) => parseInt(r.numeroSala, 10) || 0)));
                                 return minA - minB;
-                            }).map(([edif, pavimentos]) => {
+                            }).map(([edif, pavimentos]: [string, any]) => {
                                 const edifKey = `existing_${edif}`;
-                                const totalInEdif = Object.values(pavimentos).reduce(
-                                    (sum, setores) => sum + Object.values(setores).reduce((s, rooms) => s + rooms.length, 0), 0
+                                const totalInEdif = Object.values(pavimentos as any).reduce(
+                                    (sum: any, setores: any) => sum + Object.values(setores as any).reduce((s: any, rooms: any) => s + (rooms as any).length, 0), 0
                                 );
                                 return (
                                     <div key={edif} className="border rounded-lg overflow-hidden">
@@ -434,14 +434,14 @@ function MasterListTab({ projectId, inputClass }: { projectId: string; inputClas
                                             {expandedEdif[edifKey] ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                                             <Building2 className="w-4 h-4 text-primary" />
                                             <span className="font-semibold text-sm">{edif}</span>
-                                            <span className="text-xs text-muted-foreground ml-auto">{totalInEdif} salas</span>
+                                            <span className="text-xs text-muted-foreground ml-auto">{(totalInEdif as any)} salas</span>
                                         </button>
 
                                         {expandedEdif[edifKey] && (
                                             <div className="pl-6">
-                                                {Object.entries(pavimentos).map(([pav, setores]) => {
+                                                {Object.entries(pavimentos as any).map(([pav, setores]: [string, any]) => {
                                                     const pavKey = `existing_${edif}_${pav}`;
-                                                    const totalInPav = Object.values(setores).reduce((s, rooms) => s + rooms.length, 0);
+                                                    const totalInPav = Object.values(setores as any).reduce((s: any, rooms: any) => s + (rooms as any).length, 0);
                                                     return (
                                                         <div key={pav}>
                                                             <button
@@ -451,12 +451,12 @@ function MasterListTab({ projectId, inputClass }: { projectId: string; inputClas
                                                                 {expandedPav[pavKey] ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
                                                                 <Layers className="w-3 h-3 text-blue-500" />
                                                                 <span className="text-sm">{pav}</span>
-                                                                <span className="text-xs text-muted-foreground">({totalInPav})</span>
+                                                                <span className="text-xs text-muted-foreground">({(totalInPav as any)})</span>
                                                             </button>
 
                                                             {expandedPav[pavKey] && (
                                                                 <div className="pl-8 pb-2">
-                                                                    {Object.entries(setores).map(([setor, rooms]) => (
+                                                                    {(Object.entries(setores as any).map(([setor, rooms]: [string, any]) => (
                                                                         <div key={setor}>
                                                                             <div className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                                                                                 <MapPin className="w-3 h-3" />
@@ -474,7 +474,7 @@ function MasterListTab({ projectId, inputClass }: { projectId: string; inputClas
                                                                                         {/* Insert above row */}
                                                                                         {isInsertTarget && (
                                                                                             <div className="flex items-center gap-2 px-3 py-1.5 ml-4 bg-blue-50 border border-blue-200 rounded mb-1 animate-in fade-in">
-                                                                                                <span className="text-xs text-blue-600 font-medium shrink-0">Inserir Nº {insertingAt.numero}:</span>
+                                                                                                <span className="text-xs text-blue-600 font-medium shrink-0">Inserir Nº {insertingAt?.numero}:</span>
                                                                                                 <input
                                                                                                     value={insertNome}
                                                                                                     onChange={(e) => setInsertNome(e.target.value)}
@@ -532,7 +532,7 @@ function MasterListTab({ projectId, inputClass }: { projectId: string; inputClas
                                                                                 );
                                                                             })}
                                                                         </div>
-                                                                    ))}
+                                                                    )))}
                                                                 </div>
                                                             )}
                                                         </div>
@@ -676,4 +676,3 @@ function MasterListTab({ projectId, inputClass }: { projectId: string; inputClas
         </div>
     );
 }
-

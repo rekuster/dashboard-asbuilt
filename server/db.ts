@@ -5,13 +5,14 @@
  */
 
 import "dotenv/config";
-import { eq, and, sql, desc, like, inArray } from "drizzle-orm";
+import { eq, and, sql, desc, like } from "drizzle-orm";
 // import { drizzle as drizzleSqlite } from "drizzle-orm/better-sqlite3"; // REMOVED STATIC IMPORT
 import { drizzle as drizzlePg } from "drizzle-orm/postgres-js";
 // import Database from "better-sqlite3"; // REMOVED STATIC IMPORT
 import postgres from "postgres";
 // import * as sqliteSchema from "../drizzle/schema.ts"; // Not used anymore
-import * as pgSchema from "../drizzle/schema.pg.ts";
+import * as pgSchema from "../drizzle/schema.pg";
+import { format, startOfWeek, differenceInCalendarWeeks, addWeeks } from "date-fns";
 
 // Re-export tables based on active dialect
 // Forcing Postgres Schema
@@ -975,70 +976,89 @@ export async function getAsBuiltStatus(edificacao?: string) {
 
     let escopoQuery = db.select().from(escopoAsBuilt);
     if (edificacao) {
-        // Use ILIKE for flexible building matching
         escopoQuery = db.select().from(escopoAsBuilt)
             .where(sql`${escopoAsBuilt.edificacao} ILIKE ${'%' + edificacao + '%'}`) as any;
     }
     const escopos = await escopoQuery;
     
-    // For entregas, we filter by the escopoIds we just found
-    const escopoIds = escopos.map((e: any) => e.id);
-    if (escopoIds.length === 0 && edificacao) {
-        return {
-            totalModelos: 0,
-            modelosValidados: 0,
-            modelosPendentes: 0,
-            modelosRecebidos: 0,
-            comRvt: 0,
-            semRvt: 0,
-            percentualCobertura: 0,
-            thaPostados: 0,
-            thaDivergentes: 0,
-            divergenciasTha: [],
-            projectModels: 0,
-            asBuiltModels: 0,
-            consolidationFactor: "1.0"
-        };
-    }
-
-    if (escopoIds.length > 0) {
-        // We still fetch entregas once to have them in memory if needed, 
-        // but currently getEntregasPorEscopo does its own fetch.
-        // We'll keep the escopoIds check for safety but remove the redundant variable if not used.
-    }
+    const { entregasMap, allEntregas } = await getEntregasPorEscopo(edificacao);
 
     const totalModelos = escopos.length;
-    const { entregasMap } = await getEntregasPorEscopo(edificacao);
-
     const projectModelsUnique = new Set(escopos.map((e: any) => e.nomeModelo).filter(Boolean));
     const asBuiltModelsUnique = new Set(escopos.map((e: any) => e.nomeModeloFinal).filter(Boolean));
 
     const result = {
         totalModelos,
-        modelosValidados: 0,
-        modelosPendentes: 0,
-        modelosRecebidos: 0,
-        comRvt: 0,
-        semRvt: 0,
-        percentualCobertura: 0,
-        // Reconciliação Thá
-        thaPostados: 0,
-        thaDivergentes: 0,
-        divergenciasTha: [] as any[],
-        // Consolidação
         projectModels: projectModelsUnique.size,
         asBuiltModels: asBuiltModelsUnique.size || totalModelos,
-        consolidationFactor: projectModelsUnique.size > 0 ? (totalModelos / projectModelsUnique.size).toFixed(1) : "1.0"
+        consolidationFactor: projectModelsUnique.size > 0 ? (totalModelos / projectModelsUnique.size).toFixed(1) : "1.0",
+        
+        // Novos Indicadores Principais
+        totalArquivos: allEntregas.length,
+        modelosComEntrega: 0,
+        comRvt: 0,
+        semRvt: 0,
+        modelosValidados: 0,
+        modelosRecebidos: 0, // Em andamento/revisão
+        modelosPendentes: 0,  // Nada recebido
+        
+        // Métricas de Qualidade
+        taxaAprovacao: 0, // % de Conforme de primeira
+        
+        // Agrupamentos para Gráficos
+        statsPorDisciplina: [] as any[],
+        statsPorEmpresa: [] as any[],
+        timelineRecebimento: [] as any[],
     };
+
+    // 1. Processar Timeline (Agrupado por Quinzenas/2 Semanas)
+    const timelineMap = new Map<string, number>();
+    const sortedEntregas = allEntregas
+        .filter((e: any) => e.dataRecebimento)
+        .sort((a, b) => new Date(a.dataRecebimento).getTime() - new Date(b.dataRecebimento).getTime());
+
+    if (sortedEntregas.length > 0) {
+        const firstDate = new Date(sortedEntregas[0].dataRecebimento);
+        const refDate = startOfWeek(firstDate);
+
+        sortedEntregas.forEach((e: any) => {
+            const date = new Date(e.dataRecebimento);
+            const weeksElapsed = differenceInCalendarWeeks(date, refDate);
+            const biWeekNum = Math.floor(weeksElapsed / 2);
+            
+            const periodStart = addWeeks(refDate, biWeekNum * 2);
+            const key = format(periodStart, "dd/MM");
+            timelineMap.set(key, (timelineMap.get(key) || 0) + 1);
+        });
+    }
+
+    result.timelineRecebimento = Array.from(timelineMap.entries())
+        .map(([mes, count]) => ({ mes, count }));
+    // Observação: O timelineMap já mantém a ordem de inserção (que é cronológica por sortedEntregas)
+
+    // 2. Calcular Eficiência (Taxa de Aprovação)
+    const entregasComResultado = allEntregas.filter((e: any) => e.status === 'VALIDADO' || e.status === 'EM_REVISAO');
+    const entregasConformes = allEntregas.filter((e: any) => e.status === 'VALIDADO');
+    result.taxaAprovacao = entregasComResultado.length > 0 
+        ? (entregasConformes.length / entregasComResultado.length) * 100 
+        : 0;
+
+    // 3. Processar Escopos e Agrupar Disciplinas/Empresas
+    const disciplinaMap = new Map<string, { validado: number, recebido: number, pendente: number }>();
+    const empresaMap = new Map<string, { total: number, concluido: number }>();
 
     escopos.forEach((escopo: any) => {
         const entregas = entregasMap.get(escopo.id) || [];
         const hasValidado = entregas.some((e: any) => e.status === 'VALIDADO');
-        const hasRecebido = entregas.some((e: any) => ['RECEBIDO', 'VALIDADO', 'EM_REVISAO', 'EM_ANDAMENTO'].includes(e.status));
+        const hasEntrega = entregas.length > 0;
+        const hasEmAndamento = entregas.some((e: any) => ['RECEBIDO', 'EM_REVISAO', 'EM_ANDAMENTO'].includes(e.status));
 
+        // Contadores Gerais
+        if (hasEntrega) result.modelosComEntrega++;
+        
         if (hasValidado) {
             result.modelosValidados++;
-        } else if (hasRecebido) {
+        } else if (hasEmAndamento) {
             result.modelosRecebidos++;
         } else {
             result.modelosPendentes++;
@@ -1050,28 +1070,41 @@ export async function getAsBuiltStatus(edificacao?: string) {
             result.semRvt++;
         }
 
-        // Reconciliação Thá
-        const statusTha = escopo.statusTha?.toUpperCase();
-        if (statusTha === 'POSTADO') {
-            result.thaPostados++;
-            if (!hasValidado) {
-                result.thaDivergentes++;
-                result.divergenciasTha.push({
-                    id: escopo.id,
-                    edificacao: escopo.edificacao,
-                    disciplina: escopo.disciplina,
-                    nomeModelo: escopo.nomeModelo,
-                    nomeModeloFinal: escopo.nomeModeloFinal,
-                    statusTha: escopo.statusTha,
-                    obsTha: escopo.obsTha
-                });
-            }
-        }
+        // Agrupamento por Disciplina
+        const disc = escopo.disciplina || "Geral";
+        if (!disciplinaMap.has(disc)) disciplinaMap.set(disc, { validado: 0, recebido: 0, pendente: 0 });
+        const dStats = disciplinaMap.get(disc)!;
+        if (hasValidado) dStats.validado++;
+        else if (hasEmAndamento) dStats.recebido++;
+        else dStats.pendente++;
+
+        // Agrupamento por Empresa
+        const emp = escopo.empresa || "Outros";
+        if (!empresaMap.has(emp)) empresaMap.set(emp, { total: 0, concluido: 0 });
+        const eStats = empresaMap.get(emp)!;
+        eStats.total++;
+        if (hasValidado) eStats.concluido++;
     });
 
-    result.percentualCobertura = result.totalModelos > 0 ? (result.modelosValidados / result.totalModelos) * 100 : 0;
-    
-    return result;
+    // Converter Maps para Arrays formatados para o Recharts
+    result.statsPorDisciplina = Array.from(disciplinaMap.entries()).map(([name, stats]) => ({
+        name,
+        ...stats,
+        total: stats.validado + stats.recebido + stats.pendente
+    })).sort((a, b) => b.total - a.total);
+
+    result.statsPorEmpresa = Array.from(empresaMap.entries()).map(([name, stats]) => ({
+        name,
+        total: stats.total,
+        concluido: stats.concluido,
+        percent: stats.total > 0 ? (stats.concluido / stats.total) * 100 : 0
+    })).sort((a, b) => b.percent - a.percent);
+
+    return {
+        ...result,
+        percentualCobertura: result.totalModelos > 0 ? (result.modelosValidados / result.totalModelos) * 100 : 0,
+        percentualEntregasIniciadas: result.totalModelos > 0 ? (result.modelosComEntrega / result.totalModelos) * 100 : 0
+    };
 }
 
 /**
@@ -1088,7 +1121,7 @@ async function getEntregasPorEscopo(edificacao?: string) {
     const allEntregas = await q;
     
     const entregasMap = new Map<number, any[]>();
-    allEntregas.forEach(e => {
+    allEntregas.forEach((e: any) => {
         const id = e.escopoId;
         if (id) {
             if (!entregasMap.has(id)) entregasMap.set(id, []);
@@ -1096,7 +1129,7 @@ async function getEntregasPorEscopo(edificacao?: string) {
         }
     });
 
-    return { entregasMap };
+    return { entregasMap, allEntregas };
 }
 
 // ============================================================================

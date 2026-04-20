@@ -5,7 +5,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { CheckCircle2, Info } from "lucide-react";
+import { CheckCircle2, Info, AlertCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 /* 
@@ -184,7 +184,7 @@ export function VerificationModal({ isOpen, onClose, sala, disciplines, pendingA
                                 {pendingCount > 0 && (
                                     <div className="border-t border-amber-100 bg-white/60 p-4 space-y-4">
                                         <p className="text-[10px] uppercase font-black text-amber-500 tracking-widest mb-2">Detalhes das Divergências:</p>
-                                        {roomApontamentos.map((apont, idx) => (
+                                        {roomApontamentos.map((apont: any, idx: number) => (
                                             <div key={apont.id} className="space-y-3 bg-white p-3 rounded-xl border border-amber-100 shadow-sm">
                                                 <div className="flex gap-2 items-start">
                                                     <Badge className="bg-amber-500 h-5 w-5 rounded-full flex items-center justify-center p-0 shrink-0">{idx + 1}</Badge>

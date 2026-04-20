@@ -1,5 +1,3 @@
-import fs from 'fs/promises';
-import path from 'path';
 import { eq } from 'drizzle-orm';
 import { getDb, ifcFiles } from './db';
 import { createClient } from "@supabase/supabase-js";
@@ -47,7 +45,7 @@ export async function handleIfcUpload(
         if (fileName.toLowerCase().endsWith('.ifczip')) contentType = 'application/zip';
 
         // Upload to Supabase Storage
-        const { data, error } = await supabase.storage
+        const { error } = await supabase.storage
             .from('ifc-files')
             .upload(filePath, fileBuffer, {
                 contentType,

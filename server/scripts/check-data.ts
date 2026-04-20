@@ -1,5 +1,4 @@
 import { getDb, escopoAsBuilt, entregasAsBuilt, salas, apontamentos } from "../db";
-import { eq, sql } from "drizzle-orm";
 
 async function main() {
     const db = await getDb();

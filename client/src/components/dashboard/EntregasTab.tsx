@@ -38,7 +38,8 @@ import {
     Briefcase,
     ClipboardCheck,
     ShieldCheck,
-    Filter,
+    ArrowUpDown,
+    Loader2,
 } from "lucide-react";
 import {
     Select,
@@ -118,7 +119,7 @@ function PacketsListView({ entregas, onViewDetail, onDelete }: { entregas: any[]
                                     const info = STATUS_LABELS[status] || STATUS_LABELS['AGUARDANDO'];
                                     return (
                                         <Badge key={status} variant="outline" className={`text-[9px] font-black px-2 py-0.5 rounded-full ${info.color}`}>
-                                            {count} {info.label}
+                                            {(count as any)} {info.label}
                                         </Badge>
                                     );
                                 })}
@@ -186,6 +187,27 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
     const [viewMode, setViewMode] = useState<"table" | "packets">("table");
     const [filterEmpresa, setFilterEmpresa] = useState("todas");
     const [filterPacote, setFilterPacote] = useState("todos");
+    // ESTADO DE ORDENAÇÃO:
+    // Este estado guarda qual coluna o usuário clicou para ordenar (ex: "Data")
+    // e se a ordem é crescente ('asc') ou decrescente ('desc').
+    const [sortConfig, setSortConfig] = useState<{ 
+        key: 'numeroEntrega' | 'dataRecebimento' | 'status' | null, 
+        direction: 'asc' | 'desc' 
+    }>({ 
+        key: 'dataRecebimento', // Começa ordenado por Data
+        direction: 'asc'        // Começa com as mais antigas primeiro (Padrão solicitado)
+    });
+
+    // FUNÇÃO DE ORDENAÇÃO:
+    // Esta função é chamada quando o usuário clica em um cabeçalho da tabela.
+    // Ela muda a coluna ativa ou inverte a direção se a coluna já for a ativa.
+    const handleSort = (key: 'numeroEntrega' | 'dataRecebimento' | 'status') => {
+        let direction: 'asc' | 'desc' = 'asc';
+        if (sortConfig.key === key && sortConfig.direction === 'asc') {
+            direction = 'desc';
+        }
+        setSortConfig({ key, direction });
+    };
 
     const utils = trpc.useUtils();
     const { data: entregas = [], isLoading } = trpc.dashboard.getEntregas.useQuery();
@@ -194,6 +216,28 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
     const deleteMutation = trpc.dashboard.deleteEntrega.useMutation({
         onSuccess: () => utils.dashboard.getEntregas.invalidate()
     });
+
+    // Mutação para atualização rápida de status diretamente na tabela
+    const updateStatusMutation = trpc.dashboard.upsertEntrega.useMutation({
+        onSuccess: () => {
+            utils.dashboard.getEntregas.invalidate();
+            utils.dashboard.getEntregasStats.invalidate();
+            // Invalida também os dados do dashboard principal
+            utils.dashboard.getAsBuiltStatus.invalidate();
+        }
+    });
+
+    const handleStatusChange = async (entrega: any, newStatus: string) => {
+        try {
+            await updateStatusMutation.mutateAsync({
+                ...entrega,
+                status: newStatus
+            });
+        } catch (error) {
+            console.error("Erro ao atualizar status:", error);
+            alert("Falha ao atualizar status da entrega.");
+        }
+    };
 
     const filteredEntregas = useMemo(() => {
         return entregas.filter((e: any) => {
@@ -208,19 +252,36 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
             const matchesPacote = filterPacote === "todos" || e.identificadorEntrega === filterPacote;
             
             return matchesSearch && matchesEdif && matchesEmpresa && matchesPacote;
-        }).sort((a, b) => {
-            // Ordenação por DATA (Mais antigas primeiro - Cronológico)
+        }).sort((a: any, b: any) => {
+            // LÓGICA DE ORDENAÇÃO DINÂMICA:
+            // Pegamos a coluna que o usuário escolheu e comparamos os valores.
+            if (sortConfig.key) {
+                let valA = a[sortConfig.key];
+                let valB = b[sortConfig.key];
+
+                // Tratamento especial para DATAS (Transformar em número de milissegundos)
+                if (sortConfig.key === 'dataRecebimento') {
+                    valA = valA ? new Date(valA).getTime() : 0;
+                    valB = valB ? new Date(valB).getTime() : 0;
+                }
+                
+                // Comparação básica (Serve para Números e Strings de Status)
+                if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+                if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+            }
+
+            // Fallback (Padrão caso não haja ordenação ou valores sejam iguais)
+            // Se as datas forem iguais, ordena por ID crescente
             const dateA = a.dataRecebimento ? new Date(a.dataRecebimento).getTime() : 0;
             const dateB = b.dataRecebimento ? new Date(b.dataRecebimento).getTime() : 0;
             if (dateA !== dateB) return dateA - dateB;
-            // Fallback para ID (Crescente)
             return a.id - b.id;
         });
-    }, [entregas, searchTerm, selectedEdificacao, filterEmpresa, filterPacote]);
+    }, [entregas, searchTerm, selectedEdificacao, filterEmpresa, filterPacote, sortConfig]);
 
     // Opções únicas para os filtros (Normalizadas para evitar duplicata de maiúsculas/minúsculas)
     const empresasUnicas = useMemo(() => {
-        const empresas = new Set(entregas.map(e => {
+        const empresas = new Set(entregas.map((e: any) => {
             // Se for OCLE (qualquer caixa), normalize para Ocle para o filtro
             if (e.empresaResponsavel?.toUpperCase() === "OCLE") return "Ocle";
             return e.empresaResponsavel;
@@ -229,7 +290,7 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
     }, [entregas]);
 
     const pacotesUnicos = useMemo(() => {
-        const pacotes = new Set(entregas.map(e => e.identificadorEntrega).filter(Boolean));
+        const pacotes = new Set(entregas.map((e: any) => e.identificadorEntrega).filter(Boolean));
         return Array.from(pacotes).sort();
     }, [entregas]);
 
@@ -339,7 +400,7 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
                                                 </SelectTrigger>
                                                 <SelectContent>
                                                     <SelectItem value="todas">Todas Empresas</SelectItem>
-                                                    {empresasUnicas.map(emp => (
+                                                    {empresasUnicas.map((emp: any) => (
                                                         <SelectItem key={emp} value={emp}>{emp}</SelectItem>
                                                     ))}
                                                 </SelectContent>
@@ -351,7 +412,7 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
                                                 </SelectTrigger>
                                                 <SelectContent>
                                                     <SelectItem value="todos">Todos Pacotes</SelectItem>
-                                                    {pacotesUnicos.map(p => (
+                                                    {pacotesUnicos.map((p: any) => (
                                                         <SelectItem key={p} value={p}>{p}</SelectItem>
                                                     ))}
                                                 </SelectContent>
@@ -380,28 +441,48 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
                                         <Table>
                                             <TableHeader>
                                                 <TableRow className="hover:bg-transparent border-slate-100 uppercase text-[10px] font-bold tracking-wider text-slate-500 italic">
-                                                    <TableHead className="w-[50px]">Nº</TableHead>
-                                                    <TableHead className="w-[120px]">Data de Entrega</TableHead>
+                                                    <TableHead 
+                                                        className="w-[70px] cursor-pointer hover:text-primary transition-colors group"
+                                                        onClick={() => handleSort('numeroEntrega')}
+                                                    >
+                                                        <div className="flex items-center gap-1">
+                                                            Nº
+                                                            <ArrowUpDown className={`w-3 h-3 transition-opacity ${sortConfig.key === 'numeroEntrega' ? 'opacity-100 text-primary' : 'opacity-30 group-hover:opacity-100'}`} />
+                                                        </div>
+                                                    </TableHead>
+                                                    <TableHead 
+                                                        className="w-[140px] cursor-pointer hover:text-primary transition-colors group"
+                                                        onClick={() => handleSort('dataRecebimento')}
+                                                    >
+                                                        <div className="flex items-center gap-1">
+                                                            Data de Entrega
+                                                            <ArrowUpDown className={`w-3 h-3 transition-opacity ${sortConfig.key === 'dataRecebimento' ? 'opacity-100 text-primary' : 'opacity-30 group-hover:opacity-100'}`} />
+                                                        </div>
+                                                    </TableHead>
                                                     <TableHead className="w-[120px]">Pacote / SM</TableHead>
                                                     <TableHead>Responsável</TableHead>
                                                     <TableHead>Edificação</TableHead>
                                                     <TableHead>Disciplina</TableHead>
                                                     <TableHead className="w-[200px]">Documento Entregue</TableHead>
                                                     <TableHead>Formato</TableHead>
-                                                    <TableHead>Modelo Base</TableHead>
-                                                    <TableHead>Ações pós Entrega</TableHead>
-                                                    <TableHead>Status</TableHead>
+                                                    <TableHead 
+                                                        className="cursor-pointer hover:text-primary transition-colors group"
+                                                        onClick={() => handleSort('status')}
+                                                    >
+                                                        <div className="flex items-center gap-1">
+                                                            Status
+                                                            <ArrowUpDown className={`w-3 h-3 transition-opacity ${sortConfig.key === 'status' ? 'opacity-100 text-primary' : 'opacity-30 group-hover:opacity-100'}`} />
+                                                        </div>
+                                                    </TableHead>
                                                     <TableHead className="text-right">Ações</TableHead>
                                                 </TableRow>
                                             </TableHeader>
                                             <TableBody>
                                                 {isLoading ? (
-                                                    <TableRow>
-                                                        <TableCell colSpan={12} className="text-center py-10 text-slate-400 italic">Carregando entregas...</TableCell>
-                                                    </TableRow>
+                                                        <TableCell colSpan={10} className="text-center py-10 text-slate-400 italic">Carregando entregas...</TableCell>
                                                 ) : filteredEntregas.length === 0 ? (
                                                     <TableRow>
-                                                        <TableCell colSpan={12} className="text-center py-10 text-slate-400 italic">Nenhuma entrega encontrada.</TableCell>
+                                                        <TableCell colSpan={10} className="text-center py-10 text-slate-400 italic">Nenhuma entrega encontrada.</TableCell>
                                                     </TableRow>
                                                 ) : (
                                                     filteredEntregas.map((entrega: any) => {
@@ -430,12 +511,35 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
                                                                 <TableCell className="text-[11px] font-bold text-slate-400 italic">
                                                                     {DOC_TYPES[entrega.formato] || entrega.formato || entrega.tipoDocumento}
                                                                 </TableCell>
-                                                                <TableCell className="text-[11px] font-bold text-slate-700 truncate max-w-[120px]">{entrega.modeloBaseReferencia || "-"}</TableCell>
-                                                                <TableCell className="text-[11px] font-bold text-rose-500">{entrega.acoesNecessarias || "-"}</TableCell>
                                                                 <TableCell>
-                                                                    <div className={`px-2 py-0.5 rounded-full border text-[9px] font-black uppercase flex items-center gap-1 w-fit ${statusInfo.color}`}>
-                                                                        <StatusIcon className="w-2.5 h-2.5" />
-                                                                        {statusInfo.label}
+                                                                    <div className="w-fit" onClick={(e) => e.stopPropagation()}>
+                                                                        <Select 
+                                                                            value={entrega.status} 
+                                                                            onValueChange={(val) => handleStatusChange(entrega, val)}
+                                                                            disabled={updateStatusMutation.isPending && updateStatusMutation.variables?.id === entrega.id}
+                                                                        >
+                                                                            <SelectTrigger className={`h-7 min-w-[120px] rounded-full border text-[9px] font-black uppercase px-2 flex items-center gap-1 hover:brightness-95 transition-all ${statusInfo.color}`}>
+                                                                                {updateStatusMutation.isPending && updateStatusMutation.variables?.id === entrega.id ? (
+                                                                                    <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                                                                ) : (
+                                                                                    <StatusIcon className="w-2.5 h-2.5" />
+                                                                                )}
+                                                                                <SelectValue placeholder="Status" />
+                                                                            </SelectTrigger>
+                                                                            <SelectContent>
+                                                                                {Object.entries(STATUS_LABELS).map(([key, info]) => {
+                                                                                    const Icon = info.icon;
+                                                                                    return (
+                                                                                        <SelectItem key={key} value={key} className="text-[10px] font-bold uppercase py-2">
+                                                                                            <div className="flex items-center gap-2">
+                                                                                                <Icon className="w-3 h-3" />
+                                                                                                {info.label}
+                                                                                            </div>
+                                                                                        </SelectItem>
+                                                                                    );
+                                                                                })}
+                                                                            </SelectContent>
+                                                                        </Select>
                                                                     </div>
                                                                 </TableCell>
                                                                 <TableCell className="text-right">
@@ -1255,69 +1359,12 @@ function EntregaDetailView({ entrega, onBack, onUpdate, onEdit, onDelete }: any)
                                 <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1"><Briefcase className="w-3 h-3" /> Fornecedor</span>
                                 <p className="font-semibold text-slate-700">{entrega.empresaResponsavel}</p>
                             </div>
+                            <div className="space-y-1 col-span-2">
+                                <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Ações Necessárias</span>
+                                <p className="font-bold text-rose-600">{entrega.acoesNecessarias || "Nenhuma ação pendente"}</p>
+                            </div>
                         </div>
 
-                        {entrega.isModelo === 1 && (
-                            <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-2xl space-y-3">
-                                <h4 className="text-xs font-bold text-blue-700 uppercase flex items-center gap-2">
-                                    <Layers className="w-4 h-4" /> Coordenação Técnica (BEP)
-                                </h4>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] font-bold text-slate-400 uppercase">Modelo Base Referência</span>
-                                        <p className="text-sm font-medium text-slate-600 line-clamp-1" title={entrega.modeloBaseReferencia}>{entrega.modeloBaseReferencia || "Não informado"}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] font-bold text-slate-400 uppercase">Ações Necessárias</span>
-                                        <p className="text-sm font-bold text-rose-600">{entrega.acoesNecessarias || "Nenhuma ação pendente"}</p>
-                                    </div>
-                                </div>
-                                
-                                <div className="pt-2">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <span className="text-[10px] font-bold text-slate-400 uppercase">Checklist BEP as-built</span>
-                                        <span className="text-[10px] font-bold text-blue-600">
-                                            {(() => {
-                                                try {
-                                                    const cb = JSON.parse(entrega.checkpointBep || '{}');
-                                                    const total = 5;
-                                                    const checked = Object.values(cb).filter(v => v === true).length;
-                                                    return `${checked}/${total} itens ok`;
-                                                } catch (e) { return "0/5 itens ok"; }
-                                            })()}
-                                        </span>
-                                    </div>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                        {[
-                                            { id: 'geo', label: 'Georreferenciamento ok' },
-                                            { id: 'param', label: 'Parâmetros preenchidos' },
-                                            { id: 'naming', label: 'Nomenclatura BEP' },
-                                            { id: 'lod', label: 'LOD 500 (As-Built)' },
-                                            { id: 'clash', label: 'Coordenação s/ Interferências' }
-                                        ].map(item => {
-                                            let isChecked = false;
-                                            try {
-                                                const cb = JSON.parse(entrega.checkpointBep || '{}');
-                                                isChecked = cb[item.id] === true;
-                                            } catch (e) {}
-                                            return (
-                                                <div key={item.id} className="flex items-center gap-3 text-xs bg-white/50 p-2 rounded-lg border border-transparent hover:border-blue-200 hover:bg-white transition-all cursor-pointer group"
-                                                     onClick={() => toggleCheckpointBep(item.id)}>
-                                                    <Checkbox 
-                                                        checked={isChecked} 
-                                                        onCheckedChange={() => toggleCheckpointBep(item.id)}
-                                                        className="data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
-                                                    />
-                                                    <span className={`transition-colors ${isChecked ? "text-slate-700 font-bold" : "text-slate-400 italic group-hover:text-slate-600"}`}>
-                                                        {item.label}
-                                                    </span>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
 
                         <div className="pt-4 border-t border-slate-100 space-y-2">
                             <span className="text-xs font-bold text-slate-400 uppercase">Observações / Notas do Agente</span>
@@ -1619,51 +1666,10 @@ function EntregaForm({ onClose, entrega, selectedEdificacao }: any) {
                             <Input value={formData.modeloBaseReferencia} onChange={e => setFormData({ ...formData, modeloBaseReferencia: e.target.value })} placeholder="Automático..." className="rounded-xl border-slate-200 bg-blue-50/30" />
                         </div>
 
-                        {/* BEP Section - Only for existing deliveries */}
-                        {!isNew && formData.isModelo === 1 && (
-                            <div className="md:col-span-2 p-4 bg-blue-50/50 border border-blue-100 rounded-2xl space-y-4">
-                                <h4 className="text-xs font-bold text-blue-700 uppercase flex items-center gap-2">
-                                    <Layers className="w-4 h-4" /> Coordenação Técnica (BEP)
-                                </h4>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="space-y-1.5">
-                                        <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Status Ações Necessárias</label>
-                                        <Input value={formData.acoesNecessarias} onChange={e => setFormData({ ...formData, acoesNecessarias: e.target.value })} placeholder="Ex: Pedir RVT nativo" className="rounded-xl border-slate-200 bg-white" />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Checklist Técnico BEP</label>
-                                        <div className="flex flex-col gap-2 bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
-                                            {[
-                                                { id: 'geo', label: 'Georreferenciamento ok' },
-                                                { id: 'param', label: 'Parâmetros preenchidos' },
-                                                { id: 'naming', label: 'Nomenclatura BEP' },
-                                                { id: 'lod', label: 'LOD 500 (As-Built)' },
-                                                { id: 'clash', label: 'Coordenação s/ Interferências' }
-                                            ].map(item => {
-                                                const cb = JSON.parse(formData.checkpointBep);
-                                                const checked = cb[item.id] === true;
-                                                return (
-                                                    <div key={item.id} 
-                                                         className={`flex items-center gap-3 p-2 rounded-lg transition-colors cursor-pointer border ${checked ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50/50 border-transparent hover:border-slate-200'}`}
-                                                         onClick={() => {
-                                                             const newCb = { ...cb, [item.id]: !checked };
-                                                             setFormData({ ...formData, checkpointBep: JSON.stringify(newCb) });
-                                                         }}>
-                                                        <Checkbox 
-                                                            id={`check-${item.id}`}
-                                                            checked={checked}
-                                                            onCheckedChange={() => {}} // Handle via parent click
-                                                            className="data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
-                                                        />
-                                                        <label htmlFor={`check-${item.id}`} className={`text-xs cursor-pointer select-none ${checked ? 'text-emerald-700 font-bold' : 'text-slate-500'}`}>{item.label}</label>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
+                        <div className="md:col-span-2 space-y-2">
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Ações Necessárias / Pós Entrega</label>
+                            <Input value={formData.acoesNecessarias} onChange={e => setFormData({ ...formData, acoesNecessarias: e.target.value })} placeholder="Ex: Pedir RVT nativo, revisar níveis..." className="rounded-xl border-slate-200" />
+                        </div>
 
 
                         <div className="space-y-2">

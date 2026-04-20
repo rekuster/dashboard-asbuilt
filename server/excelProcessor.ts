@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx';
 import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat.js';
-import { InsertSala, InsertApontamento, InsertEntregaAsBuilt } from '../drizzle/schema';
+import { InsertSala, InsertApontamento } from '../drizzle/schema';
 
 dayjs.extend(customParseFormat);
 
@@ -66,7 +66,7 @@ export async function processExcelFile(fileBuffer: Buffer): Promise<{
             const salaSheet = workbook.Sheets['Mapeamento Salas'];
             const salaData = XLSX.utils.sheet_to_json(salaSheet);
 
-            salaData.forEach((row: any, index: number) => {
+            salaData.forEach((row: any) => {
                 if (row['Sala']) {
                     // Extremely robust mapping for statusRA (Column G)
                     let statusRA = row['Status RA'] || row['statusRa'] || row['statusRA'] || row['StatusRA'] || row['STATUS RA'];

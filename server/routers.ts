@@ -41,8 +41,6 @@ import {
     getEntregasByEscopo,
     registrarVerificacao,
     createApontamento,
-    updateSalaStatus,
-    getSalaById,
     getDb,
     salas,
     apontamentos,
@@ -422,14 +420,14 @@ export const appRouter = router({
                 comentario: z.string().optional(),
                 
                 // Novos campos
-                numeroEntrega: z.number().optional(),
-                identificadorEntrega: z.string().optional(),
-                formato: z.string().optional(),
-                isModelo: z.number().optional(),
-                modeloBaseReferencia: z.string().optional(),
-                acoesNecessarias: z.string().optional(),
-                checkpointBep: z.string().optional(),
-                avancoFisico: z.string().optional(),
+                numeroEntrega: z.number().nullish(),
+                identificadorEntrega: z.string().nullish(),
+                formato: z.string().nullish(),
+                isModelo: z.number().nullish(),
+                modeloBaseReferencia: z.string().nullish(),
+                acoesNecessarias: z.string().nullish(),
+                checkpointBep: z.string().nullish(),
+                avancoFisico: z.string().nullish(),
             }))
             .mutation(async ({ input }) => {
                 return await upsertEntrega(input);
@@ -584,7 +582,7 @@ export const appRouter = router({
                 const db = await getDb();
                 if (!db) throw new Error("Database not connected");
 
-                return await db.transaction(async (tx) => {
+                return await db.transaction(async (tx: any) => {
                     // 1. Fetch current data within transaction
                     const [existing] = await tx.select().from(salas).where(eq(salas.id, id)).limit(1);
                     if (!existing) throw new Error("Sala not found");

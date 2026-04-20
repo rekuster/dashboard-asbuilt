@@ -1,43 +1,40 @@
 {
     "compilerOptions": {
-        "target": "ES2022",
+        "target": "ESNext",
         "useDefineForClassFields": true,
-        "lib": [
-            "ES2022",
-            "DOM",
-            "DOM.Iterable"
-        ],
-        "module": "ESNext",
+        "lib": ["DOM", "DOM.Iterable", "ESNext"],
+        "allowJs": false,
         "skipLibCheck": true,
         "esModuleInterop": true,
-        /* Bundler mode */
-        "moduleResolution": "bundler",
-        "allowImportingTsExtensions": true,
+        "allowSyntheticDefaultImports": true,
+        "strict": true,
+        "forceConsistentCasingInFileNames": true,
+        "module": "ESNext",
+        "moduleResolution": "Bundler",
+        "resolveJsonModule": true,
         "isolatedModules": true,
-        "moduleDetection": "force",
         "noEmit": true,
         "jsx": "react-jsx",
-        /* Linting */
-        "strict": true,
-        "noUnusedLocals": true,
-        "noUnusedParameters": true,
-        "noFallthroughCasesInSwitch": true,
-        "noUncheckedSideEffectImports": true,
-        /* Path aliases */
         "baseUrl": ".",
         "paths": {
-            "@/*": [
-                "./client/src/*"
-            ],
-            "@shared/*": [
-                "./shared/*"
-            ]
-        }
+            "@/*": ["./client/src/*"],
+            "@shared/*": ["./shared/*"]
+        },
+        "types": ["vite/client", "node"]
     },
     "include": [
         "client/src",
         "server",
         "shared",
-        "drizzle"
+        "drizzle",
+        "vite.config.ts",
+        "drizzle.config.ts"
+    ],
+    "exclude": [
+        "node_modules",
+        "tmp",
+        "server/scripts",
+        "old-scripts",
+        "dist"
     ]
 }

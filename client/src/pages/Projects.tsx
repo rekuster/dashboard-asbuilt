@@ -1,4 +1,4 @@
-import { Plus, Building2, LogOut, Settings } from 'lucide-react';
+import { Plus, Building2, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { trpc } from '@/lib/trpc';
