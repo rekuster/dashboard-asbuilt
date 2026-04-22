@@ -72,6 +72,7 @@ import { z } from 'zod';
 export const appRouter = router({
     auth: router({
         me: publicProcedure.query(opts => opts.ctx.user),
+        debugId: publicProcedure.query(opts => ({ userId: (opts.ctx as any).userId })),
     }),
 
     // =========================================================================
@@ -82,7 +83,8 @@ export const appRouter = router({
             .query(async ({ ctx }) => {
                 // For now, use a dummy ownerId until auth middleware passes the real user
                 const userId = (ctx as any).userId || 'anonymous';
-                return await listProjects(userId);
+                console.log(`[TRPC] listProjects for userId: ${userId}, email: ${ctx.userEmail}`);
+                return await listProjects(userId, ctx.userEmail);
             }),
 
         create: publicProcedure
@@ -790,7 +792,6 @@ export const appRouter = router({
                 const result = await unlinkIfcFromRoom(input.salaId, input.ifcExpressId);
                 return { success: result };
             }),
-
     }),
 });
 

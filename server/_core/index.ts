@@ -33,7 +33,9 @@ app.use((req, res, next) => {
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
-// External API for automated Excel Sync
+/* 
+// BLOQUEADO: Sincronização automática via Excel desativada a pedido do usuário.
+// O Dashboard agora é o mestre dos dados para evitar sobreposição de informações manuais.
 app.post('/api/external/upload-excel', upload.single('file'), async (req, res) => {
     const apiKey = req.headers['x-api-key'];
 
@@ -54,6 +56,7 @@ app.post('/api/external/upload-excel', upload.single('file'), async (req, res) =
         return res.status(500).json({ error: error.message || 'Internal Server Error' });
     }
 });
+*/
 
 // Image Upload for Field Reports
 app.post('/api/upload-image', upload.single('image'), async (req, res) => {
@@ -135,6 +138,7 @@ app.use(
                         Buffer.from(token.split('.')[1], 'base64url').toString()
                     );
                     userId = payload.sub;
+                    (req as any).userEmail = payload.email;
                 } catch (e) {
                     // Invalid token, userId remains undefined
                 }
@@ -144,6 +148,7 @@ app.use(
                 res,
                 user: undefined,
                 userId,
+                userEmail: (req as any).userEmail,
             };
         },
     })

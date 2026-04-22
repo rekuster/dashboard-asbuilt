@@ -5,7 +5,7 @@ cd /d "%~dp0"
 echo 🚀 Iniciando o Dashboard As-Built - Neodent...
 echo ------------------------------------------------
 echo 🔗 Abrindo interface em: http://localhost:5188
-echo 📂 Sincronizacao Excel: Ativa na porta 3008
+echo 📂 Sincronizacao Excel: Inativa
 echo ------------------------------------------------
 
 :: Garante que o Node esta no PATH

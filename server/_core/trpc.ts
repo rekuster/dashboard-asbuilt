@@ -7,6 +7,7 @@ export interface Context {
     res: Response;
     user?: any;
     userId?: string;
+    userEmail?: string;
 }
 
 const t = initTRPC.context<Context>().create({

@@ -40,3 +40,4 @@ uploads/ifc/*
 Relatório de divergencias/
 .vercel
 .env*.local
+scratch/

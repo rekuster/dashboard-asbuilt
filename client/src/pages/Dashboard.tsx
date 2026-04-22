@@ -50,6 +50,14 @@ export default function Dashboard() {
     const [selectedEdificacao, setSelectedEdificacao] = useState<string | null>(null);
     const [activeModelUrl, setActiveModelUrl] = useState<string | undefined>();
     
+    // Persistir aba ativa no refresh
+    const [activeTab, setActiveTab] = useState(() => sessionStorage.getItem('dashboard_active_tab') || 'overview');
+
+    const handleTabChange = (val: string) => {
+        setActiveTab(val);
+        sessionStorage.setItem('dashboard_active_tab', val);
+    };
+    
     // Status Modal State
     const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
     const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
@@ -121,7 +129,7 @@ export default function Dashboard() {
     });
 
     // Also update if ifcFiles changes and none selected
-    if (!activeModelUrl && ifcFiles.length > 0) {
+    if (activeModelUrl === undefined && ifcFiles.length > 0) {
         setActiveModelUrl(ifcFiles[0].filePath);
     }
 
@@ -192,8 +200,7 @@ export default function Dashboard() {
                 {/* Alerts Section */}
                 <DataIntegrityAlert />
 
-                {/* Dashboard Tabs */}
-                <Tabs defaultValue="overview" className="space-y-6">
+                <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
                     <TabsList className="bg-white border p-1 h-12 shadow-sm overflow-x-auto flex-nowrap whitespace-nowrap">
                         <TabsTrigger value="overview" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                             <LayoutDashboard className="w-4 h-4 mr-2" />

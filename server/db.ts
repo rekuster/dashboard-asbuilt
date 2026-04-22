@@ -1323,10 +1323,28 @@ export async function updateSalaStatus(id: number, data: Partial<InsertSala>) {
 // PROJECT FUNCTIONS
 // ============================================================================
 
-export async function listProjects(ownerId: string) {
+export async function listProjects(ownerId: string, email?: string) {
     const db = await getDb();
     if (!db) return [];
-    return db.select().from(projects).where(eq(projects.ownerId, ownerId)).orderBy(desc(projects.createdAt));
+    
+    const { or, eq, exists, and } = await import('drizzle-orm');
+    
+    // Return projects where user is owner OR is a member by email
+    const conditions = [eq(projects.ownerId, ownerId)];
+    
+    if (email) {
+        conditions.push(exists(
+            db.select().from(projectMembers)
+              .where(and(
+                  eq(projectMembers.projectId, projects.id),
+                  eq(projectMembers.email, email)
+              ))
+        ));
+    }
+    
+    return db.select().from(projects)
+             .where(or(...conditions))
+             .orderBy(desc(projects.createdAt));
 }
 
 export async function createProject(data: InsertProject) {

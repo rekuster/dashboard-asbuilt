@@ -183,8 +183,18 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
     const [editingEntrega, setEditingEntrega] = useState<any>(null);
     const [isBatchFormOpen, setIsBatchFormOpen] = useState(false);
     const [viewingDetail, setViewingDetail] = useState<any>(null);
-    const [activeTab, setActiveTab] = useState("list");
-    const [viewMode, setViewMode] = useState<"table" | "packets">("table");
+    const [activeTab, setActiveTab] = useState(() => sessionStorage.getItem('entregas_active_tab') || 'list');
+    const [viewMode, setViewMode] = useState<"table" | "packets">(() => (sessionStorage.getItem('entregas_view_mode') as any) || "table");
+
+    const handleTabChange = (val: string) => {
+        setActiveTab(val);
+        sessionStorage.setItem('entregas_active_tab', val);
+    };
+
+    const handleViewModeChange = (val: "table" | "packets") => {
+        setViewMode(val);
+        sessionStorage.setItem('entregas_view_mode', val);
+    };
     const [filterEmpresa, setFilterEmpresa] = useState("todas");
     const [filterPacote, setFilterPacote] = useState("todos");
     // ESTADO DE ORDENAÇÃO:
@@ -335,7 +345,7 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
                         <KPICard title="Rejeitados" value={stats?.rejeitados || 0} subtitle="Necessitam correção" className="border-rose-200 bg-rose-50/50" />
                     </div>
 
-                    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                    <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                             <TabsList className="grid grid-cols-4 w-full max-w-4xl bg-slate-100 p-1 rounded-xl">
                                 <TabsTrigger value="list" className="rounded-lg data-[state=active]:bg-[#940707] data-[state=active]:text-white">
@@ -348,7 +358,7 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
                                 </TabsTrigger>
                                 <TabsTrigger value="scope" className="rounded-lg data-[state=active]:bg-[#940707] data-[state=active]:text-white">
                                     <FileText className="w-4 h-4 mr-2" />
-                                    Lista de Entregas Final
+                                    Lista Mestra As Built
                                 </TabsTrigger>
                             </TabsList>
 
@@ -357,7 +367,7 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
                                     <Button 
                                         variant={viewMode === "table" ? "ghost" : "ghost"} 
                                         className={`h-8 px-3 rounded-md text-xs font-medium transition-all ${viewMode === "table" ? "bg-white shadow-sm text-[#940707]" : "text-slate-500"}`}
-                                        onClick={() => setViewMode("table")}
+                                        onClick={() => handleViewModeChange("table")}
                                     >
                                         <Layers className="w-3.5 h-3.5 mr-1.5" />
                                         Individual
@@ -365,7 +375,7 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
                                     <Button 
                                         variant={viewMode === "packets" ? "ghost" : "ghost"} 
                                         className={`h-8 px-3 rounded-md text-xs font-medium transition-all ${viewMode === "packets" ? "bg-white shadow-sm text-[#940707]" : "text-slate-500"}`}
-                                        onClick={() => setViewMode("packets")}
+                                        onClick={() => handleViewModeChange("packets")}
                                     >
                                         <Briefcase className="w-3.5 h-3.5 mr-1.5" />
                                         Por Pacote (SM)
@@ -521,9 +531,7 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
                                                                             <SelectTrigger className={`h-7 min-w-[120px] rounded-full border text-[9px] font-black uppercase px-2 flex items-center gap-1 hover:brightness-95 transition-all ${statusInfo.color}`}>
                                                                                 {updateStatusMutation.isPending && updateStatusMutation.variables?.id === entrega.id ? (
                                                                                     <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                                                                                ) : (
-                                                                                    <StatusIcon className="w-2.5 h-2.5" />
-                                                                                )}
+                                                                                ) : null}
                                                                                 <SelectValue placeholder="Status" />
                                                                             </SelectTrigger>
                                                                             <SelectContent>
@@ -1229,7 +1237,10 @@ function EntregaDetailView({ entrega, onBack, onUpdate, onEdit, onDelete }: any)
     const [comentario, setComentario] = useState("");
     const [isUpdating, setIsUpdating] = useState(false);
 
+    const { data: escopos = [] } = trpc.dashboard.getEscopos.useQuery();
     const { data: historico = [] } = trpc.dashboard.getHistoricoEntrega.useQuery({ id: entrega.id });
+
+    const linkedScope = useMemo(() => escopos.find((s: any) => s.id === entrega.escopoId), [escopos, entrega.escopoId]);
 
     const mutation = trpc.dashboard.upsertEntrega.useMutation({
         onSuccess: () => {
@@ -1332,6 +1343,10 @@ function EntregaDetailView({ entrega, onBack, onUpdate, onEdit, onDelete }: any)
                                 <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1"><FileText className="w-3 h-3" /> Pacote / SM</span>
                                 <p className="font-semibold text-slate-700">{entrega.identificadorEntrega || "-"}</p>
                             </div>
+                            <div className="space-y-1 col-span-2">
+                                <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-primary" /> Modelo Lista Mestra</span>
+                                <p className="font-bold text-slate-800">{linkedScope?.nomeModeloFinal || linkedScope?.nomeModelo || "Não vinculado"}</p>
+                            </div>
                             <div className="space-y-1">
                                 <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1"><History className="w-3 h-3" /> Formato</span>
                                 <Badge variant="outline" className="font-bold uppercase bg-slate-50">{entrega.formato || "-"}</Badge>
@@ -1342,11 +1357,7 @@ function EntregaDetailView({ entrega, onBack, onUpdate, onEdit, onDelete }: any)
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
-                            <div className="space-y-1">
-                                <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1"><Layers className="w-3 h-3" /> Modelo Base</span>
-                                <p className="font-semibold text-slate-700 truncate" title={entrega.modeloBaseReferencia}>{entrega.modeloBaseReferencia || "-"}</p>
-                            </div>
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
                             <div className="space-y-1">
                                 <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1"><Building2 className="w-3 h-3" /> Edificação</span>
                                 <p className="font-semibold text-slate-700">{entrega.edificacao}</p>
@@ -1359,15 +1370,21 @@ function EntregaDetailView({ entrega, onBack, onUpdate, onEdit, onDelete }: any)
                                 <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1"><Briefcase className="w-3 h-3" /> Fornecedor</span>
                                 <p className="font-semibold text-slate-700">{entrega.empresaResponsavel}</p>
                             </div>
-                            <div className="space-y-1 col-span-2">
-                                <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Ações Necessárias</span>
-                                <p className="font-bold text-rose-600">{entrega.acoesNecessarias || "Nenhuma ação pendente"}</p>
+                            <div className="space-y-1">
+                                <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1"><Layers className="w-3 h-3" /> Modelo Base</span>
+                                <p className="font-semibold text-slate-700 break-all" title={entrega.modeloBaseReferencia}>{entrega.modeloBaseReferencia || "-"}</p>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 gap-6">
+                            <div className="space-y-1">
+                                <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Ações Necessárias / Pós Entrega</span>
+                                <p className="font-bold text-rose-600 bg-rose-50 p-3 rounded-xl border border-rose-100">{entrega.acoesNecessarias || "Nenhuma ação pendente"}</p>
                             </div>
                         </div>
 
 
                         <div className="pt-4 border-t border-slate-100 space-y-2">
-                            <span className="text-xs font-bold text-slate-400 uppercase">Observações / Notas do Agente</span>
+                            <span className="text-xs font-bold text-slate-400 uppercase">Descrição da Entrega</span>
                             <p className="text-sm text-slate-600 leading-relaxed bg-slate-50 p-4 rounded-xl italic">
                                 {entrega.descricao || "Nenhuma descrição fornecida."}
                             </p>
@@ -1502,18 +1519,29 @@ function EntregaForm({ onClose, entrega, selectedEdificacao }: any) {
         return unique;
     }, [escopos, formData.edificacao]);
 
-    // Lógica de Modelo Base Automático
-    useEffect(() => {
-        if (formData.edificacao && formData.disciplina) {
-            const match = escopos.find((e: any) => 
-                e.edificacao === formData.edificacao && 
-                e.disciplina === formData.disciplina
-            );
-            if (match && !formData.modeloBaseReferencia) {
-                setFormData(prev => ({ ...prev, modeloBaseReferencia: match.nomeModelo }));
-            }
+    // Lógica de Modelo Final / Escopo Automático
+    const filteredEscoposForSelection = useMemo(() => {
+        if (!formData.edificacao || !formData.disciplina) return [];
+        return escopos.filter((e: any) => 
+            e.edificacao === formData.edificacao && 
+            e.disciplina === formData.disciplina
+        );
+    }, [escopos, formData.edificacao, formData.disciplina]);
+
+    const handleEscopoSelection = (escopoId: string) => {
+        const id = parseInt(escopoId);
+        const match = escopos.find((e: any) => e.id === id);
+        if (match) {
+            setFormData(prev => ({ 
+                ...prev, 
+                escopoId: id,
+                empresaResponsavel: match.empresa,
+                modeloBaseReferencia: match.nomeModelo
+            }));
+        } else {
+            setFormData(prev => ({ ...prev, escopoId: null }));
         }
-    }, [formData.edificacao, formData.disciplina, escopos]);
+    };
 
     const handleFormatoChange = (val: string) => {
         let tipo = "relatorio";
@@ -1542,9 +1570,9 @@ function EntregaForm({ onClose, entrega, selectedEdificacao }: any) {
         e.preventDefault();
         
         try {
-            // Resolver escopoId a partir dos dropdowns se for novo ou se mudou
+            // Resolver escopoId se não estiver definido
             let escopoId = formData.escopoId;
-            if (!escopoId || formData.edificacao || formData.disciplina) {
+            if (!escopoId) {
                 const match = escopos.find((e: any) => 
                     e.edificacao === formData.edificacao && 
                     e.disciplina === formData.disciplina &&
@@ -1565,7 +1593,7 @@ function EntregaForm({ onClose, entrega, selectedEdificacao }: any) {
 
     return (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
-            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh]">
                 <div className="bg-[#940707] p-6 text-white flex justify-between items-center shrink-0">
                     <div>
                         <h2 className="text-xl font-bold">{entrega ? 'Editar Entrega' : 'Nova Entrega as-built'}</h2>
@@ -1656,6 +1684,28 @@ function EntregaForm({ onClose, entrega, selectedEdificacao }: any) {
                             </select>
                         </div>
 
+                        <div className="space-y-2 md:col-span-2">
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1 text-[#940707]">Modelo Final As-Built (Vincular à Lista Mestra) *</label>
+                            <select 
+                                required
+                                className="flex h-10 w-full rounded-xl border-2 border-[#940707]/20 bg-white px-3 py-2 text-sm font-bold text-slate-700 focus:border-[#940707] transition-all" 
+                                value={formData.escopoId || ""} 
+                                onChange={e => handleEscopoSelection(e.target.value)}
+                            >
+                                <option value="">Selecione o modelo final...</option>
+                                {filteredEscoposForSelection.map((esc: any) => (
+                                    <option key={esc.id} value={esc.id}>
+                                        {esc.nomeModeloFinal || esc.nomeModelo} ({esc.empresa})
+                                    </option>
+                                ))}
+                            </select>
+                            {filteredEscoposForSelection.length === 0 && formData.edificacao && formData.disciplina && (
+                                <p className="text-[10px] text-rose-500 font-bold mt-1 ml-1 animate-pulse italic">
+                                    Nenhum modelo cadastrado na Lista Mestra para esta edificação/disciplina.
+                                </p>
+                            )}
+                        </div>
+
                         <div className="space-y-2">
                             <label className="text-xs font-bold uppercase text-slate-500 ml-1">É um Modelo BIM? *</label>
                             <Input readOnly value={formData.isModelo === 1 ? "Sim" : "Não"} className="rounded-xl border-none bg-slate-50 font-bold text-slate-500" />
@@ -1666,26 +1716,28 @@ function EntregaForm({ onClose, entrega, selectedEdificacao }: any) {
                             <Input value={formData.modeloBaseReferencia} onChange={e => setFormData({ ...formData, modeloBaseReferencia: e.target.value })} placeholder="Automático..." className="rounded-xl border-slate-200 bg-blue-50/30" />
                         </div>
 
-                        <div className="md:col-span-2 space-y-2">
-                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Ações Necessárias / Pós Entrega</label>
-                            <Input value={formData.acoesNecessarias} onChange={e => setFormData({ ...formData, acoesNecessarias: e.target.value })} placeholder="Ex: Pedir RVT nativo, revisar níveis..." className="rounded-xl border-slate-200" />
-                        </div>
+                        {entrega && (
+                            <div className="md:col-span-2 space-y-2">
+                                <label className="text-xs font-bold uppercase text-slate-500 ml-1">Ações Necessárias / Pós Entrega</label>
+                                <Input value={formData.acoesNecessarias} onChange={e => setFormData({ ...formData, acoesNecessarias: e.target.value })} placeholder="Ex: Pedir RVT nativo, revisar níveis..." className="rounded-xl border-slate-200" />
+                            </div>
+                        )}
 
 
                         <div className="space-y-2">
-                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Data Prevista *</label>
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Data de Entrega *</label>
                             <Input type="date" required value={formData.dataPrevista} onChange={e => setFormData({ ...formData, dataPrevista: e.target.value })} className="rounded-xl border-slate-200" />
                         </div>
                         <div className="space-y-2 md:col-span-2">
                             <label className="text-xs font-bold uppercase text-slate-500 ml-1">Descrição / Observações</label>
-                            <Textarea value={formData.descricao} onChange={(e) => setFormData({ ...formData, descricao: e.target.value })} placeholder="Notas adicionais..." className="resize-none rounded-xl border-slate-200 min-h-[80px]" />
+                            <Textarea value={formData.descricao} onChange={(e) => setFormData({ ...formData, descricao: e.target.value })} placeholder="Notas adicionais..." className="resize-none rounded-xl border-slate-200 min-h-[60px]" />
                         </div>
-                    </div>
-                    <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
-                        <Button type="button" variant="ghost" onClick={onClose} className="rounded-full">Cancelar</Button>
-                        <Button type="submit" disabled={mutation.isPending} className="rounded-full px-8 shadow-lg shadow-primary/20 bg-[#940707] hover:bg-[#7a0606] text-white">
-                            {mutation.isPending ? 'Salvando...' : (entrega ? 'Salvar Alterações' : 'Criar Entrega')}
-                        </Button>
+                        <div className="flex flex-col justify-end gap-2 pb-1">
+                            <Button type="submit" disabled={mutation.isPending} className="w-full rounded-xl shadow-lg shadow-primary/20 bg-[#940707] hover:bg-[#7a0606] text-white">
+                                {mutation.isPending ? 'Salvando...' : (entrega ? 'Salvar' : 'Criar Entrega')}
+                            </Button>
+                            <Button type="button" variant="ghost" onClick={onClose} className="w-full rounded-xl text-slate-400">Cancelar</Button>
+                        </div>
                     </div>
                 </form>
             </div>
