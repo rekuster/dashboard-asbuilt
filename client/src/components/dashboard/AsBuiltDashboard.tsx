@@ -43,6 +43,12 @@ import {
     LabelList
 } from "recharts";
 import { Progress } from "@/components/ui/progress";
+import {
+    Tooltip as ShadcnTooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 /**
  * Foca no controle da Lista Mestra (108 modelos) e rastreio de arquivos.
@@ -68,7 +74,7 @@ export default function AsBuiltDashboard({ selectedEdificacao }: { selectedEdifi
     ];
 
     const renderCustomizedLabel = ({ percent }: { percent: number }) => {
-        return `${(percent * 100).toFixed(0)}%`;
+        return `${(percent * 100).toFixed(1)}%`;
     };
 
     const renderTooltip = (value: number, name: string, data: any[]) => {
@@ -78,7 +84,8 @@ export default function AsBuiltDashboard({ selectedEdificacao }: { selectedEdifi
     };
 
     return (
-        <div className="bg-white p-8 rounded-none shadow-none min-h-[900px] flex flex-col gap-8 border border-slate-100 overflow-hidden" id="asbuilt-presentation-slide">
+        <TooltipProvider>
+            <div className="bg-white p-8 rounded-none shadow-none min-h-[900px] flex flex-col gap-8 border border-slate-100 overflow-hidden" id="asbuilt-presentation-slide">
             {/* Header / Branding (Matching PresentationTab) */}
             <div className="flex justify-between items-start border-b-2 border-slate-100 pb-4">
                 <div>
@@ -101,91 +108,150 @@ export default function AsBuiltDashboard({ selectedEdificacao }: { selectedEdifi
 
             {/* Top Row: Main KPIs (Matching PresentationTab Cards Style) */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <Card className="bg-slate-50 border-none shadow-sm rounded-xl p-4 border-l-4 border-slate-300">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Arquivos Totais</p>
-                    <div className="flex items-baseline gap-2">
-                        <span className="text-3xl font-black text-slate-900">{stats.totalArquivos}</span>
-                        <span className="text-slate-400 font-medium text-xs">Entregas</span>
-                    </div>
-                </Card>
+                    <Card className="bg-slate-50 border-none shadow-sm rounded-xl p-4 border-l-4 border-slate-300">
+                        <div className="flex items-center gap-2 mb-1">
+                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Arquivos Totais</p>
+                            <ShadcnTooltip>
+                                <TooltipTrigger>
+                                    <Info className="w-3 h-3 text-slate-300" />
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-[200px]">
+                                    <p>Contagem total de todos os arquivos e revisões recebidos no sistema.</p>
+                                </TooltipContent>
+                            </ShadcnTooltip>
+                        </div>
+                        <div className="flex items-baseline gap-2">
+                            <span className="text-3xl font-black text-slate-900">{stats.totalArquivos}</span>
+                            <span className="text-slate-400 font-medium text-xs">Entregas</span>
+                        </div>
+                    </Card>
 
-                <Card className="bg-emerald-50/50 border-none shadow-sm rounded-xl p-4 border-l-4 border-emerald-500">
-                    <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest mb-1 font-black">Cobertura de Modelos</p>
-                    <div className="flex items-baseline gap-2">
-                        <span className="text-3xl font-black text-slate-900">{stats.modelosComEntrega}</span>
-                        <span className="text-emerald-600 font-bold bg-emerald-100 px-1.5 py-0.5 rounded text-[10px]">
-                            {stats.percentualEntregasIniciadas.toFixed(1)}%
-                        </span>
-                    </div>
-                </Card>
+                    <Card className="bg-emerald-50/50 border-none shadow-sm rounded-xl p-4 border-l-4 border-emerald-500">
+                        <div className="flex items-center gap-2 mb-1">
+                            <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest font-black">Cobertura de Modelos</p>
+                            <ShadcnTooltip>
+                                <TooltipTrigger>
+                                    <Info className="w-3 h-3 text-emerald-300" />
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-[200px]">
+                                    <p>Percentual de modelos da Lista Mestra (dos 108 contratados) que já tiveram o processo de entrega iniciado.</p>
+                                </TooltipContent>
+                            </ShadcnTooltip>
+                        </div>
+                        <div className="flex items-baseline gap-2">
+                            <span className="text-3xl font-black text-slate-900">{stats.modelosComEntrega}</span>
+                            <span className="text-emerald-600 font-bold bg-emerald-100 px-1.5 py-0.5 rounded text-[10px]">
+                                {stats.percentualEntregasIniciadas.toFixed(1)}%
+                            </span>
+                        </div>
+                    </Card>
 
-                <Card className="bg-rose-50/50 border-none shadow-sm rounded-xl p-4 border-l-4 border-rose-500">
-                    <p className="text-[10px] font-bold text-rose-700 uppercase tracking-widest mb-1 font-black">Pendência de RVT</p>
-                    <div className="flex items-baseline gap-2">
-                        <span className="text-3xl font-black text-slate-900">{stats.semRvt}</span>
-                        <span className="text-rose-600 font-bold bg-rose-100 px-1.5 py-0.5 rounded text-[10px]">
-                            {((stats.semRvt / (stats.totalModelos || 1)) * 100).toFixed(0)}%
-                        </span>
-                    </div>
-                </Card>
+                    <Card className="bg-rose-50/50 border-none shadow-sm rounded-xl p-4 border-l-4 border-rose-500">
+                        <div className="flex items-center gap-2 mb-1">
+                            <p className="text-[10px] font-bold text-rose-700 uppercase tracking-widest font-black">Pendência de RVT</p>
+                            <ShadcnTooltip>
+                                <TooltipTrigger>
+                                    <Info className="w-3 h-3 text-rose-300" />
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-[200px]">
+                                    <p>Modelos que ainda não enviaram o arquivo nativo (.RVT) editável, essencial para o As-Built.</p>
+                                </TooltipContent>
+                            </ShadcnTooltip>
+                        </div>
+                        <div className="flex items-baseline gap-2">
+                            <span className="text-3xl font-black text-slate-900">{stats.semRvt}</span>
+                            <span className="text-rose-600 font-bold bg-rose-100 px-1.5 py-0.5 rounded text-[10px]">
+                                {((stats.semRvt / (stats.totalModelos || 1)) * 100).toFixed(1)}%
+                            </span>
+                        </div>
+                    </Card>
 
-                <Card className="bg-[#f0f9f1] border-none shadow-sm rounded-xl p-4 border-l-4 border-[#166534]">
-                    <p className="text-[10px] font-bold text-[#166534] uppercase tracking-widest mb-1 font-black">Eficiência</p>
-                    <div className="flex items-baseline gap-2">
-                        <span className="text-3xl font-black text-slate-900">{stats.taxaAprovacao.toFixed(1)}%</span>
-                        <span className="text-[#166534] font-medium text-[11px] ml-2">1ª Passagem</span>
-                    </div>
-                </Card>
-            </div>
+                    <Card className="bg-[#f0f9f1] border-none shadow-sm rounded-xl p-4 border-l-4 border-[#166534]">
+                        <div className="flex items-center gap-2 mb-1">
+                            <p className="text-[10px] font-bold text-[#166534] uppercase tracking-widest font-black">Eficiência</p>
+                            <ShadcnTooltip>
+                                <TooltipTrigger>
+                                    <Info className="w-3 h-3 text-[#166534]/30" />
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-[200px]">
+                                    <p>Taxa de aprovação técnica na primeira análise (sem necessidade de ressubmissão por correções).</p>
+                                </TooltipContent>
+                            </ShadcnTooltip>
+                        </div>
+                        <div className="flex items-baseline gap-2">
+                            <span className="text-3xl font-black text-slate-900">{stats.taxaAprovacao.toFixed(1)}%</span>
+                            <span className="text-[#166534] font-medium text-[11px] ml-2">1ª Passagem</span>
+                        </div>
+                    </Card>
+                </div>
 
             <div className="grid grid-cols-12 gap-8 flex-1">
                 {/* Saúde por Disciplina (Left Column - 8/12) */}
                 <div className="col-span-12 lg:col-span-8 flex flex-col gap-6">
                     <Card className="border-none shadow-sm bg-white border border-slate-100 rounded-2xl p-6">
-                        <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-                            <Layers className="w-3.5 h-3.5 text-[#940707]" />
-                            Saúde Técnica por Disciplina
-                        </h2>
-                        <div className="h-[400px]">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                <Layers className="w-3.5 h-3.5 text-[#940707]" />
+                                Saúde Técnica por Disciplina
+                            </h2>
+                            <ShadcnTooltip>
+                                <TooltipTrigger>
+                                    <Info className="w-3.5 h-3.5 text-slate-300" />
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-[250px]">
+                                    <p>Status de aprovação técnica de cada disciplina, separando o que já foi validado, o que está em análise e o que ainda está pendente.</p>
+                                </TooltipContent>
+                            </ShadcnTooltip>
+                        </div>
+                        <div className="h-[600px]">
                             <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={stats.statsPorDisciplina} layout="vertical" margin={{ left: 20, right: 30, top: 0, bottom: 0 }}>
+                                <BarChart data={stats.statsPorDisciplina} layout="vertical" margin={{ left: 30, right: 30, top: 0, bottom: 0 }}>
                                     <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
                                     <XAxis type="number" hide />
-                                    <YAxis dataKey="name" type="category" width={100} axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 'bold' }} />
+                                    <YAxis 
+                                        dataKey="name" 
+                                        type="category" 
+                                        width={180} 
+                                        axisLine={false} 
+                                        tickLine={false} 
+                                        interval={0}
+                                        tick={{ fontSize: 9, fontWeight: 'bold', fill: '#475569' }} 
+                                    />
                                     <Tooltip 
                                         cursor={{fill: '#f8fafc'}}
                                         contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                                     />
                                     <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ paddingBottom: '20px', fontSize: '10px', textTransform: 'uppercase', fontWeight: 'bold' }} />
-                                    <Bar dataKey="validado" name="Validados" stackId="a" fill="#940707" radius={[0, 0, 0, 0]} barSize={20}>
+                                    <Bar dataKey="validado" name="Validados" stackId="a" fill="#940707" radius={[0, 0, 0, 0]} barSize={28}>
                                         <LabelList 
                                             dataKey="validado" 
-                                            position="center" 
+                                            position="insideLeft" 
                                             fill="#fff" 
-                                            fontSize={9} 
+                                            fontSize={10} 
                                             fontWeight="bold"
-                                            formatter={(val: any, entry: any) => {
-                                                if (!entry || !entry.payload) return '';
-                                                const total = (entry.payload.validado || 0) + (entry.payload.recebido || 0) + (entry.payload.pendente || 0);
-                                                return val > 0 && total > 0 ? `${((val/total)*100).toFixed(1)}%` : '';
-                                            }}
+                                            offset={10}
                                         />
                                     </Bar>
-                                    <Bar dataKey="recebido" name="Em Análise" stackId="a" fill="#475569" barSize={20}>
+                                    <Bar dataKey="recebido" name="Em Análise" stackId="a" fill="#475569" barSize={28}>
                                         <LabelList 
                                             dataKey="recebido" 
-                                            position="center" 
+                                            position="insideLeft" 
                                             fill="#fff" 
-                                            fontSize={9} 
+                                            fontSize={10} 
                                             fontWeight="bold"
-                                            formatter={(val: any, entry: any) => {
-                                                if (!entry || !entry.payload) return '';
-                                                const total = (entry.payload.validado || 0) + (entry.payload.recebido || 0) + (entry.payload.pendente || 0);
-                                                return val > 0 && total > 0 ? `${((val/total)*100).toFixed(1)}%` : '';
-                                            }}
+                                            offset={10}
                                         />
                                     </Bar>
-                                    <Bar dataKey="pendente" name="Pendentes" stackId="a" fill="#e2e8f0" radius={[0, 4, 4, 0]} barSize={20} />
+                                    <Bar dataKey="pendente" name="Pendentes" stackId="a" fill="#e2e8f0" radius={[0, 4, 4, 0]} barSize={28}>
+                                        <LabelList 
+                                            dataKey="pendente" 
+                                            position="insideLeft" 
+                                            fill="#64748b" 
+                                            fontSize={10} 
+                                            fontWeight="bold"
+                                            offset={10}
+                                        />
+                                    </Bar>
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>
@@ -193,10 +259,20 @@ export default function AsBuiltDashboard({ selectedEdificacao }: { selectedEdifi
 
                     {/* Timeline de Recebimento */}
                     <Card className="border-none shadow-sm bg-white border border-slate-100 rounded-2xl p-6">
-                        <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-                            <Calendar className="w-3.5 h-3.5 text-[#940707]" />
-                            Arquivos Recebidos (Frequência Quinzenal)
-                        </h2>
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                <Calendar className="w-3.5 h-3.5 text-[#940707]" />
+                                Arquivos Recebidos (Frequência Quinzenal)
+                            </h2>
+                            <ShadcnTooltip>
+                                <TooltipTrigger>
+                                    <Info className="w-3.5 h-3.5 text-slate-300" />
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-[250px]">
+                                    <p>Acompanhamento do volume de arquivos recebidos ao longo do tempo, agrupados por períodos de 15 dias.</p>
+                                </TooltipContent>
+                            </ShadcnTooltip>
+                        </div>
                         <div className="h-[250px]">
                             <ResponsiveContainer width="100%" height="100%">
                                 <AreaChart data={stats.timelineRecebimento} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
@@ -337,5 +413,6 @@ export default function AsBuiltDashboard({ selectedEdificacao }: { selectedEdifi
                 </div>
             </div>
         </div>
-    );
+    </TooltipProvider>
+);
 }

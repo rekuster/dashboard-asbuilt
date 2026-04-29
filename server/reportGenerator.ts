@@ -432,10 +432,21 @@ export async function generatePDFReport(filters?: {
             const infoY = 100;
             doc.fillColor('#000000').fontSize(11).font('Helvetica');
             doc.text(`Disciplina: ${getDisciplineFullName(item.apontamento.disciplina)}`, infoX, infoY);
-            doc.text(`Responsável: ${item.apontamento.responsavel || 'Não definido'}`, infoX, infoY + 20);
+            doc.text(`Responsável: ${item.apontamento.responsavel || 'Não definido'}`, infoX, infoY + 15);
+            
+            // Status e Prioridade
+            const statusLabel = (item.apontamento.status || 'ATIVA').toUpperCase();
+            doc.font('Helvetica-Bold').text(`Status: `, infoX, infoY + 35);
+            doc.font('Helvetica').text(statusLabel, infoX + 40, infoY + 35);
+            
+            if (item.apontamento.status === 'RESOLVIDA' && item.apontamento.dataResolvido) {
+                const resDate = new Date(item.apontamento.dataResolvido).toLocaleDateString('pt-BR');
+                doc.fontSize(9).fillColor('#22C55E').text(`(Sanado em ${resDate})`, infoX, infoY + 47);
+                doc.fillColor('#000000').fontSize(11);
+            }
 
-            doc.font('Helvetica-Bold').text('Apontamento:', infoX, infoY + 50);
-            doc.font('Helvetica').fontSize(10).text(item.apontamento.divergencia || '', infoX, infoY + 65, { width: 210 });
+            doc.font('Helvetica-Bold').text('Apontamento:', infoX, infoY + 65);
+            doc.font('Helvetica').fontSize(10).text(item.apontamento.divergencia || '', infoX, infoY + 80, { width: 210 });
 
             // --- Seção de Imagens ---
             const imgY = 110;
@@ -679,11 +690,16 @@ export async function generateExcelReport(edificacao?: string): Promise<Buffer> 
     // Planilha 2: Apontamentos
     const sheetApontamentos = workbook.addWorksheet('Apontamentos RA Obra');
     sheetApontamentos.columns = [
-        { header: 'Data', key: 'data', width: 15 },
+        { header: 'Data Criação', key: 'data', width: 15 },
         { header: 'Número', key: 'numeroApontamento', width: 10 },
         { header: 'Sala', key: 'sala', width: 25 },
         { header: 'Disciplina', key: 'disciplina', width: 15 },
+        { header: 'Status', key: 'status', width: 15 },
+        { header: 'Prioridade', key: 'prioridade', width: 12 },
+        { header: 'Tipo', key: 'tipo', width: 15 },
         { header: 'Divergência', key: 'divergencia', width: 50 },
+        { header: 'Responsável', key: 'responsavel', width: 20 },
+        { header: 'Data Resolução', key: 'dataResolvido', width: 15 },
     ];
     apontamentosData.forEach((item: any) => {
         sheetApontamentos.addRow({
@@ -691,7 +707,12 @@ export async function generateExcelReport(edificacao?: string): Promise<Buffer> 
             numeroApontamento: item.numeroApontamento,
             sala: item.sala,
             disciplina: item.disciplina,
-            divergencia: item.divergencia
+            status: item.status || 'ATIVA',
+            prioridade: item.prioridade || 'NORMAL',
+            tipo: item.tipo || 'DIVERGÊNCIA',
+            divergencia: item.divergencia,
+            responsavel: item.responsavel,
+            dataResolvido: item.dataResolvido ? new Date(item.dataResolvido).toLocaleDateString('pt-BR') : 'PENDENTE'
         });
     });
 

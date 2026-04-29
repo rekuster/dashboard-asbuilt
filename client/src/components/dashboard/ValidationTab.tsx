@@ -105,7 +105,7 @@ export default function ValidationTab() {
         
         // Só mostra disciplinas que têm apontamentos pendentes
         (pointingStats as any[]).forEach((a: any) => {
-            if (a.status === 'PENDENTE') {
+            if (a.status === 'ATIVA') {
                 discWithIssues.add(a.disciplina);
             }
         });
@@ -126,7 +126,7 @@ export default function ValidationTab() {
     const activeApontamentos = useMemo(() => {
         const map: Record<string, number> = {};
         (pointingStats as any[]).forEach((a: any) => {
-            if (a.status === 'PENDENTE') {
+            if (a.status === 'ATIVA') {
                 const key = `${a.sala}-${a.disciplina}`;
                 map[key] = (map[key] || 0) + 1;
             }
@@ -210,7 +210,7 @@ export default function ValidationTab() {
                         return acc;
                     }, { ok: 0, issue: 0 });
 
-                    const progress = Math.round((roomStats.ok / roomTotal) * 100) || 0;
+                    const progress = roomTotal > 0 ? (roomStats.ok / roomTotal) * 100 : 0;
 
                     return (
                         <Card key={discipline} className="border-none shadow-lg overflow-hidden bg-white/80 transition-all duration-300">
@@ -233,7 +233,7 @@ export default function ValidationTab() {
                                         <div className="flex items-center gap-2">
                                             <h3 className="font-bold text-slate-700 uppercase tracking-tight">{discipline}</h3>
                                             <Badge variant="outline" className="text-[10px] bg-slate-100 border-slate-200 py-0 h-4 text-[#940707] font-black">
-                                                {roomTotal} PENDÊNCIAS
+                                                {roomTotal} ATIVAS
                                             </Badge>
                                         </div>
                                         <div className="flex items-center gap-4 mt-1">
@@ -243,7 +243,7 @@ export default function ValidationTab() {
                                                     style={{ width: `${progress}%` }}
                                                 />
                                             </div>
-                                            <span className="text-[10px] font-black text-slate-400">{progress}%</span>
+                                            <span className="text-[10px] font-black text-slate-400">{progress.toFixed(1)}%</span>
                                             
                                             <div className="flex items-center gap-3 ml-2">
                                                 <div className="flex items-center gap-1">
@@ -253,7 +253,7 @@ export default function ValidationTab() {
                                                 {roomStats.issue > 0 && (
                                                     <div className="flex items-center gap-1">
                                                         <div className="w-2 h-2 rounded-full bg-rose-500" />
-                                                        <span className="text-[10px] font-bold text-rose-500">{roomStats.issue} Pendente</span>
+                                                        <span className="text-[10px] font-bold text-rose-500">{roomStats.issue} Ativa</span>
                                                     </div>
                                                 )}
                                             </div>

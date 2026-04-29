@@ -183,7 +183,7 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
     const [editingEntrega, setEditingEntrega] = useState<any>(null);
     const [isBatchFormOpen, setIsBatchFormOpen] = useState(false);
     const [viewingDetail, setViewingDetail] = useState<any>(null);
-    const [activeTab, setActiveTab] = useState(() => sessionStorage.getItem('entregas_active_tab') || 'list');
+    const [activeTab, setActiveTab] = useState("list");
     const [viewMode, setViewMode] = useState<"table" | "packets">(() => (sessionStorage.getItem('entregas_view_mode') as any) || "table");
 
     const handleTabChange = (val: string) => {
@@ -197,6 +197,7 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
     };
     const [filterEmpresa, setFilterEmpresa] = useState("todas");
     const [filterPacote, setFilterPacote] = useState("todos");
+    const [filterStatus, setFilterStatus] = useState("todos"); // NOVO: Filtro por status
     // ESTADO DE ORDENAÇÃO:
     // Este estado guarda qual coluna o usuário clicou para ordenar (ex: "Data")
     // e se a ordem é crescente ('asc') ou decrescente ('desc').
@@ -260,8 +261,9 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
             const matchesEdif = !selectedEdificacao || e.edificacao === selectedEdificacao;
             const matchesEmpresa = filterEmpresa === "todas" || e.empresaResponsavel === filterEmpresa;
             const matchesPacote = filterPacote === "todos" || e.identificadorEntrega === filterPacote;
+            const matchesStatus = filterStatus === "todos" || String(e.status).toUpperCase() === String(filterStatus).toUpperCase();
             
-            return matchesSearch && matchesEdif && matchesEmpresa && matchesPacote;
+            return matchesSearch && matchesEdif && matchesEmpresa && matchesPacote && matchesStatus;
         }).sort((a: any, b: any) => {
             // LÓGICA DE ORDENAÇÃO DINÂMICA:
             // Pegamos a coluna que o usuário escolheu e comparamos os valores.
@@ -287,7 +289,7 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
             if (dateA !== dateB) return dateA - dateB;
             return a.id - b.id;
         });
-    }, [entregas, searchTerm, selectedEdificacao, filterEmpresa, filterPacote, sortConfig]);
+    }, [entregas, searchTerm, selectedEdificacao, filterEmpresa, filterPacote, filterStatus, sortConfig]);
 
     // Opções únicas para os filtros (Normalizadas para evitar duplicata de maiúsculas/minúsculas)
     const empresasUnicas = useMemo(() => {
@@ -401,9 +403,7 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
                                                 onChange={(e) => setSearchTerm(e.target.value)}
                                             />
                                         </div>
-                                        
-                                        {/* Novos Filtros */}
-                                        <div className="flex items-center gap-2">
+                                                                    <div className="flex items-center gap-2">
                                             <Select value={filterEmpresa} onValueChange={setFilterEmpresa}>
                                                 <SelectTrigger className="w-[140px] h-9 rounded-full bg-white/50 border-slate-200 text-[11px] font-bold">
                                                     <SelectValue placeholder="Empresa" />
@@ -417,13 +417,25 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
                                             </Select>
 
                                             <Select value={filterPacote} onValueChange={setFilterPacote}>
-                                                <SelectTrigger className="w-[180px] h-9 rounded-full bg-white/50 border-slate-200 text-[11px] font-bold">
+                                                <SelectTrigger className="w-[150px] h-9 rounded-full bg-white/50 border-slate-200 text-[11px] font-bold">
                                                     <SelectValue placeholder="Pacote / SM" />
                                                 </SelectTrigger>
                                                 <SelectContent>
                                                     <SelectItem value="todos">Todos Pacotes</SelectItem>
                                                     {pacotesUnicos.map((p: any) => (
                                                         <SelectItem key={p} value={p}>{p}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+
+                                            <Select value={filterStatus} onValueChange={setFilterStatus}>
+                                                <SelectTrigger className="w-[140px] h-9 rounded-full bg-white/50 border-slate-200 text-[11px] font-bold">
+                                                    <SelectValue placeholder="Status" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="todos">Todos Status</SelectItem>
+                                                    {Object.entries(STATUS_LABELS).map(([val, { label }]) => (
+                                                        <SelectItem key={val} value={val}>{label}</SelectItem>
                                                     ))}
                                                 </SelectContent>
                                             </Select>
@@ -586,7 +598,11 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
                         </TabsContent>
 
                         <TabsContent value="scope">
-                            <ScopeManagementView entregas={entregas} selectedEdificacao={selectedEdificacao} />
+                            <ScopeManagementView 
+                                entregas={entregas} 
+                                selectedEdificacao={selectedEdificacao} 
+                                onViewEntrega={handleViewDetail}
+                            />
                         </TabsContent>
                     </Tabs>
                 </>
@@ -613,10 +629,15 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
 // ------------------------------------------------------------------
 // SCOPE MANAGEMENT VIEW (v2) — LISTA MESTRA + TIMELINE + VERIFICAÇÃO
 // ------------------------------------------------------------------
-function ScopeManagementView({ entregas, selectedEdificacao }: { entregas: any[], selectedEdificacao?: string }) {
+function ScopeManagementView({ entregas, selectedEdificacao, onViewEntrega }: { entregas: any[], selectedEdificacao?: string, onViewEntrega: (e: any) => void }) {
     const [selectedEscopo, setSelectedEscopo] = useState<any>(null);
     const [isEscopoFormOpen, setIsEscopoFormOpen] = useState(false);
     const [editingEscopo, setEditingEscopo] = useState<any>(null);
+
+    const [filterDisciplina, setFilterDisciplina] = useState("todas");
+    const [filterEmpresa, setFilterEmpresa] = useState("todas");
+    const [filterStatus, setFilterStatus] = useState("todos");
+    const [groupByEdificacao, setGroupByEdificacao] = useState(true);
 
     const { data: escopos = [], isLoading: loadingEscopos } = trpc.dashboard.getEscopos.useQuery();
     const utils = trpc.useUtils();
@@ -624,18 +645,28 @@ function ScopeManagementView({ entregas, selectedEdificacao }: { entregas: any[]
         onSuccess: () => utils.dashboard.getEscopos.invalidate()
     });
 
-    const filteredEscopos = escopos.filter((e: any) =>
-        !selectedEdificacao || e.edificacao === selectedEdificacao
-    );
+    // Opções para os filtros
+    const disciplinasUnicas = useMemo(() => {
+        const discs = new Set(escopos.map((e: any) => e.disciplina).filter(Boolean));
+        return Array.from(discs).sort();
+    }, [escopos]);
+
+    const empresasUnicas = useMemo(() => {
+        const emps = new Set(escopos.map((e: any) => e.empresa).filter(Boolean));
+        return Array.from(emps).sort();
+    }, [escopos]);
 
     // Count entregas per escopo
     const entregasPerEscopo = useMemo(() => {
-        const counts: Record<number, { total: number, validados: number, rejeitados: number, conformes: number, naoConformes: number }> = {};
+        const counts: Record<number, { total: number, validados: number, rejeitados: number, conformes: number, naoConformes: number, hasFinal: boolean }> = {};
         entregas.forEach((e: any) => {
             if (e.escopoId) {
-                if (!counts[e.escopoId]) counts[e.escopoId] = { total: 0, validados: 0, rejeitados: 0, conformes: 0, naoConformes: 0 };
+                if (!counts[e.escopoId]) counts[e.escopoId] = { total: 0, validados: 0, rejeitados: 0, conformes: 0, naoConformes: 0, hasFinal: false };
                 counts[e.escopoId].total++;
-                if (e.status === 'VALIDADO') counts[e.escopoId].validados++;
+                if (e.status === 'VALIDADO') {
+                    counts[e.escopoId].validados++;
+                    counts[e.escopoId].hasFinal = true; // Se houver pelo menos uma final, marca como concluído
+                }
                 if (e.status === 'REJEITADO') counts[e.escopoId].rejeitados++;
                 if (e.resultado === 'CONFORME') counts[e.escopoId].conformes++;
                 if (e.resultado === 'NAO_CONFORME') counts[e.escopoId].naoConformes++;
@@ -644,11 +675,42 @@ function ScopeManagementView({ entregas, selectedEdificacao }: { entregas: any[]
         return counts;
     }, [entregas]);
 
+    const filteredEscopos = useMemo(() => {
+        return escopos.filter((e: any) => {
+            const matchesEdif = !selectedEdificacao || e.edificacao === selectedEdificacao;
+            const matchesDisc = filterDisciplina === "todas" || e.disciplina === filterDisciplina;
+            const matchesEmp = filterEmpresa === "todas" || e.empresa === filterEmpresa;
+            
+            let matchesStatus = true;
+            if (filterStatus !== "todos") {
+                const counts = entregasPerEscopo[e.id] || { total: 0, validados: 0, hasFinal: false };
+                const isConcluido = counts.hasFinal;
+                matchesStatus = filterStatus === "validado" ? isConcluido : !isConcluido;
+            }
+            
+            return matchesEdif && matchesDisc && matchesEmp && matchesStatus;
+        });
+    }, [escopos, selectedEdificacao, filterDisciplina, filterEmpresa, filterStatus, entregasPerEscopo]);
+
+    const groupedEscopos = useMemo(() => {
+        if (!groupByEdificacao) return { "Todos os Itens": filteredEscopos };
+        
+        const groups: Record<string, any[]> = {};
+        filteredEscopos.forEach((e: any) => {
+            const edif = e.edificacao || "Sem Edificação";
+            if (!groups[edif]) groups[edif] = [];
+            groups[edif].push(e);
+        });
+        // Sort groups alphabetically by building name
+        return Object.fromEntries(Object.entries(groups).sort());
+    }, [filteredEscopos, groupByEdificacao]);
+
     if (selectedEscopo) {
         return (
             <TimelineParciais
                 escopo={selectedEscopo}
                 onBack={() => setSelectedEscopo(null)}
+                onViewEntrega={onViewEntrega}
             />
         );
     }
@@ -664,88 +726,153 @@ function ScopeManagementView({ entregas, selectedEdificacao }: { entregas: any[]
                         </CardTitle>
                         <CardDescription>Modelos esperados de cada construtora/instaladora</CardDescription>
                     </div>
-                    <Button
-                        className="rounded-full gap-2 shadow-lg shadow-primary/20 bg-[#940707] hover:bg-[#7a0606]"
-                        onClick={() => { setEditingEscopo(null); setIsEscopoFormOpen(true); }}
-                    >
-                        <Plus className="w-4 h-4" />
-                        Novo Item de Escopo
-                    </Button>
+                    <div className="flex flex-col md:flex-row md:items-center gap-4">
+                        {/* Filtros da Lista Mestra */}
+                        <div className="flex items-center gap-2">
+                            <Select value={filterEmpresa} onValueChange={setFilterEmpresa}>
+                                <SelectTrigger className="w-[140px] h-9 rounded-full bg-slate-50 border-slate-200 text-[11px] font-bold">
+                                    <SelectValue placeholder="Responsável" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="todas">Todos Responsáveis</SelectItem>
+                                    {empresasUnicas.map((emp: any) => (
+                                        <SelectItem key={emp} value={emp}>{emp}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+
+                            <Select value={filterDisciplina} onValueChange={setFilterDisciplina}>
+                                <SelectTrigger className="w-[140px] h-9 rounded-full bg-slate-50 border-slate-200 text-[11px] font-bold">
+                                    <SelectValue placeholder="Disciplina" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="todas">Todas Disciplinas</SelectItem>
+                                    {disciplinasUnicas.map((disc: any) => (
+                                        <SelectItem key={disc} value={disc}>{disc}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+
+                            <Select value={filterStatus} onValueChange={setFilterStatus}>
+                                <SelectTrigger className="w-[120px] h-9 rounded-full bg-slate-50 border-slate-200 text-[11px] font-bold">
+                                    <SelectValue placeholder="Status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="todos">Todos Status</SelectItem>
+                                    <SelectItem value="validado">Validado</SelectItem>
+                                    <SelectItem value="pendente">Pendente</SelectItem>
+                                </SelectContent>
+                            </Select>
+
+                            <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className={`h-9 px-4 rounded-full text-[10px] font-black uppercase transition-all ${groupByEdificacao ? 'bg-primary/10 text-primary border border-primary/20' : 'bg-slate-50 text-slate-500 border border-slate-200'}`}
+                                onClick={() => setGroupByEdificacao(!groupByEdificacao)}
+                            >
+                                <Building2 className="w-3 h-3 mr-2" />
+                                {groupByEdificacao ? "Agrupado por Prédio" : "Lista Simples"}
+                            </Button>
+                        </div>
+
+                        <Button
+                            className="rounded-full gap-2 shadow-lg shadow-primary/20 bg-[#940707] hover:bg-[#7a0606] ml-auto"
+                            onClick={() => { setEditingEscopo(null); setIsEscopoFormOpen(true); }}
+                        >
+                            <Plus className="w-4 h-4" />
+                            Novo Item de Escopo
+                        </Button>
+                    </div>
                 </CardHeader>
                 <CardContent>
-                    <div className="rounded-xl border overflow-hidden">
-                        <Table>
-                            <TableHeader className="bg-slate-50">
-                                <TableRow>
-                                    <TableHead className="font-bold uppercase text-[10px] tracking-wider">Prazo</TableHead>
-                                    <TableHead className="font-bold uppercase text-[10px] tracking-wider w-[300px]">Documento (Modelo Final)</TableHead>
-                                    <TableHead className="font-bold uppercase text-[10px] tracking-wider">Responsável</TableHead>
-                                    <TableHead className="font-bold uppercase text-[10px] tracking-wider">Edificação</TableHead>
-                                    <TableHead className="font-bold uppercase text-[10px] tracking-wider">Disciplina</TableHead>
-                                    <TableHead className="text-center font-bold uppercase text-[10px] tracking-wider whitespace-nowrap">RVT Nativo?</TableHead>
-                                    <TableHead className="font-bold uppercase text-[10px] tracking-wider w-[150px]">Plano de Ação</TableHead>
-                                    <TableHead className="text-center font-bold uppercase text-[10px] tracking-wider">Status</TableHead>
-                                    <TableHead className="text-right font-bold uppercase text-[10px] tracking-wider">Ações</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {loadingEscopos ? (
-                                    <TableRow>
-                                        <TableCell colSpan={8} className="text-center py-10 text-slate-400 italic">Carregando...</TableCell>
-                                    </TableRow>
-                                ) : filteredEscopos.length === 0 ? (
-                                    <TableRow>
-                                        <TableCell colSpan={8} className="text-center py-10 text-slate-400 italic">
-                                            Nenhum item de escopo cadastrado. Clique em "Novo Item de Escopo" para começar.
-                                        </TableCell>
-                                    </TableRow>
-                                ) : filteredEscopos.map((esc: any) => {
-                                    const counts = entregasPerEscopo[esc.id] || { total: 0, validados: 0, conformes: 0 };
-                                    const progress = counts.total > 0 ? Math.round((counts.validados / counts.total) * 100) : 0;
-                                    return (
-                                        <TableRow key={esc.id} className="hover:bg-slate-50/50 cursor-pointer group h-12" onClick={() => setSelectedEscopo(esc)}>
-                                            <TableCell className="text-[11px] font-bold text-slate-500">01/06/2026</TableCell>
-                                            <TableCell className="text-[11px] font-bold text-[#940707] max-w-[300px] truncate" title={esc.nomeModeloFinal}>{esc.nomeModeloFinal || "SEM NOME DEFINIDO"}</TableCell>
-                                            <TableCell className="text-[11px] font-bold text-slate-700">{esc.empresa}</TableCell>
-                                            <TableCell className="text-[11px] font-bold text-slate-700">{esc.edificacao}</TableCell>
-                                            <TableCell>
-                                                <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[9px] font-black uppercase">{esc.disciplina}</span>
-                                            </TableCell>
-                                            <TableCell className="text-center">
-                                                {esc.temRvtOriginal === 1 ? (
-                                                    <Badge variant="outline" className="text-[8px] bg-emerald-50 text-emerald-600 border-emerald-100 font-black">SIM</Badge>
-                                                ) : (
-                                                    <Badge variant="outline" className="text-[8px] bg-rose-50 text-rose-600 border-rose-100 font-black">NÃO</Badge>
-                                                )}
-                                            </TableCell>
-                                            <TableCell className="text-[10px] font-medium text-slate-500 italic max-w-[150px] truncate" title={esc.acaoRvt || esc.pendenciaRvt}>
-                                                {esc.acaoRvt || esc.pendenciaRvt || "-"}
-                                            </TableCell>
-                                            <TableCell className="text-center">
-                                                <Badge variant={progress === 100 ? "secondary" : "outline"} className={`text-[9px] font-black px-2 py-0.5 ${progress === 100 ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-400 border-slate-200"}`}>
-                                                    {progress === 100 ? "VALIDADO" : "PENDENTE"}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-primary hover:bg-primary/5 rounded-full"
-                                                        onClick={(e) => { e.stopPropagation(); setEditingEscopo(esc); setIsEscopoFormOpen(true); }}>
-                                                        <Edit2 className="w-3.5 h-3.5" />
-                                                    </Button>
-                                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-full"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            if (confirm("Excluir este item de escopo?")) deleteMutation.mutate({ id: esc.id });
-                                                        }}>
-                                                        <Trash2 className="w-3.5 h-3.5" />
-                                                    </Button>
-                                                </div>
-                                            </TableCell>
-                                        </TableRow>
-                                    );
-                                })}
-                            </TableBody>
-                        </Table>
+                    <div className="space-y-6">
+                        {loadingEscopos ? (
+                            <div className="text-center py-20 text-slate-400 italic">Carregando lista mestra...</div>
+                        ) : filteredEscopos.length === 0 ? (
+                            <div className="text-center py-20 text-slate-400 italic bg-slate-50 rounded-2xl border-2 border-dashed border-slate-100">
+                                Nenhum item de escopo encontrado para os filtros selecionados.
+                            </div>
+                        ) : (
+                            Object.entries(groupedEscopos).map(([groupName, items]) => (
+                                <div key={groupName} className="space-y-3">
+                                    {groupByEdificacao && (
+                                        <div className="flex items-center gap-3 px-2">
+                                            <div className="h-px flex-1 bg-slate-100" />
+                                            <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                                                <Building2 className="w-3.5 h-3.5 text-[#940707]/60" />
+                                                {groupName}
+                                            </h3>
+                                            <div className="h-px flex-1 bg-slate-100" />
+                                        </div>
+                                    )}
+                                    <div className="rounded-2xl border border-slate-100 overflow-hidden shadow-sm bg-white">
+                                        <Table>
+                                            <TableHeader className="bg-slate-50/50">
+                                                <TableRow className="hover:bg-transparent border-slate-100">
+                                                    <TableHead className="font-bold uppercase text-[9px] tracking-widest text-slate-400 h-10">Prazo</TableHead>
+                                                    <TableHead className="font-bold uppercase text-[9px] tracking-widest text-slate-400 w-[300px]">Documento (Modelo Final)</TableHead>
+                                                    <TableHead className="font-bold uppercase text-[9px] tracking-widest text-slate-400">Responsável</TableHead>
+                                                    {!groupByEdificacao && <TableHead className="font-bold uppercase text-[9px] tracking-widest text-slate-400">Edificação</TableHead>}
+                                                    <TableHead className="font-bold uppercase text-[9px] tracking-widest text-slate-400">Disciplina</TableHead>
+                                                    <TableHead className="text-center font-bold uppercase text-[9px] tracking-widest text-slate-400 whitespace-nowrap">RVT Nativo?</TableHead>
+                                                    <TableHead className="font-bold uppercase text-[9px] tracking-widest text-slate-400 w-[150px]">Plano de Ação</TableHead>
+                                                    <TableHead className="text-center font-bold uppercase text-[9px] tracking-widest text-slate-400">Status</TableHead>
+                                                    <TableHead className="text-right font-bold uppercase text-[9px] tracking-widest text-slate-400">Ações</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {items.map((esc: any) => {
+                                                    const counts = entregasPerEscopo[esc.id] || { total: 0, validados: 0, conformes: 0, hasFinal: false };
+                                                    const progress = counts.hasFinal ? 100 : (counts.total > 0 ? (counts.validados / counts.total) * 100 : 0);
+                                                    const isConcluido = progress >= 100 || counts.hasFinal;
+                                                    return (
+                                                        <TableRow key={esc.id} className="hover:bg-slate-50/30 cursor-pointer group h-12 border-slate-50" onClick={() => setSelectedEscopo(esc)}>
+                                                            <TableCell className="text-[11px] font-bold text-slate-400">01/06/2026</TableCell>
+                                                            <TableCell className="text-[11px] font-bold text-[#940707] max-w-[300px] truncate" title={esc.nomeModeloFinal}>{esc.nomeModeloFinal || "SEM NOME DEFINIDO"}</TableCell>
+                                                            <TableCell className="text-[11px] font-bold text-slate-700">{esc.empresa}</TableCell>
+                                                            {!groupByEdificacao && <TableCell className="text-[11px] font-bold text-slate-700">{esc.edificacao}</TableCell>}
+                                                            <TableCell>
+                                                                <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[9px] font-black uppercase">{esc.disciplina}</span>
+                                                            </TableCell>
+                                                            <TableCell className="text-center">
+                                                                {esc.temRvtOriginal === 1 ? (
+                                                                    <Badge variant="outline" className="text-[8px] bg-emerald-50 text-emerald-600 border-emerald-100 font-black">SIM</Badge>
+                                                                ) : (
+                                                                    <Badge variant="outline" className="text-[8px] bg-rose-50 text-rose-600 border-rose-100 font-black">NÃO</Badge>
+                                                                )}
+                                                            </TableCell>
+                                                            <TableCell className="text-[10px] font-medium text-slate-500 italic max-w-[150px] truncate" title={esc.acaoRvt || esc.pendenciaRvt}>
+                                                                {esc.acaoRvt || esc.pendenciaRvt || "-"}
+                                                            </TableCell>
+                                                            <TableCell className="text-center">
+                                                                <Badge variant={isConcluido ? "secondary" : "outline"} className={`text-[9px] font-black px-2 py-0.5 ${isConcluido ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-400 border-slate-200"}`}>
+                                                                    {isConcluido ? "VALIDADO" : "PENDENTE"}
+                                                                </Badge>
+                                                            </TableCell>
+                                                            <TableCell className="text-right">
+                                                                <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-primary hover:bg-primary/5 rounded-full"
+                                                                        onClick={(e) => { e.stopPropagation(); setEditingEscopo(esc); setIsEscopoFormOpen(true); }}>
+                                                                        <Edit2 className="w-3.5 h-3.5" />
+                                                                    </Button>
+                                                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-full"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            if (confirm("Excluir este item de escopo?")) deleteMutation.mutate({ id: esc.id });
+                                                                        }}>
+                                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                                    </Button>
+                                                                </div>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    );
+                                                })}
+                                            </TableBody>
+                                        </Table>
+                                    </div>
+                                </div>
+                            ))
+                        )}
                     </div>
                 </CardContent>
             </Card>
@@ -870,7 +997,7 @@ function EscopoForm({ escopo, selectedEdificacao, onClose }: { escopo?: any, sel
 // ------------------------------------------------------------------
 // TIMELINE DE PARCIAIS (Detail view for a scope item)
 // ------------------------------------------------------------------
-function TimelineParciais({ escopo, onBack }: { escopo: any, onBack: () => void }) {
+function TimelineParciais({ escopo, onBack, onViewEntrega }: { escopo: any, onBack: () => void, onViewEntrega: (e: any) => void }) {
     const [isParcialFormOpen, setIsParcialFormOpen] = useState(false);
     const [verificandoId, setVerificandoId] = useState<number | null>(null);
 
@@ -942,14 +1069,7 @@ function TimelineParciais({ escopo, onBack }: { escopo: any, onBack: () => void 
                         <History className="w-5 h-5 text-[#940707]" />
                         Entregas Parciais
                     </CardTitle>
-                    <Button
-                        className="rounded-full gap-2 bg-[#940707] hover:bg-[#7a0606] text-white"
-                        size="sm"
-                        onClick={() => setIsParcialFormOpen(true)}
-                    >
-                        <Plus className="w-4 h-4" />
-                        Registrar Parcial
-                    </Button>
+                    {/* Botão removido conforme solicitação do usuário */}
                 </CardHeader>
                 <CardContent>
                     {isLoading ? (
@@ -968,7 +1088,11 @@ function TimelineParciais({ escopo, onBack }: { escopo: any, onBack: () => void 
                                 const isVerifying = verificandoId === parcial.id;
 
                                 return (
-                                    <div key={parcial.id} className="border rounded-xl p-4 hover:bg-slate-50/50 transition-colors">
+                                    <div 
+                                        key={parcial.id} 
+                                        className="border rounded-xl p-4 hover:bg-slate-50/50 transition-colors cursor-pointer"
+                                        onClick={() => onViewEntrega(parcial)}
+                                    >
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-4">
                                                 <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-sm font-bold text-slate-500">
@@ -1257,22 +1381,28 @@ function EntregaDetailView({ entrega, onBack, onUpdate, onEdit, onDelete }: any)
         }
     });
 
+    // Esta função atualiza o status da entrega (ex: de "Recebido" para "Validado").
+    // Foi ajustada para enviar as datas como texto (YYYY-MM-DD), evitando erros de fuso horário.
     const handleUpdateStatus = () => {
         setIsUpdating(true);
         mutation.mutate({
             ...entrega,
-            dataPrevista: new Date(entrega.dataPrevista),
+            // Convertemos a data para texto simples para o servidor não se confundir com o fuso horário
+            dataPrevista: dayjs(entrega.dataPrevista).format('YYYY-MM-DD'),
+            dataRecebimento: entrega.dataRecebimento ? dayjs(entrega.dataRecebimento).format('YYYY-MM-DD') : undefined,
             status,
             comentario: comentario || undefined
         });
     };
 
+    // Esta função salva apenas um comentário novo na entrega.
     const handleSendComment = () => {
         if (!comentario.trim()) return;
         setIsUpdating(true);
         mutation.mutate({
             ...entrega,
-            dataPrevista: new Date(entrega.dataPrevista),
+            dataPrevista: dayjs(entrega.dataPrevista).format('YYYY-MM-DD'),
+            dataRecebimento: entrega.dataRecebimento ? dayjs(entrega.dataRecebimento).format('YYYY-MM-DD') : undefined,
             status: status,
             comentario: comentario
         });
@@ -1288,7 +1418,9 @@ function EntregaDetailView({ entrega, onBack, onUpdate, onEdit, onDelete }: any)
             
             mutation.mutate({
                 ...entrega,
-                dataPrevista: new Date(entrega.dataPrevista),
+                // Mantemos o padrão de enviar data como texto para evitar desvios
+                dataPrevista: dayjs(entrega.dataPrevista).format('YYYY-MM-DD'),
+                dataRecebimento: entrega.dataRecebimento ? dayjs(entrega.dataRecebimento).format('YYYY-MM-DD') : undefined,
                 checkpointBep: JSON.stringify(newCb)
             });
         } catch (e) {
@@ -1503,6 +1635,11 @@ function EntregaForm({ onClose, entrega, selectedEdificacao }: any) {
         modeloBaseReferencia: entrega?.modeloBaseReferencia || "",
         acoesNecessarias: entrega?.acoesNecessarias || "",
         checkpointBep: entrega?.checkpointBep || JSON.stringify({ geo: false, param: false, naming: false, lod: false, clash: false }),
+        manualEntry: {
+            edificacao: false,
+            disciplina: false,
+            empresa: false
+        }
     });
 
     // Atualizar numeroEntrega quando os dados carregarem
@@ -1635,18 +1772,27 @@ function EntregaForm({ onClose, entrega, selectedEdificacao }: any) {
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Edificação *</label>
-                            <select 
-                                required
-                                className="flex h-10 w-full rounded-xl border border-slate-200 bg-background px-3 py-2 text-sm" 
-                                value={formData.edificacao} 
-                                onChange={e => setFormData({ ...formData, edificacao: e.target.value, disciplina: "", modeloBaseReferencia: "" })}
-                            >
-                                <option value="">Selecione...</option>
-                                {edificacoesList.map((edif: any) => (
-                                    <option key={edif} value={edif}>{edif}</option>
-                                ))}
-                            </select>
+                            <div className="flex justify-between items-center">
+                                <label className="text-xs font-bold uppercase text-slate-500 ml-1">Edificação *</label>
+                                <button type="button" onClick={() => setFormData(prev => ({ ...prev, manualEntry: { ...prev.manualEntry, edificacao: !prev.manualEntry.edificacao } }))} className="text-[9px] font-black text-[#940707] hover:underline uppercase">
+                                    {formData.manualEntry.edificacao ? "Listar" : "Digitar Novo"}
+                                </button>
+                            </div>
+                            {formData.manualEntry.edificacao ? (
+                                <Input required value={formData.edificacao} onChange={e => setFormData({ ...formData, edificacao: e.target.value, disciplina: "", modeloBaseReferencia: "" })} placeholder="Nome da Edificação..." className="rounded-xl border-slate-200" />
+                            ) : (
+                                <select 
+                                    required
+                                    className="flex h-10 w-full rounded-xl border border-slate-200 bg-background px-3 py-2 text-sm" 
+                                    value={formData.edificacao} 
+                                    onChange={e => setFormData({ ...formData, edificacao: e.target.value, disciplina: "", modeloBaseReferencia: "" })}
+                                >
+                                    <option value="">Selecione...</option>
+                                    {edificacoesList.map((edif: any) => (
+                                        <option key={edif} value={edif}>{edif}</option>
+                                    ))}
+                                </select>
+                            )}
                         </div>
 
                         <div className="space-y-2">
@@ -1655,44 +1801,61 @@ function EntregaForm({ onClose, entrega, selectedEdificacao }: any) {
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Disciplina *</label>
-                            <select 
-                                required
-                                className="flex h-10 w-full rounded-xl border border-slate-200 bg-background px-3 py-2 text-sm" 
-                                value={formData.disciplina} 
-                                onChange={e => setFormData({ ...formData, disciplina: e.target.value, modeloBaseReferencia: "" })}
-                            >
-                                <option value="">Selecione...</option>
-                                {disciplinasList.map((disc: any) => (
-                                    <option key={disc} value={disc}>{disc}</option>
-                                ))}
-                            </select>
+                            <div className="flex justify-between items-center">
+                                <label className="text-xs font-bold uppercase text-slate-500 ml-1">Disciplina *</label>
+                                <button type="button" onClick={() => setFormData(prev => ({ ...prev, manualEntry: { ...prev.manualEntry, disciplina: !prev.manualEntry.disciplina } }))} className="text-[9px] font-black text-[#940707] hover:underline uppercase">
+                                    {formData.manualEntry.disciplina ? "Listar" : "Digitar Novo"}
+                                </button>
+                            </div>
+                            {formData.manualEntry.disciplina ? (
+                                <Input required value={formData.disciplina} onChange={e => setFormData({ ...formData, disciplina: e.target.value, modeloBaseReferencia: "" })} placeholder="Nome da Disciplina..." className="rounded-xl border-slate-200" />
+                            ) : (
+                                <select 
+                                    required
+                                    className="flex h-10 w-full rounded-xl border border-slate-200 bg-background px-3 py-2 text-sm" 
+                                    value={formData.disciplina} 
+                                    onChange={e => setFormData({ ...formData, disciplina: e.target.value, modeloBaseReferencia: "" })}
+                                >
+                                    <option value="">Selecione...</option>
+                                    {disciplinasList.map((disc: any) => (
+                                        <option key={disc} value={disc}>{disc}</option>
+                                    ))}
+                                </select>
+                            )}
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-xs font-bold uppercase text-slate-500 ml-1">Empreiteiro *</label>
-                            <select 
-                                required
-                                className="flex h-10 w-full rounded-xl border border-slate-200 bg-background px-3 py-2 text-sm" 
-                                value={formData.empresaResponsavel} 
-                                onChange={e => setFormData({ ...formData, empresaResponsavel: e.target.value })}
-                            >
-                                <option value="">Selecione...</option>
-                                {empresasList.map((emp: any) => (
-                                    <option key={emp} value={emp}>{emp}</option>
-                                ))}
-                            </select>
+                            <div className="flex justify-between items-center">
+                                <label className="text-xs font-bold uppercase text-slate-500 ml-1">Empreiteiro *</label>
+                                <button type="button" onClick={() => setFormData(prev => ({ ...prev, manualEntry: { ...prev.manualEntry, empresa: !prev.manualEntry.empresa } }))} className="text-[9px] font-black text-[#940707] hover:underline uppercase">
+                                    {formData.manualEntry.empresa ? "Listar" : "Digitar Novo"}
+                                </button>
+                            </div>
+                            {formData.manualEntry.empresa ? (
+                                <Input required value={formData.empresaResponsavel} onChange={e => setFormData({ ...formData, empresaResponsavel: e.target.value })} placeholder="Nome da Empresa..." className="rounded-xl border-slate-200" />
+                            ) : (
+                                <select 
+                                    required
+                                    className="flex h-10 w-full rounded-xl border border-slate-200 bg-background px-3 py-2 text-sm" 
+                                    value={formData.empresaResponsavel} 
+                                    onChange={e => setFormData({ ...formData, empresaResponsavel: e.target.value })}
+                                >
+                                    <option value="">Selecione...</option>
+                                    {empresasList.map((emp: any) => (
+                                        <option key={emp} value={emp}>{emp}</option>
+                                    ))}
+                                </select>
+                            )}
                         </div>
 
                         <div className="space-y-2 md:col-span-2">
-                            <label className="text-xs font-bold uppercase text-slate-500 ml-1 text-[#940707]">Modelo Final As-Built (Vincular à Lista Mestra) *</label>
+                            <label className="text-xs font-bold uppercase text-slate-500 ml-1 text-[#940707]">Modelo Final As-Built (Opcional se não houver modelo)</label>
                             <select 
-                                required
                                 className="flex h-10 w-full rounded-xl border-2 border-[#940707]/20 bg-white px-3 py-2 text-sm font-bold text-slate-700 focus:border-[#940707] transition-all" 
                                 value={formData.escopoId || ""} 
                                 onChange={e => handleEscopoSelection(e.target.value)}
                             >
-                                <option value="">Selecione o modelo final...</option>
+                                <option value="">NÃO VINCULADO / SEM MODELO</option>
                                 {filteredEscoposForSelection.map((esc: any) => (
                                     <option key={esc.id} value={esc.id}>
                                         {esc.nomeModeloFinal || esc.nomeModelo} ({esc.empresa})
@@ -1700,8 +1863,8 @@ function EntregaForm({ onClose, entrega, selectedEdificacao }: any) {
                                 ))}
                             </select>
                             {filteredEscoposForSelection.length === 0 && formData.edificacao && formData.disciplina && (
-                                <p className="text-[10px] text-rose-500 font-bold mt-1 ml-1 animate-pulse italic">
-                                    Nenhum modelo cadastrado na Lista Mestra para esta edificação/disciplina.
+                                <p className="text-[10px] text-slate-400 font-bold mt-1 ml-1 italic">
+                                    Nenhum modelo cadastrado na Lista Mestra para esta edificação/disciplina. Você pode salvar como entrega avulsa (DWG/PDF).
                                 </p>
                             )}
                         </div>
@@ -1726,7 +1889,22 @@ function EntregaForm({ onClose, entrega, selectedEdificacao }: any) {
 
                         <div className="space-y-2">
                             <label className="text-xs font-bold uppercase text-slate-500 ml-1">Data de Entrega *</label>
-                            <Input type="date" required value={formData.dataPrevista} onChange={e => setFormData({ ...formData, dataPrevista: e.target.value })} className="rounded-xl border-slate-200" />
+                            {/* 
+                                IMPORTANTE: Alterado de 'dataPrevista' para 'dataRecebimento'.
+                                Isso garante que a data que o usuário digita seja a que aparece na 'Data de Entrega' da tabela.
+                                Também atualizamos a 'dataPrevista' junto para manter os dois campos em sincronia.
+                            */}
+                            <Input 
+                                type="date" 
+                                required 
+                                value={formData.dataRecebimento} 
+                                onChange={e => setFormData({ 
+                                    ...formData, 
+                                    dataRecebimento: e.target.value,
+                                    dataPrevista: e.target.value // Sincroniza a previsão com o recebimento real
+                                })} 
+                                className="rounded-xl border-slate-200" 
+                            />
                         </div>
                         <div className="space-y-2 md:col-span-2">
                             <label className="text-xs font-bold uppercase text-slate-500 ml-1">Descrição / Observações</label>

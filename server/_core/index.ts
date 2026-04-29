@@ -8,6 +8,7 @@ import type { Context } from './trpc';
 import { ENV } from './env';
 import multer from 'multer';
 import { handleExcelUpload } from '../uploadHandler';
+import { uploadToStorage } from '../storage';
 import fs from 'fs';
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -65,23 +66,19 @@ app.post('/api/upload-image', upload.single('image'), async (req, res) => {
     }
 
     try {
-        const uploadDir = path.join(process.cwd(), 'uploads');
-        if (!fs.existsSync(uploadDir)) {
-            fs.mkdirSync(uploadDir, { recursive: true });
-        }
-
-        const fileName = `${Date.now()}-${req.file.originalname}`;
-        const filePath = path.join(uploadDir, fileName);
-
-        fs.writeFileSync(filePath, req.file.buffer);
-
+        const publicUrl = await uploadToStorage(req.file.buffer, req.file.originalname);
+        
         return res.json({
             success: true,
-            url: `/uploads/${fileName}`
+            url: publicUrl
         });
     } catch (error: any) {
         console.error('❌ Image upload error:', error);
-        return res.status(500).json({ error: 'Failed to save image' });
+        return res.status(500).json({ 
+            success: false,
+            error: error.message || 'Failed to save image',
+            details: error
+        });
     }
 });
 

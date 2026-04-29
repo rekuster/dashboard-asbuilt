@@ -2,6 +2,9 @@
  * ESTE ARQUIVO É O "CÉREBRO" DO BANCO DE DADOS.
  * Ele contém todas as funções que salvam e buscam informações (como as fotos dos relatórios e os dados dos modelos).
  * Eu adicionei aqui a lógica para calcular as porcentagens de entrega que você vê no Dashboard.
+ * 
+ * NOTA: Este arquivo foi atualizado para corrigir o erro de fuso horário, garantindo que as datas
+ * escolhidas pelo usuário não mudem sozinhas ao serem salvas.
  */
 
 import "dotenv/config";
@@ -802,19 +805,33 @@ export async function upsertEntrega(data: any) {
         Object.entries(rawValues).filter(([_, v]) => v !== undefined)
     ) as any;
 
-    // Convert string dates to Date objects setting time to Noon to avoid timezone shifts
-    if (values.dataPrevista && typeof values.dataPrevista === 'string') {
-        values.dataPrevista = new Date(values.dataPrevista + 'T12:00:00');
-    }
-    if (values.dataRecebimento && typeof values.dataRecebimento === 'string') {
-        values.dataRecebimento = new Date(values.dataRecebimento + 'T12:00:00');
-    }
-    if (values.periodoInicio && typeof values.periodoInicio === 'string') {
-        values.periodoInicio = new Date(values.periodoInicio + 'T12:00:00');
-    }
-    if (values.periodoFim && typeof values.periodoFim === 'string') {
-        values.periodoFim = new Date(values.periodoFim + 'T12:00:00');
-    }
+    // Aqui fazemos uma "limpeza" nas datas antes de salvar.
+    // Como computadores em lugares diferentes podem entender horários de forma distinta, 
+    // nós forçamos todas as datas para as 12:00 (meio-dia). 
+    // Assim, o dia escolhido pelo usuário não "pula" para o dia anterior ou posterior.
+    const normalizeDate = (d: any) => {
+        if (!d) return d;
+        let dateObj: Date;
+        if (typeof d === 'string') {
+            // Se for texto (ex: "2026-03-19"), montamos a data forçando meio-dia.
+            dateObj = new Date(d + 'T12:00:00');
+        } else if (d instanceof Date) {
+            // Se já for um objeto de data, extraímos apenas o dia/mês/ano e forçamos meio-dia.
+            const year = d.getFullYear();
+            const month = d.getMonth();
+            const day = d.getDate();
+            dateObj = new Date(year, month, day, 12, 0, 0);
+        } else {
+            return d;
+        }
+        return dateObj;
+    };
+
+    if (values.dataPrevista) values.dataPrevista = normalizeDate(values.dataPrevista);
+    if (values.dataRecebimento) values.dataRecebimento = normalizeDate(values.dataRecebimento);
+    if (values.periodoInicio) values.periodoInicio = normalizeDate(values.periodoInicio);
+    if (values.periodoFim) values.periodoFim = normalizeDate(values.periodoFim);
+    if (values.dataVerificacao) values.dataVerificacao = normalizeDate(values.dataVerificacao);
 
     let result;
     const { escopoIds, escopoNames, ...commonValues } = values;
@@ -1015,7 +1032,7 @@ export async function getAsBuiltStatus(edificacao?: string) {
     const timelineMap = new Map<string, number>();
     const sortedEntregas = allEntregas
         .filter((e: any) => e.dataRecebimento)
-        .sort((a, b) => new Date(a.dataRecebimento).getTime() - new Date(b.dataRecebimento).getTime());
+        .sort((a: any, b: any) => new Date(a.dataRecebimento).getTime() - new Date(b.dataRecebimento).getTime());
 
     if (sortedEntregas.length > 0) {
         const firstDate = new Date(sortedEntregas[0].dataRecebimento);
@@ -1049,9 +1066,11 @@ export async function getAsBuiltStatus(edificacao?: string) {
 
     escopos.forEach((escopo: any) => {
         const entregas = entregasMap.get(escopo.id) || [];
+        // Consideramos VALIDADO como a entrega Final (Concluído)
         const hasValidado = entregas.some((e: any) => e.status === 'VALIDADO');
         const hasEntrega = entregas.length > 0;
-        const hasEmAndamento = entregas.some((e: any) => ['RECEBIDO', 'EM_REVISAO', 'EM_ANDAMENTO'].includes(e.status));
+        // Consideramos 'Em Análise' qualquer modelo que tenha entregas mas ainda não tenha a Final Validada
+        const hasEmAndamento = hasEntrega && !hasValidado;
 
         // Contadores Gerais
         if (hasEntrega) result.modelosComEntrega++;
@@ -1070,8 +1089,11 @@ export async function getAsBuiltStatus(edificacao?: string) {
             result.semRvt++;
         }
 
-        // Agrupamento por Disciplina
-        const disc = escopo.disciplina || "Geral";
+        // Agrupamento por Disciplina com normalização para evitar duplicidade (ex: singular/plural)
+        let disc = (escopo.disciplina || "Geral").trim();
+        // Normalização específica para Média Tensão e casos comuns de digitação
+        if (disc === "Média Tensão e Barramento") disc = "Média Tensão e Barramentos";
+        
         if (!disciplinaMap.has(disc)) disciplinaMap.set(disc, { validado: 0, recebido: 0, pendente: 0 });
         const dStats = disciplinaMap.get(disc)!;
         if (hasValidado) dStats.validado++;
@@ -1496,7 +1518,7 @@ export async function getAllVerificacoes() {
     return db.select().from(verificacaoModelo);
 }
 
-export async function upsertVerificacao(salaId: number, disciplina: string, status: string, observacao?: string | null) {
+export async function upsertVerificacao(salaId: number, disciplina: string, status: string, observacao?: string | null, printUrl?: string | null) {
     const db = await getDb();
     if (!db) return null;
 
@@ -1506,7 +1528,7 @@ export async function upsertVerificacao(salaId: number, disciplina: string, stat
 
     if (existing.length > 0) {
         return await db.update(verificacaoModelo)
-            .set({ status, observacao: observacao || null, updatedAt: new Date() })
+            .set({ status, observacao: observacao || null, printUrl: printUrl || null, updatedAt: new Date() })
             .where(eq(verificacaoModelo.id, existing[0].id))
             .returning();
     } else {
@@ -1516,10 +1538,34 @@ export async function upsertVerificacao(salaId: number, disciplina: string, stat
                 disciplina,
                 status,
                 observacao: observacao || null,
+                printUrl: printUrl || null,
                 updatedAt: new Date()
             })
             .returning();
     }
+}
+
+export async function updateApontamentoAsBuilt(id: number, asBuiltNota: string | null, asBuiltPrintUrl: string | null, status?: string) {
+    const db = await getDb();
+    if (!db) return null;
+
+    const updateData: any = {
+        asBuiltNota: asBuiltNota || null,
+        asBuiltPrintUrl: asBuiltPrintUrl || null,
+        updatedAt: new Date()
+    };
+
+    if (status) {
+        updateData.status = status;
+        if (status === 'RESOLVIDA') {
+            updateData.dataResolvido = new Date();
+        }
+    }
+
+    return await db.update(apontamentos)
+        .set(updateData)
+        .where(eq(apontamentos.id, id))
+        .returning();
 }
 
 /**
@@ -1545,4 +1591,88 @@ export async function registrarRelatorioDivergencia(data: any) {
             createdAt: new Date()
         })
         .returning();
+}
+
+/**
+ * Calcula estatísticas de qualidade por disciplina (Para a aba Gestão por Disciplina)
+ */
+export async function getStatsPorDisciplina(edificacao?: string) {
+    const db = await getDb();
+    if (!db) return [];
+
+    // 1. Buscar todas as verificações
+    const allVerificacoes = await db.select().from(verificacaoModelo);
+    
+    // 2. Buscar todos os apontamentos ativos
+    let apontamentosQuery = db.select().from(apontamentos).where(eq(apontamentos.status, 'ATIVA'));
+    if (edificacao && edificacao !== "Todas") {
+        apontamentosQuery = apontamentosQuery.where(eq(apontamentos.edificacao, edificacao));
+    }
+    const allActiveApontamentos = await apontamentosQuery;
+
+    // 3. Buscar total de salas
+    let salasQuery = db.select().from(salas);
+    if (edificacao && edificacao !== "Todas") {
+        salasQuery = salasQuery.where(eq(salas.edificacao, edificacao));
+    }
+    const allSalas = await salasQuery;
+    const totalSalasCount = allSalas.length;
+
+    // Agrupar por disciplina
+    const statsMap: Record<string, any> = {};
+
+    // Inicializar disciplinas conhecidas (ou extrair das existentes)
+    const disciplinas = [...new Set(allVerificacoes.map((v: any) => v.disciplina))];
+    
+    // Se não houver verificações ainda, pegamos dos apontamentos ou usamos um padrão
+    if (disciplinas.length === 0) {
+        // Padrão do sistema
+        ['Hidrossanitário', 'Elétrica', 'HVAC', 'Incêndio', 'Gás', 'Estrutura'].forEach(d => {
+            statsMap[d] = {
+                disciplina: d,
+                totalRooms: totalSalasCount,
+                okRooms: 0,
+                roomsComDivergencia: 0,
+                percentOk: 0
+            };
+        });
+    } else {
+        disciplinas.forEach((d: any) => {
+            statsMap[d as string] = {
+                disciplina: d as string,
+                totalRooms: totalSalasCount,
+                okRooms: 0,
+                roomsComDivergencia: 0,
+                percentOk: 0
+            };
+        });
+    }
+
+    // Contar OKs
+    allVerificacoes.forEach((v: any) => {
+        if (statsMap[v.disciplina] && v.status === 'OK') {
+            statsMap[v.disciplina].okRooms++;
+        }
+    });
+
+    // Contar Divergências (Salas únicas por disciplina que possuem apontamentos ativos)
+    const salasComDivergenciaPorDisc: Record<string, Set<string>> = {};
+    allActiveApontamentos.forEach((a: any) => {
+        if (!salasComDivergenciaPorDisc[a.disciplina]) {
+            salasComDivergenciaPorDisc[a.disciplina] = new Set();
+        }
+        salasComDivergenciaPorDisc[a.disciplina].add(a.sala);
+    });
+
+    Object.keys(salasComDivergenciaPorDisc).forEach(disc => {
+        if (statsMap[disc]) {
+            statsMap[disc].roomsComDivergencia = salasComDivergenciaPorDisc[disc].size;
+        }
+    });
+
+    // Calcular percentuais
+    return Object.values(statsMap).map((s: any) => ({
+        ...s,
+        percentOk: s.totalRooms > 0 ? (s.okRooms / s.totalRooms) * 100 : 0
+    }));
 }

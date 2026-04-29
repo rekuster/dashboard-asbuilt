@@ -19,7 +19,8 @@ import {
     ArrowLeft,
     CheckCircle,
     Settings,
-    CalendarDays
+    CalendarDays,
+    AlertCircle
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -38,6 +39,8 @@ import PresentationTab from "@/components/dashboard/PresentationTab";
 import EntregasTab from "@/components/dashboard/EntregasTab";
 import AsBuiltDashboard from "@/components/dashboard/AsBuiltDashboard";
 import FieldReportTab from "@/components/dashboard/FieldReportTab";
+import IssueManagerTab from "@/components/dashboard/IssueManagerTab";
+import DisciplineValidationTab from "@/components/dashboard/DisciplineValidationTab";
 import { ErrorBoundary } from "@/components/dashboard/ErrorBoundary";
 import StatusDetailsModal from "@/components/dashboard/StatusDetailsModal";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -224,11 +227,15 @@ export default function Dashboard() {
                         </TabsTrigger>
                         <TabsTrigger value="entregas" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                             <FileText className="w-4 h-4 mr-2" />
-                            Entregas As-Built
+                            Gestão de Entregas e Escopo
+                        </TabsTrigger>
+                        <TabsTrigger value="issues" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                            <AlertCircle className="w-4 h-4 mr-2" />
+                            Painel de Divergências
                         </TabsTrigger>
                         <TabsTrigger value="management" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                            <FileText className="w-4 h-4 mr-2" />
-                            Gestão e Upload
+                            <Settings className="w-4 h-4 mr-2" />
+                            Configurações e Relatórios
                         </TabsTrigger>
                     </TabsList>
 
@@ -238,6 +245,14 @@ export default function Dashboard() {
 
                     <TabsContent value="field" className="animate-in fade-in duration-500">
                         <FieldReportTab />
+                    </TabsContent>
+
+                    <TabsContent value="issues" className="animate-in fade-in duration-500">
+                        <IssueManagerTab />
+                    </TabsContent>
+
+                    <TabsContent value="entregas" className="animate-in fade-in duration-500">
+                        <EntregasTab selectedEdificacao={selectedEdificacao || undefined} />
                     </TabsContent>
 
                         <TabsContent value="asbuilt" className="m-0">
@@ -375,10 +390,6 @@ export default function Dashboard() {
                                 onSelectModel={setActiveModelUrl}
                             />
                         </ErrorBoundary>
-                    </TabsContent>
-
-                    <TabsContent value="entregas" className="animate-in fade-in duration-500">
-                        <EntregasTab selectedEdificacao={selectedEdificacao || undefined} />
                     </TabsContent>
 
                     <TabsContent value="management" className="space-y-6 animate-in fade-in duration-500">

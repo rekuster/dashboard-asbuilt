@@ -50,6 +50,13 @@
       "when": 1774878376149,
       "tag": "0006_sleepy_nomad",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1777473393937,
+      "tag": "0007_smooth_victor_mancha",
+      "breakpoints": true
     }
   ]
 }

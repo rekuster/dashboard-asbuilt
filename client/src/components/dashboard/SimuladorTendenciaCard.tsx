@@ -413,8 +413,8 @@ export default function SimuladorTendenciaCard({ data, allRooms, projectId, proj
                         <p className="text-xl font-black text-emerald-800">{salasRestantes} <span className="text-xs font-medium text-emerald-500">salas</span></p>
                    </div>
                    <div className="bg-rose-50 p-3 rounded-lg border border-rose-200/50">
-                        <p className="text-[10px] font-bold text-rose-500 uppercase">Velocidade Meta</p>
-                        <p className="text-xl font-black text-rose-800">{(roomsPerWeek / 5).toFixed(2)} <span className="text-xs font-medium text-rose-500">salas/dia úteis</span></p>
+                        <p className="text-[10px] font-bold text-slate-500 uppercase">Velocidade Meta</p>
+                        <p className="text-xl font-black text-rose-800">{(roomsPerWeek / 5).toFixed(1)} <span className="text-xs font-medium text-rose-500">salas/dia úteis</span></p>
                    </div>
                    <div className="bg-primary/5 p-3 rounded-lg border border-primary/20">
                         <p className="text-[10px] font-bold text-primary uppercase">Conclusão Estimada</p>

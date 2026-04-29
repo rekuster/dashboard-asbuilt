@@ -340,6 +340,7 @@ export default function FieldReportTab() {
                 divergencia: item.divergencia,
                 fotoUrl: finalFotoUrl,
                 fotoReferenciaUrl: finalFotoReferenciaUrl,
+                status: 'ATIVA',
             };
 
             if (isOnline) {

@@ -11,3 +11,4 @@ Relatório de divergencias
 *.db
 *.sqlite
 .env*
+scratch

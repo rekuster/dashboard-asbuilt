@@ -121,15 +121,20 @@ export default function DisciplineValidationTab() {
                 if (discInBuilding) {
                     const verification = allVerificacoes.find((v: any) => v.salaId === sala.id && v.disciplina === disc);
                     
-                    // FILTRAGEM INTELIGENTE: Considera siglas (ELE) e nomes completos
-                    const pendingApontamentos = apontamentos.filter((a: any) => 
+                    // BUSCAMOS TODOS OS APONTAMENTOS (ATIVOS E RESOLVIDOS)
+                    const roomApontamentos = apontamentos.filter((a: any) => 
                         a.sala === sala?.nome && 
-                        isSameDiscipline(a.disciplina, (disc as any)) && 
-                        a.status === 'PENDENTE'
+                        isSameDiscipline(a.disciplina, (disc as any))
                     );
 
-                    // Só mostramos a sala se ela tiver pendências registradas
-                    if (pendingApontamentos.length > 0) {
+                    const activeApontamentos = roomApontamentos.filter((a: any) => 
+                        (a.status === 'ATIVA' || a.status === 'EM_REVISAO')
+                    );
+
+                    const resolvedCount = roomApontamentos.length - activeApontamentos.length;
+
+                    // Só mostramos a sala se ela tiver ou tiver tido pendências
+                    if (roomApontamentos.length > 0) {
                         const discKey = (disc as any);
                         const edifKey = (sala.edificacao as any);
                         if (!map[discKey]) map[discKey] = {};
@@ -137,9 +142,11 @@ export default function DisciplineValidationTab() {
                         
                         map[discKey][edifKey].push({
                             ...sala,
-                            statusDisciplina: verification?.status || "PENDENTE",
-                            apontamentosCount: pendingApontamentos.length,
-                            hasPending: true
+                            statusDisciplina: verification?.status || "ATIVA",
+                            apontamentosCount: activeApontamentos.length,
+                            resolvedCount: resolvedCount,
+                            totalIssues: roomApontamentos.length,
+                            hasPending: activeApontamentos.length > 0
                         });
                     }
                 }
@@ -259,21 +266,29 @@ export default function DisciplineValidationTab() {
                                         </div>
 
                                         <div className="flex items-center gap-4">
+                                            <div className="flex flex-col items-end gap-1">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-[10px] font-bold text-slate-400 uppercase">Qualidade da Disciplina:</span>
+                                                    <span className={`text-[10px] font-black px-2 py-0.5 rounded ${isComplete ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                        {totalSalas > 0 ? ((okSalas / totalSalas) * 100).toFixed(1) : 0}% Salas OK
+                                                    </span>
+                                                </div>
+                                                {totalSalas > 0 && (
+                                                    <div className="w-32 h-1 bg-slate-100 rounded-full overflow-hidden">
+                                                        <div 
+                                                            className={`h-full transition-all duration-500 ${isComplete ? 'bg-emerald-500' : 'bg-[#940707]'}`}
+                                                            style={{ width: `${(okSalas / totalSalas) * 100}%` }}
+                                                        />
+                                                    </div>
+                                                )}
+                                            </div>
+
                                             {pendingSalas > 0 && (
-                                                <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-[10px] font-black uppercase border border-amber-200">
+                                                <div className="flex items-center gap-1.5 px-3 py-1 bg-rose-100 text-rose-700 rounded-full text-[10px] font-black uppercase border border-rose-200">
                                                     <AlertCircle className="w-3 h-3" />
-                                                    {pendingSalas} salas com divergências
+                                                    {pendingSalas} salas c/ divergências
                                                 </div>
                                             )}
-                                            
-                                            <div className={`px-4 py-1.5 rounded-full text-[12px] font-black uppercase border-2 flex items-center gap-2 ${
-                                                isComplete 
-                                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-500/30' 
-                                                    : 'bg-slate-50 text-slate-600 border-slate-200'
-                                            }`}>
-                                                {isComplete && <CheckCircle2 className="w-4 h-4" />}
-                                                {isComplete ? 'Validado 100%' : `${okSalas} / ${totalSalas} Verificadas`}
-                                            </div>
                                         </div>
                                     </div>
                                 </CardHeader>
@@ -308,13 +323,29 @@ export default function DisciplineValidationTab() {
                                                                         </div>
                                                                     </TableCell>
                                                                     <TableCell className="text-center">
-                                                                        {sala.apontamentosCount > 0 ? (
-                                                                            <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 font-bold px-2 py-0.5 text-[10px]">
-                                                                                {sala.apontamentosCount} {sala.apontamentosCount === 1 ? 'PENDÊNCIA' : 'PENDÊNCIAS'}
-                                                                            </Badge>
-                                                                        ) : (
-                                                                            <span className="text-[10px] text-emerald-600 font-bold">✓ LIMPO</span>
-                                                                        )}
+                                                                         <div className="flex flex-col items-center gap-1">
+                                                                             {sala.apontamentosCount > 0 ? (
+                                                                                 <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 font-bold px-2 py-0.5 text-[10px]">
+                                                                                     {sala.apontamentosCount} {sala.apontamentosCount === 1 ? 'ATIVA' : 'ATIVAS'}
+                                                                                 </Badge>
+                                                                             ) : (
+                                                                                 <span className="text-[10px] text-emerald-600 font-black flex items-center gap-1">
+                                                                                     <CheckCircle2 className="w-3 h-3" />
+                                                                                     SANADO
+                                                                                 </span>
+                                                                             )}
+                                                                             <div className="flex items-center gap-1.5 mt-0.5">
+                                                                                 <div className="w-16 h-1 bg-slate-100 rounded-full overflow-hidden">
+                                                                                     <div 
+                                                                                         className="h-full bg-emerald-500 transition-all duration-500" 
+                                                                                         style={{ width: `${(sala.resolvedCount / sala.totalIssues) * 100}%` }}
+                                                                                     />
+                                                                                 </div>
+                                                                                 <span className="text-[8px] font-black text-slate-400 uppercase">
+                                                                                     {sala.resolvedCount}/{sala.totalIssues}
+                                                                                 </span>
+                                                                             </div>
+                                                                         </div>
                                                                     </TableCell>
                                                                     <TableCell className="text-center">
                                                                         <span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase ${

@@ -27,13 +27,15 @@ import {
     ListChecks,
     ClipboardCheck,
     Image as ImageIcon,
-    X
+    X,
+    Pencil
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { ImageUpload } from "@/components/ui/ImageUpload";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ReportPreviewModal } from "@/components/dashboard/ReportPreviewModal";
+import { EditApontamentoModal } from "@/components/dashboard/EditApontamentoModal";
 
 export default function DataHubTab() {
     const [search, setSearch] = useState("");
@@ -72,7 +74,7 @@ export default function DataHubTab() {
                             (updated.augin === 1) &&
                             (updated.trackerPosicionado === 1) &&
                             (updated.qrCodePlastificado === 1);
-                        updated.statusRA = isLiberado ? "LIBERADO PARA OBRA" : "PENDENTE";
+                        updated.statusRA = isLiberado ? "LIBERADO PARA OBRA" : "ATIVA";
 
                         // Room status
                         if (updated.dataVerificacao2) {
@@ -82,7 +84,7 @@ export default function DataHubTab() {
                         } else if (updated.dataVerificada) {
                             updated.status = "VERIFICADA";
                         } else {
-                            updated.status = "PENDENTE";
+                            updated.status = "ATIVA";
                         }
 
                         return updated;
@@ -130,6 +132,14 @@ export default function DataHubTab() {
         }
     };
 
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [selectedApontamento, setSelectedApontamento] = useState<any>(null);
+
+    const handleEditClick = (apont: any) => {
+        setSelectedApontamento(apont);
+        setIsEditModalOpen(true);
+    };
+
     const downloadExcel = async () => {
         try {
             toast.info("Gerando Excel...");
@@ -159,7 +169,7 @@ export default function DataHubTab() {
             const matchesEdificacao = filterEdificacao === "Todas" || s.edificacao === filterEdificacao;
             const matchesPavimento = filterPavimento === "Todos" || s.pavimento === filterPavimento;
             // Status filter logic for "Status Verificação" tab mainly, but consistent
-            const currentStatus = s.status || "PENDENTE";
+            const currentStatus = s.status || "ATIVA";
             const matchesStatus = filterStatus === "Todos" || currentStatus === filterStatus;
 
             return matchesSearch && matchesEdificacao && matchesPavimento && matchesStatus;
@@ -306,12 +316,12 @@ export default function DataHubTab() {
                                                 { done: checklistStats.tracker, label: 'Tracker' },
                                                 { done: checklistStats.qr, label: 'QR' },
                                             ].map((col) => {
-                                                const pct = checklistStats.total > 0 ? Math.round((col.done / checklistStats.total) * 100) : 0;
-                                                const color = pct === 100 ? 'text-emerald-700 bg-emerald-50' : pct > 0 ? 'text-amber-700 bg-amber-50' : 'text-slate-500 bg-slate-50';
+                                                const pct = checklistStats.total > 0 ? (col.done / checklistStats.total) * 100 : 0;
+                                                const color = pct >= 100 ? 'text-emerald-700 bg-emerald-50' : pct > 0 ? 'text-amber-700 bg-amber-50' : 'text-slate-500 bg-slate-50';
                                                 return (
                                                     <TableCell key={col.label} className="text-center py-1.5">
                                                         <div className={`inline-flex flex-col items-center rounded-md px-2 py-0.5 ${color}`}>
-                                                            <span className="text-[11px] font-bold">{pct}%</span>
+                                                            <span className="text-[11px] font-bold">{pct.toFixed(1)}%</span>
                                                             <span className="text-[9px] opacity-70">{col.done}/{checklistStats.total}</span>
                                                         </div>
                                                     </TableCell>
@@ -322,7 +332,7 @@ export default function DataHubTab() {
                                                         ? 'text-emerald-700 bg-emerald-50'
                                                         : checklistStats.liberado > 0 ? 'text-amber-700 bg-amber-50' : 'text-slate-500 bg-slate-50'
                                                     }`}>
-                                                    <span className="text-[11px] font-bold">{checklistStats.total > 0 ? Math.round((checklistStats.liberado / checklistStats.total) * 100) : 0}%</span>
+                                                    <span className="text-[11px] font-bold">{checklistStats.total > 0 ? ((checklistStats.liberado / checklistStats.total) * 100).toFixed(1) : (0).toFixed(1)}%</span>
                                                     <span className="text-[9px] opacity-70">{checklistStats.liberado}/{checklistStats.total}</span>
                                                 </div>
                                             </TableCell>
@@ -398,7 +408,7 @@ export default function DataHubTab() {
                                                 <TableCell className="text-center">
                                                     <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold tracking-tighter ${sala.statusRA === 'LIBERADO PARA OBRA' ? 'bg-[#10b981] text-white' : 'bg-slate-100 text-slate-500'
                                                         }`}>
-                                                        {sala.statusRA ? (sala.statusRA === 'LIBERADO PARA OBRA' ? 'LIBERADO' : sala.statusRA) : 'PENDENTE'}
+                                                        {sala.statusRA ? (sala.statusRA === 'LIBERADO PARA OBRA' ? 'LIBERADO' : sala.statusRA) : 'ATIVA'}
                                                     </span>
                                                 </TableCell>
                                             </TableRow>
@@ -513,6 +523,18 @@ export default function DataHubTab() {
                                                             <X size={14} />
                                                         </Button>
 
+                                                        {/* Botão de editar */}
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            title={`Editar #${item.numeroApontamento}`}
+                                                            className="h-6 w-6 text-slate-300 hover:text-blue-600 hover:bg-blue-50 transition-all shrink-0"
+                                                            onClick={() => handleEditClick(item)}
+                                                        >
+                                                            <Pencil size={12} />
+                                                        </Button>
+
+
                                                         {/* Model Photo (Referencia) */}
                                                         <Popover>
                                                             <PopoverTrigger asChild>
@@ -577,7 +599,7 @@ export default function DataHubTab() {
                                     <option value="Todos">Todos Status</option>
                                     <option value="VERIFICADA">Verificada</option>
                                     <option value="REVISAR">Revisar</option>
-                                    <option value="PENDENTE">Pendente</option>
+                                    <option value="ATIVA">Ativa</option>
                                 </select>
                             </div>
                         </CardHeader>
@@ -659,7 +681,7 @@ export default function DataHubTab() {
                                                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${sala.status === 'VERIFICADA' ? 'bg-emerald-100 text-emerald-700' :
                                                         sala.status === 'REVISAR' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500' // Changed to Slate/Gray for Pendente
                                                         }`}>
-                                                        {sala.status || 'PENDENTE'}
+                                                        {sala.status || 'ATIVA'}
                                                     </span>
                                                 </TableCell>
                                             </TableRow>
@@ -671,6 +693,17 @@ export default function DataHubTab() {
                     </Card>
                 </TabsContent>
             </Tabs>
+
+            {selectedApontamento && (
+                <EditApontamentoModal 
+                    isOpen={isEditModalOpen}
+                    onClose={() => {
+                        setIsEditModalOpen(false);
+                        setSelectedApontamento(null);
+                    }}
+                    apontamento={selectedApontamento}
+                />
+            )}
         </div>
     );
 }

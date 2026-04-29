@@ -94,10 +94,16 @@ export const apontamentos = pgTable("apontamentos", {
     divergencia: text("divergencia"),
     fotoUrl: text("fotoUrl"),
     fotoReferenciaUrl: text("fotoReferenciaUrl"),
-    status: text("status").default("PENDENTE").notNull(),
+    status: text("status").default("ATIVA").notNull(), // 'ATIVA', 'EM_REVISAO', 'RESOLVIDA', 'NAO_PROCEDE'
+    prioridade: text("prioridade").default("NORMAL"), // 'BAIXA', 'NORMAL', 'ALTA', 'URGENTE'
+    tipo: text("tipo").default("DIVERGÊNCIA"),      // 'DIVERGÊNCIA', 'INCONSISTÊNCIA', 'SOLICITAÇÃO'
+    comentario: text("comentario"),                 // Comentários de resolução ou notas adicionais
+    dataResolvido: timestamp("dataResolvido"),      // Data em que o apontamento foi marcado como resolvido
     responsavel: text("responsavel"),
     dataEnvio: timestamp("dataEnvio"),
     enviado: integer("enviado").default(0).notNull(), // 0 = Não enviado, 1 = Enviado
+    asBuiltNota: text("asBuiltNota"),               // Nota técnica específica da verificação As-Built
+    asBuiltPrintUrl: text("asBuiltPrintUrl"),       // Print do modelo As-Built comprovando a resolução
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
@@ -215,6 +221,7 @@ export const verificacaoModelo = pgTable("verificacaoModelo", {
     disciplina: text("disciplina").notNull(),
     status: text("status").default("PENDENTE").notNull(), // 'OK', 'PENDENTE', 'NAO_APLICAVEL'
     observacao: text("observacao"),
+    printUrl: text("printUrl"),
     updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 

@@ -1,17 +1,20 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { CheckCircle2, Info, AlertCircle } from "lucide-react";
+import { CheckCircle2, Info, AlertCircle, Image as ImageIcon, ExternalLink, X, Upload, Loader2 as LoaderIcon, Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { EditApontamentoModal } from "./EditApontamentoModal";
 
 /* 
  * ESTE É O MODAL DE CHECKLIST POR SALA.
  * Ele permite marcar quais disciplinas já foram verificadas "in loco".
  * Agora, ele também mostra se existem divergências (apontamentos) pendentes vindos do campo.
+ * Adicionada funcionalidade de "Print de Verificação" para o modelo As-Built.
  */
 
 interface VerificationModalProps {
@@ -64,18 +67,72 @@ export function VerificationModal({ isOpen, onClose, sala, disciplines, pendingA
         },
     });
 
-    const [editingDisc, setEditingDisc] = useState<string | null>(null);
-    const [obs, setObs] = useState("");
+    const [editingApontamentoId, setEditingApontamentoId] = useState<number | null>(null);
+    const [asBuiltNota, setAsBuiltNota] = useState("");
+    const [asBuiltPrintUrl, setAsBuiltPrintUrl] = useState("");
+    const [isUploading, setIsUploading] = useState(false);
+
+    // Mutação para salvar detalhes As-Built no apontamento
+    const updateAsBuiltMutation = trpc.dashboard.updateApontamentoAsBuilt.useMutation({
+        onSuccess: () => {
+            utils.dashboard.getApontamentos.invalidate();
+            toast.success("Detalhes As-Built salvos!");
+            setEditingApontamentoId(null);
+            setAsBuiltNota("");
+            setAsBuiltPrintUrl("");
+        },
+    });
+
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [selectedApontamento, setSelectedApontamento] = useState<any>(null);
+
+    const handleEditClick = (apont: any) => {
+        setSelectedApontamento(apont);
+        setIsEditModalOpen(true);
+    };
+
+
+    // Função para upload de imagem
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setIsUploading(true);
+        const formData = new FormData();
+        formData.append("image", file);
+
+        try {
+            const response = await fetch("/api/upload-image", {
+                method: "POST",
+                body: formData,
+            });
+
+            const data = await response.json();
+            if (data.success && data.url) {
+                setAsBuiltPrintUrl(data.url);
+                toast.success("Imagem carregada com sucesso!");
+            } else {
+                toast.error("Erro ao carregar imagem.");
+            }
+        } catch (error) {
+            console.error("Upload error:", error);
+            toast.error("Erro na conexão com o servidor.");
+        } finally {
+            setIsUploading(false);
+        }
+    };
 
     // Alterna entre OK e PENDENTE na checklist
     const handleToggle = async (disc: string, currentStatus: string) => {
-        const newStatus = currentStatus === "OK" ? "PENDENTE" : "OK";
+        const newStatus = currentStatus === "OK" ? "ATIVA" : "OK";
+        const currentVer = verifications.find((v: any) => v.disciplina === disc);
         try {
             await upsertMutation.mutateAsync({
                 salaId: sala.id,
                 disciplina: disc,
                 status: newStatus,
-                observacao: verifications.find((v: any) => v.disciplina === disc)?.observacao || ""
+                observacao: currentVer?.observacao || "",
+                printUrl: currentVer?.printUrl || ""
             });
             toast.success(`${disc} atualizado!`);
         } catch (e) {
@@ -83,27 +140,23 @@ export function VerificationModal({ isOpen, onClose, sala, disciplines, pendingA
         }
     };
 
-    // Salva uma observação técnica para a disciplina
-    const handleSaveObs = async () => {
-        if (!editingDisc) return;
+    // Salva uma observação técnica para o apontamento
+    const handleSaveAsBuilt = async (id: number, currentStatus?: string) => {
         try {
-            await upsertMutation.mutateAsync({
-                salaId: sala.id,
-                disciplina: editingDisc,
-                status: verifications.find((v: any) => v.disciplina === editingDisc)?.status || "PENDENTE",
-                observacao: obs
+            await updateAsBuiltMutation.mutateAsync({
+                id,
+                asBuiltNota,
+                asBuiltPrintUrl,
+                status: currentStatus // Keep current or update if needed
             });
-            toast.success(`Observação salva para ${editingDisc}!`);
-            setEditingDisc(null);
-            setObs("");
         } catch (e) {
-            toast.error("Erro ao salvar observação.");
+            toast.error("Erro ao salvar detalhes.");
         }
     };
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-[700px] font-sans rounded-3xl overflow-hidden flex flex-col max-h-[90vh]">
+            <DialogContent className="sm:max-w-[1000px] font-sans rounded-3xl overflow-hidden flex flex-col max-h-[90vh]">
                 <DialogHeader className="px-6 py-4 border-b border-slate-100">
                     <DialogTitle className="flex items-center gap-2 text-xl font-bold text-slate-800">
                         <CheckCircle2 className="w-6 h-6 text-[#940707]" />
@@ -126,14 +179,12 @@ export function VerificationModal({ isOpen, onClose, sala, disciplines, pendingA
                         const ver = verifications.find((v: any) => v.disciplina === disc);
                         const isOk = ver?.status === "OK";
                         
-                        // FILTRO PARA PEGAR OS APONTAMENTOS REAIS DESTA SALA E DISCIPLINA
                         const roomApontamentos = allApontamentos.filter((a: any) => 
                             a.sala === sala?.nome && 
-                            isSameDiscipline(a.disciplina, disc) &&
-                            a.status === 'PENDENTE'
+                            isSameDiscipline(a.disciplina, disc)
                         );
                         
-                        const pendingCount = roomApontamentos.length;
+                        const pendingCount = roomApontamentos.filter((a: any) => a.status === 'ATIVA' || a.status === 'EM_REVISAO').length;
                         
                         return (
                             <div 
@@ -152,7 +203,7 @@ export function VerificationModal({ isOpen, onClose, sala, disciplines, pendingA
                                             <Checkbox 
                                                 id={`check-${disc}`} 
                                                 checked={isOk}
-                                                onCheckedChange={() => handleToggle(disc, ver?.status || "PENDENTE")}
+                                                onCheckedChange={() => handleToggle(disc, ver?.status || "ATIVA")}
                                                 className="w-5 h-5 rounded-md border-slate-300 data-[state=checked]:bg-[#940707] data-[state=checked]:border-[#940707]"
                                             />
                                             <div className="flex flex-col">
@@ -171,103 +222,283 @@ export function VerificationModal({ isOpen, onClose, sala, disciplines, pendingA
                                             <Badge 
                                                 variant={isOk ? "secondary" : "outline"} 
                                                 className={`rounded-full px-3 py-0.5 text-[10px] uppercase tracking-wider font-bold ${
-                                                    isOk ? "bg-emerald-100 text-emerald-700 border-none" : "text-slate-400 bg-white"
+                                                    isOk ? "bg-emerald-100 text-emerald-700 border-none" : "text-amber-600 bg-amber-50 border-amber-200"
                                                 }`}
                                             >
-                                                {isOk ? "Verificado" : "Pendente"}
+                                                {isOk ? "Verificado" : "Ativa"}
                                             </Badge>
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* LISTA DETALHADA COM FOTOS (REQUISIÇÃO DO USUÁRIO) */}
                                 {pendingCount > 0 && (
-                                    <div className="border-t border-amber-100 bg-white/60 p-4 space-y-4">
-                                        <p className="text-[10px] uppercase font-black text-amber-500 tracking-widest mb-2">Detalhes das Divergências:</p>
-                                        {roomApontamentos.map((apont: any, idx: number) => (
-                                            <div key={apont.id} className="space-y-3 bg-white p-3 rounded-xl border border-amber-100 shadow-sm">
-                                                <div className="flex gap-2 items-start">
-                                                    <Badge className="bg-amber-500 h-5 w-5 rounded-full flex items-center justify-center p-0 shrink-0">{idx + 1}</Badge>
-                                                    <p className="text-[11px] text-slate-700 font-medium leading-relaxed italic">
-                                                        "{apont.divergencia}"
-                                                    </p>
-                                                </div>
+                                    <div className="border-t border-amber-100 bg-white/60 p-4 space-y-6">
+                                        <p className="text-[10px] uppercase font-black text-amber-500 tracking-widest mb-2">Detalhes das Divergências (Layout de Relatório):</p>
+                                        <div className="flex flex-col gap-8">
+                                            {roomApontamentos.map((apont: any, idx: number) => (
+                                                <div key={apont.id} className="space-y-4 bg-white p-5 rounded-3xl border border-amber-100 shadow-md">
+                                                    <div className="flex gap-4 items-start">
+                                                        <Badge className={`${apont.status === 'RESOLVIDA' ? 'bg-emerald-500' : 'bg-amber-500'} h-8 w-8 rounded-full flex items-center justify-center p-0 shrink-0 text-white text-lg font-black shadow-lg`}>{idx + 1}</Badge>
+                                                        <div className="flex-1 space-y-1">
+                                                            <p className={`text-sm font-bold leading-relaxed italic ${apont.status === 'RESOLVIDA' ? 'text-slate-400 line-through' : 'text-slate-800'}`}>
+                                                                "{apont.divergencia}"
+                                                            </p>
+                                                            <div className="flex items-center gap-3">
+                                                                <Badge variant="outline" className={`text-[10px] font-black uppercase px-2 py-0.5 ${
+                                                                    apont.status === 'RESOLVIDA' ? 'text-emerald-600 bg-emerald-50 border-emerald-200' : 
+                                                                    apont.status === 'EM_REVISAO' ? 'text-blue-600 bg-blue-50 border-blue-200' :
+                                                                    'text-amber-600 bg-amber-50 border-amber-200'
+                                                                }`}>
+                                                                    {apont.status || 'ATIVA'}
+                                                                </Badge>
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="text-[10px] font-bold text-slate-400 uppercase">Responsável:</span>
+                                                                    <span className="text-[10px] font-black text-slate-600 uppercase">
+                                                                        {apont.responsavel || 'Não Definido'}
+                                                                    </span>
+                                                                </div>
+                                                                <Button 
+                                                                    variant="ghost" 
+                                                                    size="icon" 
+                                                                    className="h-6 w-6 text-slate-400 hover:text-[#940707] transition-colors"
+                                                                    onClick={() => handleEditClick(apont)}
+                                                                >
+                                                                    <Pencil size={12} />
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex flex-wrap gap-2">
+                                                            <Button 
+                                                                size="sm" 
+                                                                variant="outline" 
+                                                                className={`h-8 px-3 text-[10px] font-black uppercase rounded-full transition-all border ${
+                                                                    apont.status === 'ATIVA' 
+                                                                        ? 'bg-amber-500 text-white border-amber-600 shadow-sm' 
+                                                                        : 'text-amber-600 border-amber-100 hover:bg-amber-50'
+                                                                }`}
+                                                                onClick={async () => {
+                                                                    try {
+                                                                        await utils.client.dashboard.updateApontamento.mutate({
+                                                                            id: apont.id,
+                                                                            status: 'ATIVA',
+                                                                            dataResolvido: null
+                                                                        });
+                                                                        toast.success("Divergência marcada como ATIVA");
+                                                                        utils.dashboard.getApontamentos.invalidate();
+                                                                    } catch (e) {
+                                                                        toast.error("Erro ao atualizar divergência.");
+                                                                    }
+                                                                }}
+                                                            >
+                                                                Ativa
+                                                            </Button>
+                                                            <Button 
+                                                                size="sm" 
+                                                                variant="outline" 
+                                                                className={`h-8 px-3 text-[10px] font-black uppercase rounded-full transition-all border ${
+                                                                    apont.status === 'EM_REVISAO' 
+                                                                        ? 'bg-blue-500 text-white border-blue-600 shadow-sm' 
+                                                                        : 'text-blue-600 border-blue-100 hover:bg-blue-50'
+                                                                }`}
+                                                                onClick={async () => {
+                                                                    try {
+                                                                        await utils.client.dashboard.updateApontamento.mutate({
+                                                                            id: apont.id,
+                                                                            status: 'EM_REVISAO',
+                                                                            dataResolvido: null
+                                                                        });
+                                                                        toast.success("Divergência enviada para REVISÃO");
+                                                                        utils.dashboard.getApontamentos.invalidate();
+                                                                    } catch (e) {
+                                                                        toast.error("Erro ao atualizar divergência.");
+                                                                    }
+                                                                }}
+                                                            >
+                                                                Em Revisão
+                                                            </Button>
+                                                            <Button 
+                                                                size="sm" 
+                                                                variant="outline" 
+                                                                className={`h-8 px-3 text-[10px] font-black uppercase rounded-full transition-all border ${
+                                                                    apont.status === 'RESOLVIDA' 
+                                                                        ? 'bg-emerald-500 text-white border-emerald-600 shadow-sm' 
+                                                                        : 'text-emerald-600 border-emerald-100 hover:bg-emerald-50'
+                                                                }`}
+                                                                onClick={async () => {
+                                                                    try {
+                                                                        await utils.client.dashboard.updateApontamento.mutate({
+                                                                            id: apont.id,
+                                                                            status: 'RESOLVIDA',
+                                                                            dataResolvido: new Date()
+                                                                        });
+                                                                        toast.success("Divergência marcada como RESOLVIDA");
+                                                                        utils.dashboard.getApontamentos.invalidate();
+                                                                    } catch (e) {
+                                                                        toast.error("Erro ao atualizar divergência.");
+                                                                    }
+                                                                }}
+                                                            >
+                                                                Resolvida
+                                                            </Button>
+                                                        </div>
+                                                    </div>
 
-                                                {/* Comparativo de Imagens */}
-                                                <div className="grid grid-cols-2 gap-3 pt-1">
-                                                    <div className="space-y-1">
-                                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Projeto / Referência RA</p>
-                                                        <div className="aspect-video bg-slate-100 rounded-lg overflow-hidden border border-slate-200">
-                                                            {apont.fotoReferenciaUrl ? (
-                                                                <img src={apont.fotoReferenciaUrl} alt="Referência" className="w-full h-full object-cover hover:scale-105 transition-transform cursor-zoom-in" 
-                                                                    onClick={() => window.open(apont.fotoReferenciaUrl, '_blank')}/>
-                                                            ) : (
-                                                                <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400 italic">Sem imagem</div>
-                                                            )}
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                                                        <div className="space-y-2">
+                                                            <div className="flex items-center justify-between">
+                                                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-tight flex items-center gap-2">
+                                                                    <div className="w-1.5 h-1.5 bg-[#940707] rounded-full"></div>
+                                                                    Projeto / Referência RA
+                                                                </p>
+                                                            </div>
+                                                            <div className="h-[450px] bg-slate-100 rounded-2xl overflow-hidden border-2 border-slate-200 shadow-inner group">
+                                                                {apont.fotoReferenciaUrl ? (
+                                                                    <img src={apont.fotoReferenciaUrl} alt="Referência" className="w-full h-full object-contain bg-slate-200 hover:scale-[1.02] transition-all duration-500 cursor-zoom-in" 
+                                                                        onClick={() => window.open(apont.fotoReferenciaUrl, '_blank')}/>
+                                                                ) : (
+                                                                    <div className="w-full h-full flex flex-col items-center justify-center text-[10px] text-slate-400 italic gap-2">
+                                                                        <ImageIcon className="w-8 h-8 opacity-20" />
+                                                                        Sem imagem de referência
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            <div className="flex items-center justify-between">
+                                                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-tight flex items-center gap-2">
+                                                                    <div className="w-1.5 h-1.5 bg-amber-500 rounded-full"></div>
+                                                                    Execução Real / Obra
+                                                                </p>
+                                                            </div>
+                                                            <div className="h-[450px] bg-slate-100 rounded-2xl overflow-hidden border-2 border-slate-200 shadow-inner group">
+                                                                {apont.fotoUrl ? (
+                                                                    <img src={apont.fotoUrl} alt="Campo" className="w-full h-full object-contain bg-slate-200 hover:scale-[1.02] transition-all duration-500 cursor-zoom-in" 
+                                                                        onClick={() => window.open(apont.fotoUrl, '_blank')}/>
+                                                                ) : (
+                                                                    <div className="w-full h-full flex flex-col items-center justify-center text-[10px] text-slate-400 italic gap-2">
+                                                                        <ImageIcon className="w-8 h-8 opacity-20" />
+                                                                        Sem foto de campo
+                                                                    </div>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                    <div className="space-y-1">
-                                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Execução Real / Obra</p>
-                                                        <div className="aspect-video bg-slate-100 rounded-lg overflow-hidden border border-slate-200">
-                                                            {apont.fotoUrl ? (
-                                                                <img src={apont.fotoUrl} alt="Campo" className="w-full h-full object-cover hover:scale-105 transition-transform cursor-zoom-in" 
-                                                                    onClick={() => window.open(apont.fotoUrl, '_blank')}/>
-                                                            ) : (
-                                                                <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400 italic">Sem imagem</div>
-                                                            )}
-                                                        </div>
+
+                                                    {/* SEÇÃO AS-BUILT POR APONTAMENTO */}
+                                                    <div className="mt-4 pt-4 border-t border-slate-100">
+                                                        {editingApontamentoId === apont.id ? (
+                                                            <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+                                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                                    <div className="space-y-2">
+                                                                        <label className="text-[10px] font-bold text-slate-500 uppercase">Nota Técnica As-Built</label>
+                                                                        <Textarea 
+                                                                            placeholder="Descreva a solução aplicada no As-Built..."
+                                                                            value={asBuiltNota}
+                                                                            onChange={(e) => setAsBuiltNota(e.target.value)}
+                                                                            className="text-xs min-h-[80px] rounded-xl border-slate-200 focus:ring-[#940707] focus:border-[#940707] bg-white"
+                                                                        />
+                                                                    </div>
+                                                                    <div className="space-y-2">
+                                                                        <label className="text-[10px] font-bold text-slate-500 uppercase">Print de Verificação (Modelo)</label>
+                                                                        <div className="space-y-3">
+                                                                            <div className="flex gap-2">
+                                                                                <Input 
+                                                                                    placeholder="URL ou Upload..."
+                                                                                    value={asBuiltPrintUrl}
+                                                                                    onChange={(e) => setAsBuiltPrintUrl(e.target.value)}
+                                                                                    className="text-xs h-9 rounded-lg border-slate-200 bg-white"
+                                                                                />
+                                                                                <div className="relative">
+                                                                                    <input 
+                                                                                        type="file" 
+                                                                                        id={`file-${apont.id}`} 
+                                                                                        className="hidden" 
+                                                                                        onChange={handleFileUpload}
+                                                                                    />
+                                                                                    <Button variant="outline" size="icon" className="h-9 w-9" asChild>
+                                                                                        <label htmlFor={`file-${apont.id}`}>
+                                                                                            {isUploading ? <LoaderIcon className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                                                                                        </label>
+                                                                                    </Button>
+                                                                                </div>
+                                                                            </div>
+                                                                            {asBuiltPrintUrl && (
+                                                                                <div className="aspect-video w-full rounded-xl overflow-hidden border border-slate-200">
+                                                                                    <img src={asBuiltPrintUrl} className="w-full h-full object-cover" />
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex justify-end gap-2">
+                                                                    <Button size="sm" variant="ghost" onClick={() => setEditingApontamentoId(null)}>Cancelar</Button>
+                                                                    <Button size="sm" onClick={() => handleSaveAsBuilt(apont.id)} className="bg-[#940707] text-white">Salvar Verificação</Button>
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="space-y-3">
+                                                                {(apont.asBuiltNota || apont.asBuiltPrintUrl) && (
+                                                                    <div className="bg-emerald-50/30 p-3 rounded-2xl border border-emerald-100/50">
+                                                                        {apont.asBuiltNota && (
+                                                                            <p className="text-xs text-slate-600 italic mb-2 flex gap-2">
+                                                                                <Info className="w-4 h-4 text-emerald-500 shrink-0" />
+                                                                                {apont.asBuiltNota}
+                                                                            </p>
+                                                                        )}
+                                                                        {apont.asBuiltPrintUrl && (
+                                                                            <div className="max-w-[300px] aspect-video rounded-lg overflow-hidden border border-emerald-200 shadow-sm cursor-zoom-in" onClick={() => window.open(apont.asBuiltPrintUrl, '_blank')}>
+                                                                                <img src={apont.asBuiltPrintUrl} className="w-full h-full object-cover" />
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+                                                                <button 
+                                                                    className="text-[10px] font-bold text-[#940707] hover:underline flex items-center gap-1.5"
+                                                                    onClick={() => {
+                                                                        setEditingApontamentoId(apont.id);
+                                                                        setAsBuiltNota(apont.asBuiltNota || "");
+                                                                        setAsBuiltPrintUrl(apont.asBuiltPrintUrl || "");
+                                                                    }}
+                                                                >
+                                                                    <ImageIcon className="w-3.5 h-3.5" />
+                                                                    {apont.asBuiltNota || apont.asBuiltPrintUrl ? "✎ Editar Verificação As-Built" : "+ Adicionar Nota Técnica e Print As-Built"}
+                                                                </button>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
-                                            </div>
-                                        ))}
+                                            ))}
+                                        </div>
                                     </div>
                                 )}
                                 
-                                {ver?.observacao && !editingDisc && (
-                                    <div className="text-[11px] text-slate-600 bg-white/80 p-3 rounded-xl border border-slate-100 italic flex gap-2 items-start shadow-sm">
-                                        <Info className="w-3.5 h-3.5 mt-0.5 shrink-0 text-slate-400" />
-                                        {ver.observacao}
+                                <div className="p-4 bg-slate-50/30 border-t border-slate-100">
+                                    {/* Nota de verificação da disciplina removida conforme solicitação do usuário para ser individual por apontamento */}
+                                    <div className="text-[10px] text-slate-400 italic">
+                                        As notas técnicas agora são vinculadas individualmente a cada divergência acima.
                                     </div>
-                                )}
-
-                                {editingDisc === disc ? (
-                                    <div className="space-y-3 pt-2 animate-in fade-in slide-in-from-top-2">
-                                        <Textarea 
-                                            placeholder="Descreva observações técnicas ou pendências..."
-                                            value={obs}
-                                            onChange={(e) => setObs(e.target.value)}
-                                            className="text-xs min-h-[80px] rounded-xl border-slate-200 focus:ring-[#940707] focus:border-[#940707]"
-                                        />
-                                        <div className="flex gap-2">
-                                            <Button size="sm" onClick={handleSaveObs} className="h-8 px-4 text-xs bg-[#940707] hover:bg-[#7a0606] rounded-full text-white">
-                                                Salvar Observação
-                                            </Button>
-                                            <Button size="sm" variant="ghost" onClick={() => setEditingDisc(null)} className="h-8 px-4 text-xs rounded-full">
-                                                Cancelar
-                                            </Button>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <button 
-                                        className="text-[10px] font-bold text-[#940707] hover:underline flex items-center gap-1 mt-1 px-1"
-                                        onClick={() => {
-                                            setEditingDisc(disc);
-                                            setObs(ver?.observacao || "");
-                                        }}
-                                    >
-                                        {ver?.observacao ? "✎ Editar observação" : "+ Adicionar nota técnica"}
-                                    </button>
-                                )}
+                                </div>
                             </div>
                         );
                     })}
                 </div>
 
-                <DialogFooter className="pt-4 border-t border-slate-100">
-                    <Button onClick={onClose} className="bg-[#940707] hover:bg-[#7a0606] text-white rounded-full px-8 shadow-lg shadow-[#940707]/20">
-                        Concluir
+                <DialogFooter className="px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+                    <Button onClick={onClose} className="bg-[#940707] hover:bg-[#7a0606] text-white rounded-full px-10 h-10 shadow-lg shadow-[#940707]/20 font-bold">
+                        Concluir Verificação
                     </Button>
                 </DialogFooter>
+
+                {selectedApontamento && (
+                    <EditApontamentoModal 
+                        isOpen={isEditModalOpen}
+                        onClose={() => {
+                            setIsEditModalOpen(false);
+                            setSelectedApontamento(null);
+                        }}
+                        apontamento={selectedApontamento}
+                    />
+                )}
             </DialogContent>
         </Dialog>
     );

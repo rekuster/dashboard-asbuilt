@@ -57,6 +57,7 @@ import {
     getVerificacoes,
     upsertVerificacao,
     getAllVerificacoes,
+    getStatsPorDisciplina,
 } from './db';
 import { eq } from "drizzle-orm";
 import { handleExcelUpload } from './uploadHandler';
@@ -324,6 +325,12 @@ export const appRouter = router({
             .query(async ({ input }) => {
                 return await getTopSalasImpactadas(input?.edificacao);
             }),
+            
+        getStatsPorDisciplina: publicProcedure
+            .input(z.object({ edificacao: z.string().optional() }).optional())
+            .query(async ({ input }) => {
+                return await getStatsPorDisciplina(input?.edificacao);
+            }),
 
         // Excel Upload
         uploadExcel: publicProcedure
@@ -518,13 +525,17 @@ export const appRouter = router({
                 divergencia: z.string().nullable(),
                 fotoUrl: z.string().optional(),
                 fotoReferenciaUrl: z.string().optional(),
+                status: z.string().optional(),
+                prioridade: z.string().optional(),
+                tipo: z.string().optional(),
+                comentario: z.string().optional(),
             }))
             .mutation(async ({ input }) => {
                 const data = {
                     ...input,
                     data: typeof input.data === 'string' ? new Date(input.data) : input.data,
                     responsavel: assignResponsavel(input.disciplina),
-                    status: 'PENDENTE'
+                    status: input.status || 'ATIVA'
                 };
                 return await createApontamento(data as any);
             }),
@@ -532,20 +543,32 @@ export const appRouter = router({
         updateApontamento: publicProcedure
             .input(z.object({
                 id: z.number(),
+                edificacao: z.string().optional(),
+                pavimento: z.string().optional(),
+                setor: z.string().optional(),
+                sala: z.string().optional(),
                 disciplina: z.string().optional(),
                 responsavel: z.string().optional(),
                 divergencia: z.string().optional(),
                 fotoUrl: z.string().optional(),
                 fotoReferenciaUrl: z.string().optional(),
+                status: z.string().optional(),
+                prioridade: z.string().optional(),
+                tipo: z.string().optional(),
+                comentario: z.string().optional(),
+                dataResolvido: z.string().or(z.date()).nullable().optional(),
             }))
             .mutation(async ({ input }) => {
                 const { id, ...data } = input;
                 const db = await getDb();
                 if (!db) throw new Error("Database not connected");
 
+                const updateData: any = { ...data };
+                if (data.dataResolvido) updateData.dataResolvido = new Date(data.dataResolvido);
+
                 return await db.update(apontamentos)
                     .set({
-                        ...data,
+                        ...updateData,
                         updatedAt: new Date()
                     })
                     .where(eq(apontamentos.id, id))
@@ -623,9 +646,23 @@ export const appRouter = router({
                 disciplina: z.string(),
                 status: z.string(),
                 observacao: z.string().nullish(),
+                printUrl: z.string().nullish()
             }))
             .mutation(async ({ input }) => {
-                return await upsertVerificacao(input.salaId, input.disciplina, input.status, input.observacao);
+                return await upsertVerificacao(input.salaId, input.disciplina, input.status, input.observacao, input.printUrl);
+            }),
+
+        updateApontamentoAsBuilt: publicProcedure
+            .input(z.object({
+                id: z.number(),
+                asBuiltNota: z.string().nullish(),
+                asBuiltPrintUrl: z.string().nullish(),
+                status: z.string().nullish()
+            }))
+            .mutation(async ({ input }) => {
+                const { id, asBuiltNota, asBuiltPrintUrl, status } = input;
+                const db = await import("./db");
+                return await db.updateApontamentoAsBuilt(id, asBuiltNota || null, asBuiltPrintUrl || null, status || undefined);
             }),
 
         getAllVerificacoes: publicProcedure.query(async () => {
