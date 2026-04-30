@@ -1,6 +1,6 @@
 
 // @ts-nocheck
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import {
     Table,
@@ -226,6 +226,9 @@ export default function IssueManagerTab() {
                             resolvedCount: resolvedCount,
                             totalIssues: roomApontamentos.length
                         });
+
+                        // Ordenar salas por nome dentro de cada edificação
+                        map[disc][sala.edificacao].sort((a, b) => a.nome.localeCompare(b.nome, undefined, { numeric: true }));
                     }
                 }
             });
@@ -399,67 +402,89 @@ export default function IssueManagerTab() {
                                     }}
                                 >
                                     <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            {isExpanded ? <ChevronDown className="w-4 h-4 text-[#940707]" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
-                                            <span className="text-sm font-black text-slate-700 uppercase">{disc}</span>
-                                            <Badge className="bg-slate-100 text-slate-500 border-none text-[9px]">{dOkSalas}/{dTotalSalas} Salas OK</Badge>
+                                        <div className="flex items-center gap-4">
+                                            {isExpanded ? <ChevronDown className="w-5 h-5 text-[#940707]" /> : <ChevronRight className="w-5 h-5 text-slate-400" />}
+                                            <span className="text-base font-black text-slate-800 uppercase tracking-tight">{disc}</span>
+                                            <Badge className="bg-slate-100 text-slate-600 border-none text-[10px] font-bold px-3">{dOkSalas}/{dTotalSalas} SALAS OK</Badge>
                                         </div>
                                         <div className="flex items-center gap-4">
-                                            <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                                <div className="h-full bg-emerald-500" style={{ width: `${(dOkSalas/dTotalSalas)*100}%` }} />
+                                            <div className="w-32 h-2 bg-slate-100 rounded-full overflow-hidden">
+                                                <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${(dOkSalas/dTotalSalas)*100}%` }} />
                                             </div>
                                         </div>
                                     </div>
                                 </CardHeader>
                                 {isExpanded && (
-                                    <CardContent className="p-0 border-t border-slate-50">
+                                    <CardContent className="p-0 border-t border-slate-100 bg-white">
                                         <Table>
-                                            <TableHeader className="bg-slate-50/50">
-                                                <TableRow className="h-8">
-                                                    <TableHead className="text-[9px] uppercase font-bold px-5">Sala / Ambiente</TableHead>
-                                                    <TableHead className="text-[9px] uppercase font-bold text-center">Divergências</TableHead>
-                                                    <TableHead className="text-[9px] uppercase font-bold text-center">Status</TableHead>
-                                                    <TableHead className="text-[9px] uppercase font-bold text-center">Ação</TableHead>
+                                            <TableHeader className="bg-slate-50/80">
+                                                <TableRow className="h-10">
+                                                    <TableHead className="text-[11px] uppercase font-black text-slate-500 px-6">Sala / Ambiente</TableHead>
+                                                    <TableHead className="text-[11px] uppercase font-black text-slate-500 text-center">Divergências</TableHead>
+                                                    <TableHead className="text-[11px] uppercase font-black text-slate-500 text-center">Status</TableHead>
+                                                    <TableHead className="text-[11px] uppercase font-black text-slate-500 text-center">Ação</TableHead>
                                                 </TableRow>
                                             </TableHeader>
                                             <TableBody>
-                                                {edifs.map(edif => (
-                                                    groupedValidation[disc][edif].map(sala => (
-                                                        <TableRow key={sala.id} className="h-10 hover:bg-slate-50/30">
-                                                            <TableCell className="px-5">
-                                                                <div className="flex flex-col">
-                                                                    <span className="text-xs font-bold text-slate-700">{sala.nome}</span>
-                                                                    <span className="text-[9px] text-slate-400">{edif}</span>
+                                                {edifs.sort().map(edif => (
+                                                    <React.Fragment key={edif}>
+                                                        {/* Header da Edificação */}
+                                                        <TableRow className="bg-slate-50/30 border-y border-slate-100">
+                                                            <TableCell colSpan={4} className="py-2 px-6">
+                                                                <div className="flex items-center gap-2">
+                                                                    <Building2 className="w-4 h-4 text-[#940707]" />
+                                                                    <span className="text-xs font-black text-slate-700 uppercase tracking-wider">{edif}</span>
                                                                 </div>
-                                                            </TableCell>
-                                                            <TableCell className="text-center">
-                                                                <div className="flex justify-center gap-1">
-                                                                    {sala.apontamentosCount > 0 && <Badge className="bg-rose-50 text-rose-600 border-rose-100 text-[9px]">{sala.apontamentosCount} ATIVA</Badge>}
-                                                                    {sala.revisionCount > 0 && <Badge className="bg-amber-50 text-amber-600 border-amber-100 text-[9px]">{sala.revisionCount} AJUSTE</Badge>}
-                                                                    {sala.apontamentosCount === 0 && sala.revisionCount === 0 && <span className="text-[9px] text-emerald-600 font-bold">SANADO</span>}
-                                                                </div>
-                                                            </TableCell>
-                                                            <TableCell className="text-center">
-                                                                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${sala.statusDisciplina === "OK" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-400"}`}>
-                                                                    {sala.statusDisciplina}
-                                                                </span>
-                                                            </TableCell>
-                                                            <TableCell className="text-center">
-                                                                <Button 
-                                                                    variant="ghost" 
-                                                                    size="sm" 
-                                                                    className="h-7 text-[10px] font-bold gap-1 hover:text-[#940707]"
-                                                                    onClick={() => {
-                                                                        setSelectedSala(sala);
-                                                                        setSelectedDisciplineForModal(disc);
-                                                                        setIsVModalOpen(true);
-                                                                    }}
-                                                                >
-                                                                    <Pencil className="w-3 h-3" /> Conferir
-                                                                </Button>
                                                             </TableCell>
                                                         </TableRow>
-                                                    ))
+                                                        {groupedValidation[disc][edif].map(sala => (
+                                                            <TableRow key={sala.id} className="h-14 hover:bg-slate-50/50 transition-colors">
+                                                                <TableCell className="px-6">
+                                                                    <div className="flex flex-col">
+                                                                        <span className="text-sm font-bold text-slate-800">{sala.nome}</span>
+                                                                    </div>
+                                                                </TableCell>
+                                                                <TableCell className="text-center">
+                                                                    <div className="flex justify-center gap-2">
+                                                                        {sala.apontamentosCount > 0 && (
+                                                                            <Badge className="bg-rose-50 text-rose-600 border-rose-100 text-[10px] font-bold px-2 py-0.5">
+                                                                                {sala.apontamentosCount} ATIVA
+                                                                            </Badge>
+                                                                        )}
+                                                                        {sala.revisionCount > 0 && (
+                                                                            <Badge className="bg-amber-50 text-amber-600 border-amber-100 text-[10px] font-bold px-2 py-0.5">
+                                                                                {sala.revisionCount} AJUSTE
+                                                                            </Badge>
+                                                                        )}
+                                                                        {sala.apontamentosCount === 0 && sala.revisionCount === 0 && (
+                                                                            <span className="text-[10px] text-emerald-600 font-black tracking-widest uppercase flex items-center gap-1 justify-center">
+                                                                                <CheckCircle2 className="w-3 h-3" /> SANADO
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                </TableCell>
+                                                                <TableCell className="text-center">
+                                                                    <span className={`text-[10px] font-black uppercase px-3 py-1 rounded-full ${sala.statusDisciplina === "OK" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                                                                        {sala.statusDisciplina}
+                                                                    </span>
+                                                                </TableCell>
+                                                                <TableCell className="text-center">
+                                                                    <Button 
+                                                                        variant="outline" 
+                                                                        size="sm" 
+                                                                        className="h-8 text-[11px] font-bold gap-2 border-slate-200 hover:border-[#940707] hover:text-[#940707] rounded-full px-4"
+                                                                        onClick={() => {
+                                                                            setSelectedSala(sala);
+                                                                            setSelectedDisciplineForModal(disc);
+                                                                            setIsVModalOpen(true);
+                                                                        }}
+                                                                    >
+                                                                        <Pencil className="w-3.5 h-3.5" /> Conferir
+                                                                    </Button>
+                                                                </TableCell>
+                                                            </TableRow>
+                                                        ))}
+                                                    </React.Fragment>
                                                 ))}
                                             </TableBody>
                                         </Table>
