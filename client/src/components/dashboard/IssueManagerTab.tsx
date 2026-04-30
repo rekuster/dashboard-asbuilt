@@ -30,7 +30,9 @@ import {
     MessageSquare,
     Building2,
     ShieldCheck,
-    Pencil
+    Pencil,
+    ChevronDown,
+    ChevronRight
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { EditApontamentoModal } from "./EditApontamentoModal";
