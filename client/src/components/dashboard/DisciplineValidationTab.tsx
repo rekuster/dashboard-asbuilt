@@ -324,43 +324,45 @@ export default function DisciplineValidationTab() {
                                                                         </div>
                                                                     </TableCell>
                                                                     <TableCell className="text-center">
-                                                                         <div className="flex flex-col items-center gap-1">
-                                                                             {sala.apontamentosCount > 0 && (
-                                                                                 <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 font-bold px-2 py-0.5 text-[10px]">
-                                                                                     {sala.apontamentosCount} {sala.apontamentosCount === 1 ? 'ATIVA' : 'ATIVAS'}
-                                                                                 </Badge>
-                                                                             )}
-                                                                             {sala.revisionCount > 0 && (
-                                                                                 <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 font-bold px-2 py-0.5 text-[10px]">
-                                                                                     {sala.revisionCount} EM REVISÃO
-                                                                                 </Badge>
-                                                                             )}
-                                                                             {sala.apontamentosCount === 0 && sala.revisionCount === 0 && (
-                                                                                 <span className="text-[10px] text-emerald-600 font-black flex items-center gap-1">
-                                                                                     <CheckCircle2 className="w-3 h-3" />
-                                                                                     SANADO
-                                                                                 </span>
-                                                                             )}
-                                                                             <div className="flex items-center gap-1.5 mt-0.5">
-                                                                                 <div className="w-16 h-1 bg-slate-100 rounded-full overflow-hidden">
-                                                                                     <div 
-                                                                                         className="h-full bg-emerald-500 transition-all duration-500" 
-                                                                                         style={{ width: `${(sala.resolvedCount / sala.totalIssues) * 100}%` }}
-                                                                                     />
-                                                                                 </div>
-                                                                                 <span className="text-[8px] font-black text-slate-400 uppercase">
-                                                                                     {sala.resolvedCount}/{sala.totalIssues}
-                                                                                 </span>
-                                                                             </div>
-                                                                         </div>
+                                                                        <div className="flex flex-col items-center gap-1">
+                                                                            {sala.apontamentosCount > 0 && (
+                                                                                <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 font-bold px-2 py-0.5 text-[10px]">
+                                                                                    {sala.apontamentosCount} {sala.apontamentosCount === 1 ? 'ATIVA' : 'ATIVAS'}
+                                                                                </Badge>
+                                                                            )}
+                                                                            {sala.revisionCount > 0 && (
+                                                                                <Badge variant="outline" className="bg-amber-50 text-amber-600 border-amber-200 font-bold px-2 py-0.5 text-[10px]">
+                                                                                    {sala.revisionCount} AJUSTES
+                                                                                </Badge>
+                                                                            )}
+                                                                            {sala.apontamentosCount === 0 && sala.revisionCount === 0 && (
+                                                                                <span className="text-[10px] text-emerald-600 font-black flex items-center gap-1">
+                                                                                    <CheckCircle2 className="w-3 h-3" />
+                                                                                    SANADO
+                                                                                </span>
+                                                                            )}
+                                                                            <div className="flex items-center gap-1.5 mt-0.5">
+                                                                                <div className="w-16 h-1 bg-slate-100 rounded-full overflow-hidden">
+                                                                                    <div 
+                                                                                        className="h-full bg-emerald-500 transition-all duration-500" 
+                                                                                        style={{ width: `${(sala.resolvedCount / sala.totalIssues) * 100}%` }}
+                                                                                    />
+                                                                                </div>
+                                                                                <span className="text-[8px] font-black text-slate-400 uppercase">
+                                                                                    {sala.resolvedCount}/{sala.totalIssues}
+                                                                                </span>
+                                                                            </div>
+                                                                        </div>
                                                                     </TableCell>
                                                                     <TableCell className="text-center">
                                                                         <span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase ${
                                                                             sala.statusDisciplina === "OK" 
                                                                                 ? "bg-emerald-100 text-emerald-700" 
-                                                                                : "bg-slate-100 text-slate-400"
+                                                                                : sala.revisionCount > 0
+                                                                                    ? "bg-amber-100 text-amber-700 border border-amber-200"
+                                                                                    : "bg-slate-100 text-slate-400"
                                                                         }`}>
-                                                                            {sala.statusDisciplina}
+                                                                            {sala.statusDisciplina === "OK" ? "OK" : (sala.revisionCount > 0 ? "EM REVISÃO" : "ATIVA")}
                                                                         </span>
                                                                     </TableCell>
                                                                     <TableCell className="text-center">
