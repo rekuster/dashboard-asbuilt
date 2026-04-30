@@ -127,11 +127,10 @@ export default function DisciplineValidationTab() {
                         isSameDiscipline(a.disciplina, (disc as any))
                     );
 
-                    const activeApontamentos = roomApontamentos.filter((a: any) => 
-                        (a.status === 'ATIVA' || a.status === 'EM_REVISAO')
-                    );
-
-                    const resolvedCount = roomApontamentos.length - activeApontamentos.length;
+                    const activeApontamentos = roomApontamentos.filter((a: any) => a.status === 'ATIVA');
+                    const revisionApontamentos = roomApontamentos.filter((a: any) => a.status === 'EM_REVISAO');
+                    const totalPending = activeApontamentos.length + revisionApontamentos.length;
+                    const resolvedCount = roomApontamentos.length - totalPending;
 
                     // Só mostramos a sala se ela tiver ou tiver tido pendências
                     if (roomApontamentos.length > 0) {
@@ -144,9 +143,11 @@ export default function DisciplineValidationTab() {
                             ...sala,
                             statusDisciplina: verification?.status || "ATIVA",
                             apontamentosCount: activeApontamentos.length,
+                            revisionCount: revisionApontamentos.length,
+                            totalPending: totalPending,
                             resolvedCount: resolvedCount,
                             totalIssues: roomApontamentos.length,
-                            hasPending: activeApontamentos.length > 0
+                            hasPending: totalPending > 0
                         });
                     }
                 }
@@ -235,7 +236,7 @@ export default function DisciplineValidationTab() {
                             groupedData[disc][ed].forEach((s: any) => {
                                 totalSalas++;
                                 if (s.statusDisciplina === "OK") okSalas++;
-                                if (s.apontamentosCount > 0) pendingSalas++;
+                                if (s.totalPending > 0) pendingSalas++;
                             });
                         });
 
@@ -324,11 +325,17 @@ export default function DisciplineValidationTab() {
                                                                     </TableCell>
                                                                     <TableCell className="text-center">
                                                                          <div className="flex flex-col items-center gap-1">
-                                                                             {sala.apontamentosCount > 0 ? (
+                                                                             {sala.apontamentosCount > 0 && (
                                                                                  <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 font-bold px-2 py-0.5 text-[10px]">
                                                                                      {sala.apontamentosCount} {sala.apontamentosCount === 1 ? 'ATIVA' : 'ATIVAS'}
                                                                                  </Badge>
-                                                                             ) : (
+                                                                             )}
+                                                                             {sala.revisionCount > 0 && (
+                                                                                 <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 font-bold px-2 py-0.5 text-[10px]">
+                                                                                     {sala.revisionCount} EM REVISÃO
+                                                                                 </Badge>
+                                                                             )}
+                                                                             {sala.apontamentosCount === 0 && sala.revisionCount === 0 && (
                                                                                  <span className="text-[10px] text-emerald-600 font-black flex items-center gap-1">
                                                                                      <CheckCircle2 className="w-3 h-3" />
                                                                                      SANADO
@@ -393,7 +400,7 @@ export default function DisciplineValidationTab() {
                     sala={selectedSala}
                     disciplines={[selectedDisciplineForModal]} // Only show the current filtered discipline
                     pendingApontamentos={{
-                        [selectedDisciplineForModal]: selectedSala.apontamentosCount
+                        [selectedDisciplineForModal]: selectedSala.totalPending
                     }}
                 />
             )}

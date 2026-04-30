@@ -105,7 +105,7 @@ export default function ValidationTab() {
         
         // Só mostra disciplinas que têm apontamentos pendentes
         (pointingStats as any[]).forEach((a: any) => {
-            if (a.status === 'ATIVA') {
+            if (a.status === 'ATIVA' || a.status === 'EM_REVISAO') {
                 discWithIssues.add(a.disciplina);
             }
         });
@@ -127,6 +127,18 @@ export default function ValidationTab() {
         const map: Record<string, number> = {};
         (pointingStats as any[]).forEach((a: any) => {
             if (a.status === 'ATIVA') {
+                const key = `${a.sala}-${a.disciplina}`;
+                map[key] = (map[key] || 0) + 1;
+            }
+        });
+        return map;
+    }, [pointingStats]);
+
+    // Apontamentos em revisão por sala e disciplina
+    const revisionApontamentos = useMemo(() => {
+        const map: Record<string, number> = {};
+        (pointingStats as any[]).forEach((a: any) => {
+            if (a.status === 'EM_REVISAO') {
                 const key = `${a.sala}-${a.disciplina}`;
                 map[key] = (map[key] || 0) + 1;
             }
@@ -194,7 +206,8 @@ export default function ValidationTab() {
                     const isExpanded = expandedDisciplines.includes(discipline);
                     // Calcular estatísticas APENAS das salas que têm pendência nesta disciplina
                     const roomsWithIssues = filteredSalas.filter(sala => 
-                        activeApontamentos[`${sala.nome}-${discipline}`] > 0
+                        activeApontamentos[`${sala.nome}-${discipline}`] > 0 ||
+                        revisionApontamentos[`${sala.nome}-${discipline}`] > 0
                     );
 
                     const roomTotal = roomsWithIssues.length;
@@ -233,7 +246,7 @@ export default function ValidationTab() {
                                         <div className="flex items-center gap-2">
                                             <h3 className="font-bold text-slate-700 uppercase tracking-tight">{discipline}</h3>
                                             <Badge variant="outline" className="text-[10px] bg-slate-100 border-slate-200 py-0 h-4 text-[#940707] font-black">
-                                                {roomTotal} ATIVAS
+                                                {roomTotal} PENDENTES
                                             </Badge>
                                         </div>
                                         <div className="flex items-center gap-4 mt-1">
@@ -253,7 +266,7 @@ export default function ValidationTab() {
                                                 {roomStats.issue > 0 && (
                                                     <div className="flex items-center gap-1">
                                                         <div className="w-2 h-2 rounded-full bg-rose-500" />
-                                                        <span className="text-[10px] font-bold text-rose-500">{roomStats.issue} Ativa</span>
+                                                        <span className="text-[10px] font-bold text-rose-500">{roomStats.issue} Pendentes</span>
                                                     </div>
                                                 )}
                                             </div>
@@ -271,7 +284,8 @@ export default function ValidationTab() {
                                     {(() => {
                                         // 1. Filtrar apenas salas que têm pendência nesta disciplina
                                         const roomsWithIssues = filteredSalas.filter(sala => 
-                                            activeApontamentos[`${sala.nome}-${discipline}`] > 0
+                                            activeApontamentos[`${sala.nome}-${discipline}`] > 0 ||
+                                            revisionApontamentos[`${sala.nome}-${discipline}`] > 0
                                         );
 
                                         // 2. Agrupar por Edificacao
@@ -303,6 +317,7 @@ export default function ValidationTab() {
                                                     {groupedByEdificacao[edif].map((sala: any) => {
                                                         const status = statusMap[`${sala.id}-${discipline}`];
                                                         const hasApontamento = activeApontamentos[`${sala.nome}-${discipline}`];
+                                                        const hasRevision = revisionApontamentos[`${sala.nome}-${discipline}`];
                                                         
                                                         let bgClass = "bg-white border-slate-200 text-slate-400 hover:border-[#940707] hover:text-[#940707]";
                                                         let icon = null;
@@ -313,6 +328,9 @@ export default function ValidationTab() {
                                                         } else if (hasApontamento) {
                                                             bgClass = "bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100 animate-pulse";
                                                             icon = <XCircle className="w-2.5 h-2.5 absolute top-1 right-1" />;
+                                                        } else if (hasRevision) {
+                                                            bgClass = "bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100";
+                                                            icon = <Clock className="w-2.5 h-2.5 absolute top-1 right-1" />;
                                                         } else if (status === "NAO_CONFORME") {
                                                             bgClass = "bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100";
                                                             icon = <XCircle className="w-2.5 h-2.5 absolute top-1 right-1" />;
@@ -361,7 +379,7 @@ export default function ValidationTab() {
                 sala={selectedSala}
                 // When we open from here, we can either restrict to just that discipline or show all
                 disciplines={selectedSala ? [modalDiscipline!] : []}
-                pendingApontamentos={selectedSala && modalDiscipline ? { [modalDiscipline]: activeApontamentos[`${selectedSala.nome}-${modalDiscipline}`] } : {}}
+                pendingApontamentos={selectedSala && modalDiscipline ? { [modalDiscipline]: (activeApontamentos[`${selectedSala.nome}-${modalDiscipline}`] || 0) + (revisionApontamentos[`${selectedSala.nome}-${modalDiscipline}`] || 0) } : {}}
             />
         </div>
     );
