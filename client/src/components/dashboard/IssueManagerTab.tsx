@@ -45,6 +45,16 @@ import {
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import {
+    BarChart,
+    Bar,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    Tooltip as RechartsTooltip,
+    ResponsiveContainer,
+    Cell
+} from "recharts";
 import KPICard from "./KPICard";
 import { VerificationModal } from "./VerificationModal";
 
@@ -166,7 +176,18 @@ export default function IssueManagerTab() {
         });
         const topResp = Object.entries(respStats).sort((a, b) => b[1] - a[1])[0];
 
-        return { total, active, resolved, critical, qualityScore, topDisc, topResp };
+        // Dados formatados para gráficos
+        const discChartData = Object.entries(discStats)
+            .map(([name, count]) => ({ name, count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 8); // Top 8 disciplinas
+
+        const respChartData = Object.entries(respStats)
+            .map(([name, count]) => ({ name, count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 8); // Top 8 responsáveis
+
+        return { total, active, resolved, critical, qualityScore, topDisc, topResp, discChartData, respChartData };
     }, [issues]);
 
     // Lógica de Validação por Disciplina integrada
@@ -253,7 +274,7 @@ export default function IssueManagerTab() {
         <div className="space-y-6 font-sans pb-20">
             {/* Header com Stats */}
             {/* Header com Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <KPICard 
                     title="Total Geral" 
                     value={stats.total} 
@@ -284,22 +305,67 @@ export default function IssueManagerTab() {
                     icon={ShieldCheck}
                     variant="blue"
                 />
+            </div>
 
-                <KPICard 
-                    title="Por Disciplina" 
-                    value={stats.topDisc?.[0] || "N/A"} 
-                    subtitle={`${stats.topDisc?.[1] || 0} pendências`} 
-                    icon={Tag}
-                    variant="red"
-                />
+            {/* Gráficos de Distribuição */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card className="border-none shadow-sm p-6 bg-white overflow-hidden">
+                    <CardHeader className="p-0 mb-6">
+                        <div className="flex items-center gap-2">
+                            <Tag className="w-4 h-4 text-[#940707]" />
+                            <CardTitle className="text-[11px] font-black uppercase text-slate-500 tracking-tighter">Pendências por Disciplina</CardTitle>
+                        </div>
+                    </CardHeader>
+                    <div className="h-[200px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={stats.discChartData} layout="vertical" margin={{ left: 10, right: 30 }}>
+                                <XAxis type="number" hide />
+                                <YAxis 
+                                    dataKey="name" 
+                                    type="category" 
+                                    width={80} 
+                                    axisLine={false} 
+                                    tickLine={false} 
+                                    tick={{ fontSize: 9, fontWeight: 'bold', fill: '#64748b' }} 
+                                />
+                                <RechartsTooltip 
+                                    cursor={{fill: '#f8fafc'}}
+                                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '10px' }}
+                                />
+                                <Bar dataKey="count" name="Pendências" fill="#940707" radius={[0, 4, 4, 0]} barSize={16} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                </Card>
 
-                <KPICard 
-                    title="Por Responsável" 
-                    value={stats.topResp?.[0]?.split(' ')[0] || "N/A"} 
-                    subtitle={`${stats.topResp?.[1] || 0} pendências`} 
-                    icon={User}
-                    variant="purple"
-                />
+                <Card className="border-none shadow-sm p-6 bg-white overflow-hidden">
+                    <CardHeader className="p-0 mb-6">
+                        <div className="flex items-center gap-2">
+                            <User className="w-4 h-4 text-[#940707]" />
+                            <CardTitle className="text-[11px] font-black uppercase text-slate-500 tracking-tighter">Pendências por Responsável</CardTitle>
+                        </div>
+                    </CardHeader>
+                    <div className="h-[200px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={stats.respChartData} layout="vertical" margin={{ left: 10, right: 30 }}>
+                                <XAxis type="number" hide />
+                                <YAxis 
+                                    dataKey="name" 
+                                    type="category" 
+                                    width={80} 
+                                    axisLine={false} 
+                                    tickLine={false} 
+                                    tick={{ fontSize: 9, fontWeight: 'bold', fill: '#64748b' }} 
+                                />
+                                <RechartsTooltip 
+                                    cursor={{fill: '#f8fafc'}}
+                                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '10px' }}
+                                />
+                                <Bar dataKey="count" name="Pendências" fill="#475569" radius={[0, 4, 4, 0]} barSize={16} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                </Card>
             </div>
 
             {/* SEÇÃO INTEGRADA: VALIDAÇÃO POR DISCIPLINA */}
