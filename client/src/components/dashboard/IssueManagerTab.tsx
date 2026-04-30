@@ -164,29 +164,41 @@ export default function IssueManagerTab() {
 
         // Por Disciplina
         const discStats = {};
-        activeIssuesList.forEach(i => {
-            discStats[i.disciplina] = (discStats[i.disciplina] || 0) + 1;
+        issues.forEach(i => {
+            if (!discStats[i.disciplina]) {
+                discStats[i.disciplina] = { ativa: 0, revisao: 0, resolvida: 0, total: 0 };
+            }
+            if (i.status === 'ATIVA') discStats[i.disciplina].ativa++;
+            else if (i.status === 'EM_REVISAO') discStats[i.disciplina].revisao++;
+            else if (i.status === 'RESOLVIDA') discStats[i.disciplina].resolvida++;
+            discStats[i.disciplina].total++;
         });
-        const topDisc = Object.entries(discStats).sort((a, b) => b[1] - a[1])[0];
+        const topDisc = Object.entries(discStats).sort((a, b) => (b[1].ativa + b[1].revisao) - (a[1].ativa + a[1].revisao))[0];
 
         // Por Responsável
         const respStats = {};
-        activeIssuesList.forEach(i => {
+        issues.forEach(i => {
             const resp = i.responsavel || "Não Atribuído";
-            respStats[resp] = (respStats[resp] || 0) + 1;
+            if (!respStats[resp]) {
+                respStats[resp] = { ativa: 0, revisao: 0, resolvida: 0, total: 0 };
+            }
+            if (i.status === 'ATIVA') respStats[resp].ativa++;
+            else if (i.status === 'EM_REVISAO') respStats[resp].revisao++;
+            else if (i.status === 'RESOLVIDA') respStats[resp].resolvida++;
+            respStats[resp].total++;
         });
-        const topResp = Object.entries(respStats).sort((a, b) => b[1] - a[1])[0];
+        const topResp = Object.entries(respStats).sort((a, b) => (b[1].ativa + b[1].revisao) - (a[1].ativa + a[1].revisao))[0];
 
-        // Dados formatados para gráficos
+        // Dados formatados para gráficos (ordenados por volume de pendências ativas + revisao)
         const discChartData = Object.entries(discStats)
-            .map(([name, count]) => ({ name, count }))
-            .sort((a, b) => b.count - a.count)
-            .slice(0, 8); // Top 8 disciplinas
+            .map(([name, data]) => ({ name, ...data }))
+            .sort((a, b) => (b.ativa + b.revisao) - (a.ativa + a.revisao))
+            .slice(0, 10);
 
         const respChartData = Object.entries(respStats)
-            .map(([name, count]) => ({ name, count }))
-            .sort((a, b) => b.count - a.count)
-            .slice(0, 8); // Top 8 responsáveis
+            .map(([name, data]) => ({ name, ...data }))
+            .sort((a, b) => (b.ativa + b.revisao) - (a.ativa + a.revisao))
+            .slice(0, 10);
 
         return { total, active, resolved, critical, qualityScore, topDisc, topResp, discChartData, respChartData };
     }, [issues]);
@@ -340,8 +352,14 @@ export default function IssueManagerTab() {
                                     cursor={{fill: '#f8fafc'}}
                                     contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '10px' }}
                                 />
-                                <Bar dataKey="count" name="Pendências" fill="#940707" radius={[0, 4, 4, 0]} barSize={16}>
-                                    <LabelList dataKey="count" position="right" style={{ fontSize: '10px', fontWeight: 'bold', fill: '#940707' }} />
+                                <Bar dataKey="resolvida" stackId="a" name="Sanadas" fill="#10b981" radius={[0, 0, 0, 0]} barSize={20}>
+                                    <LabelList dataKey="resolvida" position="inside" style={{ fontSize: '9px', fontWeight: 'black', fill: '#fff' }} />
+                                </Bar>
+                                <Bar dataKey="revisao" stackId="a" name="Em Revisão" fill="#f59e0b" radius={[0, 0, 0, 0]} barSize={20}>
+                                    <LabelList dataKey="revisao" position="inside" style={{ fontSize: '9px', fontWeight: 'black', fill: '#fff' }} />
+                                </Bar>
+                                <Bar dataKey="ativa" stackId="a" name="Ativas" fill="#940707" radius={[0, 4, 4, 0]} barSize={20}>
+                                    <LabelList dataKey="ativa" position="inside" style={{ fontSize: '9px', fontWeight: 'black', fill: '#fff' }} />
                                 </Bar>
                             </BarChart>
                         </ResponsiveContainer>
@@ -371,8 +389,14 @@ export default function IssueManagerTab() {
                                     cursor={{fill: '#f8fafc'}}
                                     contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '10px' }}
                                 />
-                                <Bar dataKey="count" name="Pendências" fill="#475569" radius={[0, 4, 4, 0]} barSize={16}>
-                                    <LabelList dataKey="count" position="right" style={{ fontSize: '10px', fontWeight: 'bold', fill: '#475569' }} />
+                                <Bar dataKey="resolvida" stackId="a" name="Sanadas" fill="#10b981" radius={[0, 0, 0, 0]} barSize={20}>
+                                    <LabelList dataKey="resolvida" position="inside" style={{ fontSize: '9px', fontWeight: 'black', fill: '#fff' }} />
+                                </Bar>
+                                <Bar dataKey="revisao" stackId="a" name="Em Revisão" fill="#f59e0b" radius={[0, 0, 0, 0]} barSize={20}>
+                                    <LabelList dataKey="revisao" position="inside" style={{ fontSize: '9px', fontWeight: 'black', fill: '#fff' }} />
+                                </Bar>
+                                <Bar dataKey="ativa" stackId="a" name="Ativas" fill="#475569" radius={[0, 4, 4, 0]} barSize={20}>
+                                    <LabelList dataKey="ativa" position="inside" style={{ fontSize: '9px', fontWeight: 'black', fill: '#fff' }} />
                                 </Bar>
                             </BarChart>
                         </ResponsiveContainer>
