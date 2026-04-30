@@ -355,15 +355,17 @@ export default function DisciplineValidationTab() {
                                                                         </div>
                                                                     </TableCell>
                                                                     <TableCell className="text-center">
-                                                                        <span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase ${
-                                                                            sala.statusDisciplina === "OK" 
-                                                                                ? "bg-emerald-100 text-emerald-700" 
-                                                                                : sala.revisionCount > 0
-                                                                                    ? "bg-amber-100 text-amber-700 border border-amber-200"
-                                                                                    : "bg-slate-100 text-slate-400"
-                                                                        }`}>
-                                                                            {sala.statusDisciplina === "OK" ? "OK" : (sala.revisionCount > 0 ? "EM REVISÃO" : "ATIVA")}
-                                                                        </span>
+                                                                         <span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase ${
+                                                                             (sala.statusDisciplina === "OK" || (sala.totalIssues > 0 && sala.apontamentosCount === 0 && sala.revisionCount === 0))
+                                                                                 ? "bg-emerald-100 text-emerald-700 border border-emerald-200" 
+                                                                                 : sala.revisionCount > 0
+                                                                                     ? "bg-amber-100 text-amber-700 border border-amber-200"
+                                                                                     : "bg-slate-100 text-slate-400"
+                                                                         }`}>
+                                                                             {(sala.statusDisciplina === "OK" || (sala.totalIssues > 0 && sala.apontamentosCount === 0 && sala.revisionCount === 0)) 
+                                                                                 ? "OK" 
+                                                                                 : (sala.revisionCount > 0 ? "EM REVISÃO" : "ATIVA")}
+                                                                         </span>
                                                                     </TableCell>
                                                                     <TableCell className="text-center">
                                                                         <Button 
