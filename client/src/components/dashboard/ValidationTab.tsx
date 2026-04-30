@@ -325,12 +325,12 @@ export default function ValidationTab() {
                                                         if (status === "OK") {
                                                             bgClass = "bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100";
                                                             icon = <CheckCircle2 className="w-2.5 h-2.5 absolute top-1 right-1" />;
-                                                        } else if (hasApontamento) {
-                                                            bgClass = "bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100 animate-pulse";
-                                                            icon = <XCircle className="w-2.5 h-2.5 absolute top-1 right-1" />;
                                                         } else if (hasRevision) {
                                                             bgClass = "bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100";
                                                             icon = <Clock className="w-2.5 h-2.5 absolute top-1 right-1" />;
+                                                        } else if (hasApontamento) {
+                                                            bgClass = "bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100 animate-pulse";
+                                                            icon = <AlertCircle className="w-2.5 h-2.5 absolute top-1 right-1" />;
                                                         } else if (status === "NAO_CONFORME") {
                                                             bgClass = "bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100";
                                                             icon = <XCircle className="w-2.5 h-2.5 absolute top-1 right-1" />;
