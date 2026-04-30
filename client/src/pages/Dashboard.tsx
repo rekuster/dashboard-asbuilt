@@ -40,7 +40,6 @@ import EntregasTab from "@/components/dashboard/EntregasTab";
 import AsBuiltDashboard from "@/components/dashboard/AsBuiltDashboard";
 import FieldReportTab from "@/components/dashboard/FieldReportTab";
 import IssueManagerTab from "@/components/dashboard/IssueManagerTab";
-import DisciplineValidationTab from "@/components/dashboard/DisciplineValidationTab";
 import { ErrorBoundary } from "@/components/dashboard/ErrorBoundary";
 import StatusDetailsModal from "@/components/dashboard/StatusDetailsModal";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";

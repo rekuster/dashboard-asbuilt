@@ -44,6 +44,40 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import KPICard from "./KPICard";
+import { VerificationModal } from "./VerificationModal";
+
+/**
+ * MAPEAMENTO DE DISCIPLINAS (SIGLA -> NOME COMPLETO)
+ */
+const DISCIPLINE_MAPPING: Record<string, string> = {
+    'ELE': 'Instalações Elétricas',
+    'LOG': 'CFTV e Lógica',
+    'HID': 'Instalações Hidrossanitárias',
+    'UTI': 'Utilidades',
+    'CLI': 'Climatização',
+    'EST': 'Estrutura de Concreto',
+    'MET': 'Estrutura Metálica',
+    'ARQ': 'Arquitetura',
+    'ELEMT': 'Média Tensão e Barramentos',
+    'PCI': 'PCI',
+    'SDAI': 'SDAI'
+};
+
+const isSameDiscipline = (apontamentoDisc: string, escopoDisc: string) => {
+    const a = (apontamentoDisc || "").trim().toUpperCase();
+    const e = (escopoDisc || "").trim().toUpperCase();
+    if (a === e) return true;
+    const mapped = DISCIPLINE_MAPPING[a];
+    return mapped && mapped.toUpperCase() === e;
+};
+
+const normalizeEdificacao = (name: string) => {
+    const n = (name || "").trim().toLowerCase();
+    if (n === "produção") return "Prédio Produção";
+    if (n === "suporte") return "Prédio Suporte";
+    if (n === "central utilidades") return "Central de Utilidades";
+    return name;
+};
 
 /**
  * ISSUE MANAGER TAB (ESTILO BIMCOLLAB)
@@ -58,6 +92,14 @@ export default function IssueManagerTab() {
 
     const utils = trpc.useUtils();
     const { data: issues = [], isLoading } = trpc.dashboard.getApontamentos.useQuery();
+    const { data: salas = [] } = trpc.dashboard.getSalas.useQuery();
+    const { data: escopos = [] } = trpc.dashboard.getEscopos.useQuery();
+    const { data: allVerificacoes = [] } = trpc.dashboard.getAllVerificacoes.useQuery();
+
+    const [expandedDisciplines, setExpandedDisciplines] = useState<string[]>([]);
+    const [selectedSala, setSelectedSala] = useState<any>(null);
+    const [selectedDisciplineForModal, setSelectedDisciplineForModal] = useState<string>("");
+    const [isVModalOpen, setIsVModalOpen] = useState(false);
 
     const updateStatusMutation = trpc.dashboard.updateApontamento.useMutation({
         onSuccess: () => {
@@ -100,14 +142,75 @@ export default function IssueManagerTab() {
     // Estatísticas para os Cards
     const stats = useMemo(() => {
         const total = issues.length;
-        const active = issues.filter((i: any) => i.status === 'ATIVA' || i.status === 'EM_REVISAO').length;
+        const activeIssuesList = issues.filter((i: any) => i.status === 'ATIVA' || i.status === 'EM_REVISAO');
+        const active = activeIssuesList.length;
         const resolved = issues.filter((i: any) => i.status === 'RESOLVIDA').length;
         const critical = issues.filter((i: any) => i.prioridade === 'ALTA' || i.prioridade === 'URGENTE').length;
         
         const qualityScore = total > 0 ? (resolved / total) * 100 : 100;
 
-        return { total, active, resolved, critical, qualityScore };
+        // Por Disciplina
+        const discStats = {};
+        activeIssuesList.forEach(i => {
+            discStats[i.disciplina] = (discStats[i.disciplina] || 0) + 1;
+        });
+        const topDisc = Object.entries(discStats).sort((a, b) => b[1] - a[1])[0];
+
+        // Por Responsável
+        const respStats = {};
+        activeIssuesList.forEach(i => {
+            const resp = i.responsavel || "Não Atribuído";
+            respStats[resp] = (respStats[resp] || 0) + 1;
+        });
+        const topResp = Object.entries(respStats).sort((a, b) => b[1] - a[1])[0];
+
+        return { total, active, resolved, critical, qualityScore, topDisc, topResp };
     }, [issues]);
+
+    // Lógica de Validação por Disciplina integrada
+    const groupedValidation = useMemo(() => {
+        const map: Record<string, Record<string, any[]>> = {};
+        const availableDisciplines = Array.from(new Set(escopos.map((e: any) => e.disciplina)));
+
+        salas.forEach((sala: any) => {
+            const edifNorm = normalizeEdificacao(sala.edificacao);
+            availableDisciplines.forEach(disc => {
+                const discInBuilding = escopos.find((e: any) => 
+                    e.disciplina === disc && normalizeEdificacao(e.edificacao) === edifNorm
+                );
+                
+                if (discInBuilding) {
+                    const verification = allVerificacoes.find((v: any) => v.salaId === sala.id && v.disciplina === disc);
+                    const roomApontamentos = issues.filter((a: any) => 
+                        a.sala === sala?.nome && isSameDiscipline(a.disciplina, disc)
+                    );
+
+                    const activeAp = roomApontamentos.filter((a: any) => a.status === 'ATIVA');
+                    const revisionAp = roomApontamentos.filter((a: any) => a.status === 'EM_REVISAO');
+                    const totalPending = activeAp.length + revisionAp.length;
+                    const resolvedCount = roomApontamentos.length - totalPending;
+
+                    if (roomApontamentos.length > 0) {
+                        if (!map[disc]) map[disc] = {};
+                        if (!map[disc][sala.edificacao]) map[disc][sala.edificacao] = [];
+                        
+                        map[disc][sala.edificacao].push({
+                            ...sala,
+                            statusDisciplina: (verification?.status === "OK" || (roomApontamentos.length > 0 && totalPending === 0)) ? "OK" : "ATIVA",
+                            apontamentosCount: activeAp.length,
+                            revisionCount: revisionAp.length,
+                            totalPending: totalPending,
+                            resolvedCount: resolvedCount,
+                            totalIssues: roomApontamentos.length
+                        });
+                    }
+                }
+            });
+        });
+        return map;
+    }, [salas, escopos, issues, allVerificacoes]);
+
+    const activeDisciplines = Object.keys(groupedValidation).sort();
 
     const handleUpdateStatus = async (id: number, status: string) => {
         try {
@@ -147,37 +250,164 @@ export default function IssueManagerTab() {
     return (
         <div className="space-y-6 font-sans pb-20">
             {/* Header com Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {/* Header com Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
                 <KPICard 
-                    title="Total de Apontamentos" 
+                    title="Total Geral" 
                     value={stats.total} 
-                    subtitle="Registros totais no sistema" 
+                    subtitle="Registros totais" 
                     icon={BarChart3}
                 />
                 
                 <KPICard 
-                    title="Ativos / Pendentes" 
+                    title="Ativos" 
                     value={stats.active} 
-                    subtitle={`${stats.total > 0 ? ((stats.active / stats.total) * 100).toFixed(1) : 0}% do total`} 
+                    subtitle="Pendências em campo" 
                     icon={AlertCircle}
                     variant="orange"
                 />
 
                 <KPICard 
-                    title="Apontamentos Sanados" 
+                    title="Resolvidos" 
                     value={stats.resolved} 
-                    subtitle={`${stats.total > 0 ? ((stats.resolved / stats.total) * 100).toFixed(1) : 0}% de resolução`} 
+                    subtitle="Itens sanados" 
                     icon={CheckCircle2}
                     variant="green"
                 />
 
                 <KPICard 
-                    title="Índice de Qualidade" 
+                    title="Qualidade" 
                     value={`${stats.qualityScore.toFixed(1)}%`} 
-                    subtitle="Taxa de conformidade As-Built" 
+                    subtitle="Taxa As-Built" 
                     icon={ShieldCheck}
                     variant="blue"
                 />
+
+                <KPICard 
+                    title="Por Disciplina" 
+                    value={stats.topDisc?.[0] || "N/A"} 
+                    subtitle={`${stats.topDisc?.[1] || 0} pendências`} 
+                    icon={Tag}
+                    variant="red"
+                />
+
+                <KPICard 
+                    title="Por Responsável" 
+                    value={stats.topResp?.[0]?.split(' ')[0] || "N/A"} 
+                    subtitle={`${stats.topResp?.[1] || 0} pendências`} 
+                    icon={User}
+                    variant="purple"
+                />
+            </div>
+
+            {/* SEÇÃO INTEGRADA: VALIDAÇÃO POR DISCIPLINA */}
+            <div className="space-y-4">
+                <div className="flex items-center gap-2 px-2">
+                    <ShieldCheck className="w-5 h-5 text-[#940707]" />
+                    <h3 className="text-sm font-black uppercase text-slate-700 tracking-wider">Ajustes As-Built por Disciplina</h3>
+                </div>
+                
+                <div className="grid grid-cols-1 gap-3">
+                    {activeDisciplines.map(disc => {
+                        const isExpanded = expandedDisciplines.includes(disc);
+                        const edifs = Object.keys(groupedValidation[disc]);
+                        let dTotalSalas = 0;
+                        let dOkSalas = 0;
+                        edifs.forEach(ed => {
+                            groupedValidation[disc][ed].forEach(s => {
+                                dTotalSalas++;
+                                if (s.statusDisciplina === "OK") dOkSalas++;
+                            });
+                        });
+
+                        return (
+                            <Card key={disc} className="border-none shadow-sm overflow-hidden">
+                                <CardHeader 
+                                    className="py-3 px-5 cursor-pointer bg-white hover:bg-slate-50 transition-colors"
+                                    onClick={() => {
+                                        setExpandedDisciplines(prev => 
+                                            prev.includes(disc) ? prev.filter(d => d !== disc) : [...prev, disc]
+                                        );
+                                    }}
+                                >
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            {isExpanded ? <ChevronDown className="w-4 h-4 text-[#940707]" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
+                                            <span className="text-sm font-black text-slate-700 uppercase">{disc}</span>
+                                            <Badge className="bg-slate-100 text-slate-500 border-none text-[9px]">{dOkSalas}/{dTotalSalas} Salas OK</Badge>
+                                        </div>
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                                <div className="h-full bg-emerald-500" style={{ width: `${(dOkSalas/dTotalSalas)*100}%` }} />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </CardHeader>
+                                {isExpanded && (
+                                    <CardContent className="p-0 border-t border-slate-50">
+                                        <Table>
+                                            <TableHeader className="bg-slate-50/50">
+                                                <TableRow className="h-8">
+                                                    <TableHead className="text-[9px] uppercase font-bold px-5">Sala / Ambiente</TableHead>
+                                                    <TableHead className="text-[9px] uppercase font-bold text-center">Divergências</TableHead>
+                                                    <TableHead className="text-[9px] uppercase font-bold text-center">Status</TableHead>
+                                                    <TableHead className="text-[9px] uppercase font-bold text-center">Ação</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {edifs.map(edif => (
+                                                    groupedValidation[disc][edif].map(sala => (
+                                                        <TableRow key={sala.id} className="h-10 hover:bg-slate-50/30">
+                                                            <TableCell className="px-5">
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-xs font-bold text-slate-700">{sala.nome}</span>
+                                                                    <span className="text-[9px] text-slate-400">{edif}</span>
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell className="text-center">
+                                                                <div className="flex justify-center gap-1">
+                                                                    {sala.apontamentosCount > 0 && <Badge className="bg-rose-50 text-rose-600 border-rose-100 text-[9px]">{sala.apontamentosCount} ATIVA</Badge>}
+                                                                    {sala.revisionCount > 0 && <Badge className="bg-amber-50 text-amber-600 border-amber-100 text-[9px]">{sala.revisionCount} AJUSTE</Badge>}
+                                                                    {sala.apontamentosCount === 0 && sala.revisionCount === 0 && <span className="text-[9px] text-emerald-600 font-bold">SANADO</span>}
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell className="text-center">
+                                                                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${sala.statusDisciplina === "OK" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-400"}`}>
+                                                                    {sala.statusDisciplina}
+                                                                </span>
+                                                            </TableCell>
+                                                            <TableCell className="text-center">
+                                                                <Button 
+                                                                    variant="ghost" 
+                                                                    size="sm" 
+                                                                    className="h-7 text-[10px] font-bold gap-1 hover:text-[#940707]"
+                                                                    onClick={() => {
+                                                                        setSelectedSala(sala);
+                                                                        setSelectedDisciplineForModal(disc);
+                                                                        setIsVModalOpen(true);
+                                                                    }}
+                                                                >
+                                                                    <Pencil className="w-3 h-3" /> Conferir
+                                                                </Button>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    ))
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    </CardContent>
+                                )}
+                            </Card>
+                        );
+                    })}
+                </div>
+            </div>
+
+            <div className="h-px bg-slate-100 my-2" />
+            
+            <div className="flex items-center gap-2 px-2">
+                <Filter className="w-5 h-5 text-slate-400" />
+                <h3 className="text-sm font-black uppercase text-slate-700 tracking-wider">Lista Detalhada de Apontamentos</h3>
             </div>
 
             {/* Barra de Filtros */}
@@ -377,6 +607,16 @@ export default function IssueManagerTab() {
                     </TableBody>
                 </Table>
             </Card>
+
+            {isVModalOpen && selectedSala && (
+                <VerificationModal 
+                    isOpen={isVModalOpen}
+                    onClose={() => setIsVModalOpen(false)}
+                    sala={selectedSala}
+                    disciplines={[selectedDisciplineForModal]}
+                    pendingApontamentos={{ [selectedDisciplineForModal]: selectedSala.totalPending }}
+                />
+            )}
 
             {selectedApontamento && (
                 <EditApontamentoModal 

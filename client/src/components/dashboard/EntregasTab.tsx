@@ -51,7 +51,6 @@ import {
 import dayjs from "dayjs";
 import KPICard from "./KPICard";
 // Trocamos a aba de validação antiga pela nova, que foca em disciplinas
-import DisciplineValidationTab from "./DisciplineValidationTab";
 
 const STATUS_LABELS: Record<string, { label: string, color: string, icon: any }> = {
     'AGUARDANDO': { label: 'Mapeado', color: 'bg-slate-100 text-slate-600 border-slate-200', icon: Clock },
@@ -354,10 +353,6 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
                                     <History className="w-4 h-4 mr-2" />
                                     Gestão de Entregas
                                 </TabsTrigger>
-                                <TabsTrigger value="validation" className="rounded-lg data-[state=active]:bg-[#940707] data-[state=active]:text-white col-span-2">
-                                    <ClipboardCheck className="w-4 h-4 mr-2" />
-                                    Validação por Disciplina / Sala
-                                </TabsTrigger>
                                 <TabsTrigger value="scope" className="rounded-lg data-[state=active]:bg-[#940707] data-[state=active]:text-white">
                                     <FileText className="w-4 h-4 mr-2" />
                                     Lista Mestra As Built
@@ -592,10 +587,6 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
                             </Card>
                         </TabsContent>
 
-                        <TabsContent value="validation">
-                            {/* Agora usamos a visão por disciplina, mais organizada para a conferência final */}
-                            <DisciplineValidationTab />
-                        </TabsContent>
 
                         <TabsContent value="scope">
                             <ScopeManagementView 
