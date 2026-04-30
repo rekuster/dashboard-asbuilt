@@ -141,7 +141,7 @@ export default function DisciplineValidationTab() {
                         
                         map[discKey][edifKey].push({
                             ...sala,
-                            statusDisciplina: verification?.status || "ATIVA",
+                            statusDisciplina: (verification?.status === "OK" || (roomApontamentos.length > 0 && totalPending === 0)) ? "OK" : "ATIVA",
                             apontamentosCount: activeApontamentos.length,
                             revisionCount: revisionApontamentos.length,
                             totalPending: totalPending,
