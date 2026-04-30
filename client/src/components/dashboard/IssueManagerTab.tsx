@@ -53,7 +53,8 @@ import {
     CartesianGrid,
     Tooltip as RechartsTooltip,
     ResponsiveContainer,
-    Cell
+    Cell,
+    LabelList
 } from "recharts";
 import KPICard from "./KPICard";
 import { VerificationModal } from "./VerificationModal";
@@ -227,8 +228,12 @@ export default function IssueManagerTab() {
                             totalIssues: roomApontamentos.length
                         });
 
-                        // Ordenar salas por nome dentro de cada edificação
-                        map[disc][sala.edificacao].sort((a, b) => a.nome.localeCompare(b.nome, undefined, { numeric: true }));
+                        // Ordenar salas por número dentro de cada edificação
+                        map[disc][sala.edificacao].sort((a, b) => {
+                            const numA = a.numeroSala || "";
+                            const numB = b.numeroSala || "";
+                            return numA.localeCompare(numB, undefined, { numeric: true });
+                        });
                     }
                 }
             });
@@ -335,7 +340,9 @@ export default function IssueManagerTab() {
                                     cursor={{fill: '#f8fafc'}}
                                     contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '10px' }}
                                 />
-                                <Bar dataKey="count" name="Pendências" fill="#940707" radius={[0, 4, 4, 0]} barSize={16} />
+                                <Bar dataKey="count" name="Pendências" fill="#940707" radius={[0, 4, 4, 0]} barSize={16}>
+                                    <LabelList dataKey="count" position="right" style={{ fontSize: '10px', fontWeight: 'bold', fill: '#940707' }} />
+                                </Bar>
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
@@ -364,7 +371,9 @@ export default function IssueManagerTab() {
                                     cursor={{fill: '#f8fafc'}}
                                     contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '10px' }}
                                 />
-                                <Bar dataKey="count" name="Pendências" fill="#475569" radius={[0, 4, 4, 0]} barSize={16} />
+                                <Bar dataKey="count" name="Pendências" fill="#475569" radius={[0, 4, 4, 0]} barSize={16}>
+                                    <LabelList dataKey="count" position="right" style={{ fontSize: '10px', fontWeight: 'bold', fill: '#475569' }} />
+                                </Bar>
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
