@@ -155,13 +155,22 @@ export default function IssueManagerTab() {
     // Estatísticas para os Cards
     const stats = useMemo(() => {
         const total = issues.length;
-        const activeIssuesList = issues.filter((i: any) => i.status === 'ATIVA' || i.status === 'EM_REVISAO');
-        const active = activeIssuesList.length;
+        const active = issues.filter((i: any) => i.status === 'ATIVA').length;
+        const revision = issues.filter((i: any) => i.status === 'EM_REVISAO').length;
         const resolved = issues.filter((i: any) => i.status === 'RESOLVIDA').length;
-        const critical = issues.filter((i: any) => i.prioridade === 'ALTA' || i.prioridade === 'URGENTE').length;
-        
-        const qualityScore = total > 0 ? (resolved / total) * 100 : 100;
+        const qualityRate = total > 0 ? (resolved / total) * 100 : 0;
 
+        return {
+            total,
+            active,
+            revision,
+            resolved,
+            qualityRate
+        };
+    }, [issues]);
+
+    // Estatísticas Detalhadas para Gráficos
+    const chartStats = useMemo(() => {
         // Por Disciplina
         const discStats = {};
         issues.forEach(i => {
@@ -173,7 +182,6 @@ export default function IssueManagerTab() {
             else if (i.status === 'RESOLVIDA') discStats[i.disciplina].resolvida++;
             discStats[i.disciplina].total++;
         });
-        const topDisc = Object.entries(discStats).sort((a, b) => (b[1].ativa + b[1].revisao) - (a[1].ativa + a[1].revisao))[0];
 
         // Por Responsável
         const respStats = {};
@@ -187,20 +195,16 @@ export default function IssueManagerTab() {
             else if (i.status === 'RESOLVIDA') respStats[resp].resolvida++;
             respStats[resp].total++;
         });
-        const topResp = Object.entries(respStats).sort((a, b) => (b[1].ativa + b[1].revisao) - (a[1].ativa + a[1].revisao))[0];
 
-        // Dados formatados para gráficos (ordenados por volume de pendências ativas + revisao)
         const discChartData = Object.entries(discStats)
             .map(([name, data]) => ({ name, ...data }))
-            .sort((a, b) => (b.ativa + b.revisao) - (a.ativa + a.revisao))
-            .slice(0, 10);
+            .sort((a, b) => (b.ativa + b.revisao) - (a.ativa + a.revisao));
 
         const respChartData = Object.entries(respStats)
             .map(([name, data]) => ({ name, ...data }))
-            .sort((a, b) => (b.ativa + b.revisao) - (a.ativa + a.revisao))
-            .slice(0, 10);
+            .sort((a, b) => (b.ativa + b.revisao) - (a.ativa + a.revisao));
 
-        return { total, active, resolved, critical, qualityScore, topDisc, topResp, discChartData, respChartData };
+        return { discChartData, respChartData };
     }, [issues]);
 
     // Lógica de Validação por Disciplina integrada
@@ -293,46 +297,56 @@ export default function IssueManagerTab() {
     return (
         <div className="space-y-6 font-sans pb-20">
             {/* Header com Stats */}
-            {/* Header com Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <KPICard 
-                    title="Total Geral" 
-                    value={stats.total} 
-                    subtitle="Registros totais" 
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                <KPICard
+                    title="Total Geral"
+                    value={stats.total}
+                    subtitle="Registros totais"
                     icon={BarChart3}
                 />
-                
-                <KPICard 
-                    title="Ativos" 
-                    value={stats.active} 
-                    subtitle="Pendências em campo" 
+                <KPICard
+                    title="Ativos"
+                    value={stats.active}
+                    subtitle="Pendências em campo"
                     icon={AlertCircle}
+                    variant="red"
+                    badge={{
+                        text: `${((stats.active / (stats.total || 1)) * 100).toFixed(1)}%`,
+                        variant: 'danger'
+                    }}
+                />
+                <KPICard
+                    title="Em Revisão"
+                    value={stats.revision}
+                    subtitle="Aguardando validação"
+                    icon={Clock}
                     variant="orange"
-                    badge={{ 
-                        text: `${stats.total > 0 ? ((stats.active / stats.total) * 100).toFixed(1) : 0}%`,
+                    badge={{
+                        text: `${((stats.revision / (stats.total || 1)) * 100).toFixed(1)}%`,
                         variant: 'warning'
                     }}
                 />
-
-                <KPICard 
-                    title="Resolvidos" 
-                    value={stats.resolved} 
-                    subtitle="Itens sanados" 
+                <KPICard
+                    title="Resolvidos"
+                    value={stats.resolved}
+                    subtitle="Itens sanados"
                     icon={CheckCircle2}
                     variant="green"
-                    badge={{ 
-                        text: `${stats.total > 0 ? ((stats.resolved / stats.total) * 100).toFixed(1) : 0}%`,
+                    badge={{
+                        text: `${((stats.resolved / (stats.total || 1)) * 100).toFixed(1)}%`,
                         variant: 'success'
                     }}
                 />
-
-                <KPICard 
-                    title="Qualidade" 
-                    value={`${stats.qualityScore.toFixed(1)}%`} 
-                    subtitle="Taxa As-Built" 
+                <KPICard
+                    title="Qualidade"
+                    value={`${stats.qualityRate.toFixed(1)}%`}
+                    subtitle="Taxa As-Built"
                     icon={ShieldCheck}
                     variant="blue"
-                    badge={{ text: 'Global', variant: 'info' }}
+                    badge={{
+                        text: "GLOBAL",
+                        variant: 'info'
+                    }}
                 />
             </div>
 
@@ -345,9 +359,9 @@ export default function IssueManagerTab() {
                             <CardTitle className="text-[11px] font-black uppercase text-slate-500 tracking-tighter">Pendências por Disciplina</CardTitle>
                         </div>
                     </CardHeader>
-                    <div className="h-[200px] w-full">
+                    <div className="h-[350px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={stats.discChartData} layout="vertical" margin={{ left: 10, right: 40, top: 0, bottom: 0 }}>
+                            <BarChart data={chartStats.discChartData} layout="vertical" margin={{ left: 10, right: 40, top: 0, bottom: 0 }}>
                                 <XAxis type="number" hide />
                                 <YAxis 
                                     dataKey="name" 
@@ -356,19 +370,20 @@ export default function IssueManagerTab() {
                                     axisLine={false} 
                                     tickLine={false} 
                                     tick={{ fontSize: 9, fontWeight: 'bold', fill: '#64748b' }} 
+                                    interval={0}
                                 />
                                 <RechartsTooltip 
                                     cursor={{fill: '#f8fafc'}}
                                     contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '10px' }}
                                 />
                                 <Bar dataKey="resolvida" stackId="a" name="Sanadas" fill="#10b981" radius={[0, 0, 0, 0]} barSize={20}>
-                                    <LabelList dataKey="resolvida" position="right" style={{ fontSize: '9px', fontWeight: 'black', fill: '#10b981' }} formatter={(val) => val > 0 ? val : ''} />
+                                    <LabelList dataKey="resolvida" position="center" style={{ fontSize: '9px', fontWeight: 'black', fill: 'white' }} formatter={(val) => val > 0 ? val : ''} />
                                 </Bar>
                                 <Bar dataKey="revisao" stackId="a" name="Em Revisão" fill="#f59e0b" radius={[0, 0, 0, 0]} barSize={20}>
-                                    <LabelList dataKey="revisao" position="right" style={{ fontSize: '9px', fontWeight: 'black', fill: '#f59e0b' }} formatter={(val) => val > 0 ? val : ''} />
+                                    <LabelList dataKey="revisao" position="center" style={{ fontSize: '9px', fontWeight: 'black', fill: 'white' }} formatter={(val) => val > 0 ? val : ''} />
                                 </Bar>
                                 <Bar dataKey="ativa" stackId="a" name="Ativas" fill="#940707" radius={[0, 4, 4, 0]} barSize={20}>
-                                    <LabelList dataKey="ativa" position="right" style={{ fontSize: '9px', fontWeight: 'black', fill: '#940707' }} formatter={(val) => val > 0 ? val : ''} />
+                                    <LabelList dataKey="ativa" position="center" style={{ fontSize: '9px', fontWeight: 'black', fill: 'white' }} formatter={(val) => val > 0 ? val : ''} />
                                 </Bar>
                             </BarChart>
                         </ResponsiveContainer>
@@ -382,9 +397,9 @@ export default function IssueManagerTab() {
                             <CardTitle className="text-[11px] font-black uppercase text-slate-500 tracking-tighter">Pendências por Responsável</CardTitle>
                         </div>
                     </CardHeader>
-                    <div className="h-[200px] w-full">
+                    <div className="h-[350px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={stats.respChartData} layout="vertical" margin={{ left: 10, right: 40, top: 0, bottom: 0 }}>
+                            <BarChart data={chartStats.respChartData} layout="vertical" margin={{ left: 10, right: 40, top: 0, bottom: 0 }}>
                                 <XAxis type="number" hide />
                                 <YAxis 
                                     dataKey="name" 
@@ -393,19 +408,20 @@ export default function IssueManagerTab() {
                                     axisLine={false} 
                                     tickLine={false} 
                                     tick={{ fontSize: 9, fontWeight: 'bold', fill: '#64748b' }} 
+                                    interval={0}
                                 />
                                 <RechartsTooltip 
                                     cursor={{fill: '#f8fafc'}}
                                     contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '10px' }}
                                 />
                                 <Bar dataKey="resolvida" stackId="a" name="Sanadas" fill="#10b981" radius={[0, 0, 0, 0]} barSize={20}>
-                                    <LabelList dataKey="resolvida" position="right" style={{ fontSize: '9px', fontWeight: 'black', fill: '#10b981' }} formatter={(val) => val > 0 ? val : ''} />
+                                    <LabelList dataKey="resolvida" position="center" style={{ fontSize: '9px', fontWeight: 'black', fill: 'white' }} formatter={(val) => val > 0 ? val : ''} />
                                 </Bar>
                                 <Bar dataKey="revisao" stackId="a" name="Em Revisão" fill="#f59e0b" radius={[0, 0, 0, 0]} barSize={20}>
-                                    <LabelList dataKey="revisao" position="right" style={{ fontSize: '9px', fontWeight: 'black', fill: '#f59e0b' }} formatter={(val) => val > 0 ? val : ''} />
+                                    <LabelList dataKey="revisao" position="center" style={{ fontSize: '9px', fontWeight: 'black', fill: 'white' }} formatter={(val) => val > 0 ? val : ''} />
                                 </Bar>
                                 <Bar dataKey="ativa" stackId="a" name="Ativas" fill="#475569" radius={[0, 4, 4, 0]} barSize={20}>
-                                    <LabelList dataKey="ativa" position="right" style={{ fontSize: '9px', fontWeight: 'black', fill: '#475569' }} formatter={(val) => val > 0 ? val : ''} />
+                                    <LabelList dataKey="ativa" position="center" style={{ fontSize: '9px', fontWeight: 'black', fill: 'white' }} formatter={(val) => val > 0 ? val : ''} />
                                 </Bar>
                             </BarChart>
                         </ResponsiveContainer>
