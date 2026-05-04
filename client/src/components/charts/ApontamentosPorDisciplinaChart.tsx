@@ -44,20 +44,18 @@ export default function ApontamentosPorDisciplinaChart({ data, hideTitle }: Apon
 
     const chartContent = (
         <ResponsiveContainer width="100%" height="100%">
-            <PieChart margin={{ top: 30, bottom: 20 }}>
+            <PieChart>
                 <Pie
                     data={data}
                     cx="50%"
-                    cy="55%"
-                    outerRadius={75}
+                    cy="50%"
                     innerRadius={60}
-                    paddingAngle={2}
+                    outerRadius={80}
+                    paddingAngle={5}
                     dataKey="count"
                     nameKey="disciplina"
-                    minAngle={15} // Ensure tiny slices are visible
-                    label={({ name, percent }) => `${name || 'OUTROS'} (${(percent * 100).toFixed(0)}%)`}
-                    labelLine={true}
-                    style={{ fontSize: '10px', fontWeight: 'bold' }}
+                    minAngle={15}
+                    label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
                 >
                     {data.map((_, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="rgba(255,255,255,0.5)" />
@@ -70,12 +68,16 @@ export default function ApontamentosPorDisciplinaChart({ data, hideTitle }: Apon
                         borderRadius: "12px",
                         boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
                     }}
+                    formatter={(value: number, name: string) => {
+                        const total = data.reduce((acc, curr) => acc + curr.count, 0);
+                        const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                        return [`${value} (${percentage}%)`, name];
+                    }}
                 />
                 <Legend
                     layout="horizontal"
                     verticalAlign="bottom"
                     align="center"
-                    wrapperStyle={{ paddingTop: '20px' }}
                     iconType="circle"
                     formatter={(value, entry: any) => {
                         const { payload } = entry;

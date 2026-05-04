@@ -308,6 +308,10 @@ export default function IssueManagerTab() {
                     subtitle="Pendências em campo" 
                     icon={AlertCircle}
                     variant="orange"
+                    badge={{ 
+                        text: `${stats.total > 0 ? ((stats.active / stats.total) * 100).toFixed(1) : 0}%`,
+                        variant: 'warning'
+                    }}
                 />
 
                 <KPICard 
@@ -316,6 +320,10 @@ export default function IssueManagerTab() {
                     subtitle="Itens sanados" 
                     icon={CheckCircle2}
                     variant="green"
+                    badge={{ 
+                        text: `${stats.total > 0 ? ((stats.resolved / stats.total) * 100).toFixed(1) : 0}%`,
+                        variant: 'success'
+                    }}
                 />
 
                 <KPICard 
@@ -324,6 +332,7 @@ export default function IssueManagerTab() {
                     subtitle="Taxa As-Built" 
                     icon={ShieldCheck}
                     variant="blue"
+                    badge={{ text: 'Global', variant: 'info' }}
                 />
             </div>
 
@@ -338,12 +347,12 @@ export default function IssueManagerTab() {
                     </CardHeader>
                     <div className="h-[200px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={stats.discChartData} layout="vertical" margin={{ left: 10, right: 30 }}>
+                            <BarChart data={stats.discChartData} layout="vertical" margin={{ left: 10, right: 40, top: 0, bottom: 0 }}>
                                 <XAxis type="number" hide />
                                 <YAxis 
                                     dataKey="name" 
                                     type="category" 
-                                    width={80} 
+                                    width={140} 
                                     axisLine={false} 
                                     tickLine={false} 
                                     tick={{ fontSize: 9, fontWeight: 'bold', fill: '#64748b' }} 
@@ -353,13 +362,13 @@ export default function IssueManagerTab() {
                                     contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '10px' }}
                                 />
                                 <Bar dataKey="resolvida" stackId="a" name="Sanadas" fill="#10b981" radius={[0, 0, 0, 0]} barSize={20}>
-                                    <LabelList dataKey="resolvida" position="inside" style={{ fontSize: '9px', fontWeight: 'black', fill: '#fff' }} />
+                                    <LabelList dataKey="resolvida" position="right" style={{ fontSize: '9px', fontWeight: 'black', fill: '#10b981' }} formatter={(val) => val > 0 ? val : ''} />
                                 </Bar>
                                 <Bar dataKey="revisao" stackId="a" name="Em Revisão" fill="#f59e0b" radius={[0, 0, 0, 0]} barSize={20}>
-                                    <LabelList dataKey="revisao" position="inside" style={{ fontSize: '9px', fontWeight: 'black', fill: '#fff' }} />
+                                    <LabelList dataKey="revisao" position="right" style={{ fontSize: '9px', fontWeight: 'black', fill: '#f59e0b' }} formatter={(val) => val > 0 ? val : ''} />
                                 </Bar>
                                 <Bar dataKey="ativa" stackId="a" name="Ativas" fill="#940707" radius={[0, 4, 4, 0]} barSize={20}>
-                                    <LabelList dataKey="ativa" position="inside" style={{ fontSize: '9px', fontWeight: 'black', fill: '#fff' }} />
+                                    <LabelList dataKey="ativa" position="right" style={{ fontSize: '9px', fontWeight: 'black', fill: '#940707' }} formatter={(val) => val > 0 ? val : ''} />
                                 </Bar>
                             </BarChart>
                         </ResponsiveContainer>
@@ -375,12 +384,12 @@ export default function IssueManagerTab() {
                     </CardHeader>
                     <div className="h-[200px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={stats.respChartData} layout="vertical" margin={{ left: 10, right: 30 }}>
+                            <BarChart data={stats.respChartData} layout="vertical" margin={{ left: 10, right: 40, top: 0, bottom: 0 }}>
                                 <XAxis type="number" hide />
                                 <YAxis 
                                     dataKey="name" 
                                     type="category" 
-                                    width={80} 
+                                    width={140} 
                                     axisLine={false} 
                                     tickLine={false} 
                                     tick={{ fontSize: 9, fontWeight: 'bold', fill: '#64748b' }} 
@@ -390,13 +399,13 @@ export default function IssueManagerTab() {
                                     contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '10px' }}
                                 />
                                 <Bar dataKey="resolvida" stackId="a" name="Sanadas" fill="#10b981" radius={[0, 0, 0, 0]} barSize={20}>
-                                    <LabelList dataKey="resolvida" position="inside" style={{ fontSize: '9px', fontWeight: 'black', fill: '#fff' }} />
+                                    <LabelList dataKey="resolvida" position="right" style={{ fontSize: '9px', fontWeight: 'black', fill: '#10b981' }} formatter={(val) => val > 0 ? val : ''} />
                                 </Bar>
                                 <Bar dataKey="revisao" stackId="a" name="Em Revisão" fill="#f59e0b" radius={[0, 0, 0, 0]} barSize={20}>
-                                    <LabelList dataKey="revisao" position="inside" style={{ fontSize: '9px', fontWeight: 'black', fill: '#fff' }} />
+                                    <LabelList dataKey="revisao" position="right" style={{ fontSize: '9px', fontWeight: 'black', fill: '#f59e0b' }} formatter={(val) => val > 0 ? val : ''} />
                                 </Bar>
                                 <Bar dataKey="ativa" stackId="a" name="Ativas" fill="#475569" radius={[0, 4, 4, 0]} barSize={20}>
-                                    <LabelList dataKey="ativa" position="inside" style={{ fontSize: '9px', fontWeight: 'black', fill: '#fff' }} />
+                                    <LabelList dataKey="ativa" position="right" style={{ fontSize: '9px', fontWeight: 'black', fill: '#475569' }} formatter={(val) => val > 0 ? val : ''} />
                                 </Bar>
                             </BarChart>
                         </ResponsiveContainer>
