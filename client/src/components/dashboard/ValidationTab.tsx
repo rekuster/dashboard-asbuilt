@@ -252,11 +252,16 @@ export default function ValidationTab() {
                                         <div className="flex items-center gap-4 mt-1">
                                             <div className="flex-1 max-w-[200px] h-1.5 bg-slate-100 rounded-full overflow-hidden">
                                                 <div 
-                                                    className="h-full bg-[#940707] transition-all duration-500" 
+                                                    className={`h-full transition-all duration-500 ${progress === 100 ? 'bg-emerald-500' : 'bg-[#940707]'}`}
                                                     style={{ width: `${progress}%` }}
                                                 />
                                             </div>
-                                            <span className="text-[10px] font-black text-slate-400">{progress.toFixed(1)}%</span>
+                                            <div className="flex items-center gap-1.5 ml-2">
+                                                <span className="text-[10px] font-bold text-slate-400 uppercase">Qualidade:</span>
+                                                <span className={`text-[10px] font-black px-2 py-0.5 rounded ${progress === 100 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                    {progress.toFixed(1)}% OK
+                                                </span>
+                                            </div>
                                             
                                             <div className="flex items-center gap-3 ml-2">
                                                 <div className="flex items-center gap-1">

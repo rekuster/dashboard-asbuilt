@@ -62,25 +62,84 @@ export function VerificationModal({ isOpen, onClose, sala, disciplines, pendingA
 
     // Mutação para salvar/atualizar o status da checklist
     const upsertMutation = trpc.dashboard.upsertVerificacao.useMutation({
-        onSuccess: () => {
+        onMutate: async (newVer) => {
+            await utils.dashboard.getVerificacoes.cancel({ salaId: sala?.id });
+            const previous = utils.dashboard.getVerificacoes.getData({ salaId: sala?.id });
+            utils.dashboard.getVerificacoes.setData({ salaId: sala?.id }, (old: any) => {
+                if (!old) return [{ ...newVer, id: Date.now() }];
+                const exists = old.find((v: any) => v.disciplina === newVer.disciplina);
+                if (exists) {
+                    return old.map((v: any) => v.disciplina === newVer.disciplina ? { ...v, status: newVer.status } : v);
+                }
+                return [...old, { ...newVer, id: Date.now() }];
+            });
+            return { previous };
+        },
+        onError: (err, newVer, context) => {
+            if (context?.previous) {
+                utils.dashboard.getVerificacoes.setData({ salaId: sala?.id }, context.previous);
+            }
+        },
+        onSettled: () => {
             utils.dashboard.getVerificacoes.invalidate({ salaId: sala?.id });
         },
     });
 
     const [editingApontamentoId, setEditingApontamentoId] = useState<number | null>(null);
     const [asBuiltNota, setAsBuiltNota] = useState("");
-    const [asBuiltPrintUrl, setAsBuiltPrintUrl] = useState("");
+    const [asBuiltPrintUrls, setAsBuiltPrintUrls] = useState<string[]>([]);
+    const [asBuiltPrintUrlInput, setAsBuiltPrintUrlInput] = useState("");
     const [isUploading, setIsUploading] = useState(false);
 
     // Mutação para salvar detalhes As-Built no apontamento
     const updateAsBuiltMutation = trpc.dashboard.updateApontamentoAsBuilt.useMutation({
+        onMutate: async (newApont) => {
+            await utils.dashboard.getApontamentos.cancel();
+            const previous = utils.dashboard.getApontamentos.getData();
+            utils.dashboard.getApontamentos.setData(undefined, (old: any) => {
+                if (!old) return old;
+                return old.map((a: any) => a.id === newApont.id ? { ...a, asBuiltNota: newApont.asBuiltNota, asBuiltPrintUrl: newApont.asBuiltPrintUrl, status: newApont.status || a.status } : a);
+            });
+            return { previous };
+        },
+        onError: (err, newApont, context) => {
+            if (context?.previous) {
+                utils.dashboard.getApontamentos.setData(undefined, context.previous);
+            }
+            toast.error("Erro ao salvar detalhes.");
+        },
         onSuccess: () => {
-            utils.dashboard.getApontamentos.invalidate();
             toast.success("Detalhes As-Built salvos!");
             setEditingApontamentoId(null);
             setAsBuiltNota("");
-            setAsBuiltPrintUrl("");
+            setAsBuiltPrintUrls([]);
+            setAsBuiltPrintUrlInput("");
         },
+        onSettled: () => {
+            utils.dashboard.getApontamentos.invalidate();
+        }
+    });
+
+    // Mutação otimista para atualização de status de apontamentos
+    const updateApontamentoMutation = trpc.dashboard.updateApontamento.useMutation({
+        onMutate: async (newApont) => {
+            await utils.dashboard.getApontamentos.cancel();
+            const previous = utils.dashboard.getApontamentos.getData();
+            utils.dashboard.getApontamentos.setData(undefined, (old: any) => {
+                if (!old) return old;
+                return old.map((a: any) => a.id === newApont.id ? { ...a, status: newApont.status, dataResolvido: newApont.dataResolvido } : a);
+            });
+            return { previous };
+        },
+        onError: (err, newApont, context) => {
+            if (context?.previous) {
+                utils.dashboard.getApontamentos.setData(undefined, context.previous);
+            }
+            toast.error("Erro ao atualizar divergência.");
+        },
+        onSettled: () => {
+            utils.dashboard.getApontamentos.invalidate();
+        }
     });
 
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -109,7 +168,7 @@ export function VerificationModal({ isOpen, onClose, sala, disciplines, pendingA
 
             const data = await response.json();
             if (data.success && data.url) {
-                setAsBuiltPrintUrl(data.url);
+                setAsBuiltPrintUrls(prev => [...prev, data.url]);
                 toast.success("Imagem carregada com sucesso!");
             } else {
                 toast.error("Erro ao carregar imagem.");
@@ -123,35 +182,28 @@ export function VerificationModal({ isOpen, onClose, sala, disciplines, pendingA
     };
 
     // Alterna entre OK e PENDENTE na checklist
-    const handleToggle = async (disc: string, currentStatus: string) => {
+    const handleToggle = (disc: string, currentStatus: string) => {
         const newStatus = currentStatus === "OK" ? "ATIVA" : "OK";
         const currentVer = verifications.find((v: any) => v.disciplina === disc);
-        try {
-            await upsertMutation.mutateAsync({
-                salaId: sala.id,
-                disciplina: disc,
-                status: newStatus,
-                observacao: currentVer?.observacao || "",
-                printUrl: currentVer?.printUrl || ""
-            });
-            toast.success(`${disc} atualizado!`);
-        } catch (e) {
-            toast.error("Erro ao atualizar o status.");
-        }
+        upsertMutation.mutate({
+            salaId: sala.id,
+            disciplina: disc,
+            status: newStatus,
+            observacao: currentVer?.observacao || "",
+            printUrl: currentVer?.printUrl || ""
+        }, {
+            onSuccess: () => toast.success(`${disc} atualizado!`)
+        });
     };
 
     // Salva uma observação técnica para o apontamento
-    const handleSaveAsBuilt = async (id: number, currentStatus?: string) => {
-        try {
-            await updateAsBuiltMutation.mutateAsync({
-                id,
-                asBuiltNota,
-                asBuiltPrintUrl,
-                status: currentStatus // Keep current or update if needed
-            });
-        } catch (e) {
-            toast.error("Erro ao salvar detalhes.");
-        }
+    const handleSaveAsBuilt = (id: number, currentStatus?: string) => {
+        updateAsBuiltMutation.mutate({
+            id,
+            asBuiltNota,
+            asBuiltPrintUrl: JSON.stringify(asBuiltPrintUrls),
+            status: (asBuiltNota || asBuiltPrintUrls.length > 0) ? 'EM_REVISAO' : currentStatus
+        });
     };
 
     return (
@@ -276,18 +328,14 @@ export function VerificationModal({ isOpen, onClose, sala, disciplines, pendingA
                                                                         ? 'bg-amber-500 text-white border-amber-600 shadow-sm' 
                                                                         : 'text-amber-600 border-amber-100 hover:bg-amber-50'
                                                                 }`}
-                                                                onClick={async () => {
-                                                                    try {
-                                                                        await utils.client.dashboard.updateApontamento.mutate({
-                                                                            id: apont.id,
-                                                                            status: 'ATIVA',
-                                                                            dataResolvido: null
-                                                                        });
-                                                                        toast.success("Divergência marcada como ATIVA");
-                                                                        utils.dashboard.getApontamentos.invalidate();
-                                                                    } catch (e) {
-                                                                        toast.error("Erro ao atualizar divergência.");
-                                                                    }
+                                                                onClick={() => {
+                                                                    updateApontamentoMutation.mutate({
+                                                                        id: apont.id,
+                                                                        status: 'ATIVA',
+                                                                        dataResolvido: null
+                                                                    }, {
+                                                                        onSuccess: () => toast.success("Divergência marcada como ATIVA")
+                                                                    });
                                                                 }}
                                                             >
                                                                 Ativa
@@ -300,18 +348,14 @@ export function VerificationModal({ isOpen, onClose, sala, disciplines, pendingA
                                                                         ? 'bg-blue-500 text-white border-blue-600 shadow-sm' 
                                                                         : 'text-blue-600 border-blue-100 hover:bg-blue-50'
                                                                 }`}
-                                                                onClick={async () => {
-                                                                    try {
-                                                                        await utils.client.dashboard.updateApontamento.mutate({
-                                                                            id: apont.id,
-                                                                            status: 'EM_REVISAO',
-                                                                            dataResolvido: null
-                                                                        });
-                                                                        toast.success("Divergência enviada para REVISÃO");
-                                                                        utils.dashboard.getApontamentos.invalidate();
-                                                                    } catch (e) {
-                                                                        toast.error("Erro ao atualizar divergência.");
-                                                                    }
+                                                                onClick={() => {
+                                                                    updateApontamentoMutation.mutate({
+                                                                        id: apont.id,
+                                                                        status: 'EM_REVISAO',
+                                                                        dataResolvido: null
+                                                                    }, {
+                                                                        onSuccess: () => toast.success("Divergência enviada para REVISÃO")
+                                                                    });
                                                                 }}
                                                             >
                                                                 Em Revisão
@@ -324,18 +368,14 @@ export function VerificationModal({ isOpen, onClose, sala, disciplines, pendingA
                                                                         ? 'bg-emerald-500 text-white border-emerald-600 shadow-sm' 
                                                                         : 'text-emerald-600 border-emerald-100 hover:bg-emerald-50'
                                                                 }`}
-                                                                onClick={async () => {
-                                                                    try {
-                                                                        await utils.client.dashboard.updateApontamento.mutate({
-                                                                            id: apont.id,
-                                                                            status: 'RESOLVIDA',
-                                                                            dataResolvido: new Date()
-                                                                        });
-                                                                        toast.success("Divergência marcada como RESOLVIDA");
-                                                                        utils.dashboard.getApontamentos.invalidate();
-                                                                    } catch (e) {
-                                                                        toast.error("Erro ao atualizar divergência.");
-                                                                    }
+                                                                onClick={() => {
+                                                                    updateApontamentoMutation.mutate({
+                                                                        id: apont.id,
+                                                                        status: 'RESOLVIDA',
+                                                                        dataResolvido: new Date()
+                                                                    }, {
+                                                                        onSuccess: () => toast.success("Divergência marcada como RESOLVIDA")
+                                                                    });
                                                                 }}
                                                             >
                                                                 Resolvida
@@ -399,15 +439,28 @@ export function VerificationModal({ isOpen, onClose, sala, disciplines, pendingA
                                                                         />
                                                                     </div>
                                                                     <div className="space-y-2">
-                                                                        <label className="text-[10px] font-bold text-slate-500 uppercase">Print de Verificação (Modelo)</label>
+                                                                        <label className="text-[10px] font-bold text-slate-500 uppercase">Prints de Verificação (Modelo)</label>
                                                                         <div className="space-y-3">
                                                                             <div className="flex gap-2">
                                                                                 <Input 
-                                                                                    placeholder="URL ou Upload..."
-                                                                                    value={asBuiltPrintUrl}
-                                                                                    onChange={(e) => setAsBuiltPrintUrl(e.target.value)}
+                                                                                    placeholder="Adicionar URL manualmente..."
+                                                                                    value={asBuiltPrintUrlInput}
+                                                                                    onChange={(e) => setAsBuiltPrintUrlInput(e.target.value)}
                                                                                     className="text-xs h-9 rounded-lg border-slate-200 bg-white"
                                                                                 />
+                                                                                <Button 
+                                                                                    variant="outline" 
+                                                                                    size="sm" 
+                                                                                    className="h-9"
+                                                                                    onClick={() => {
+                                                                                        if (asBuiltPrintUrlInput) {
+                                                                                            setAsBuiltPrintUrls(prev => [...prev, asBuiltPrintUrlInput]);
+                                                                                            setAsBuiltPrintUrlInput("");
+                                                                                        }
+                                                                                    }}
+                                                                                >
+                                                                                    Adicionar
+                                                                                </Button>
                                                                                 <div className="relative">
                                                                                     <input 
                                                                                         type="file" 
@@ -422,9 +475,19 @@ export function VerificationModal({ isOpen, onClose, sala, disciplines, pendingA
                                                                                     </Button>
                                                                                 </div>
                                                                             </div>
-                                                                            {asBuiltPrintUrl && (
-                                                                                <div className="aspect-video w-full rounded-xl overflow-hidden border border-slate-200">
-                                                                                    <img src={asBuiltPrintUrl} className="w-full h-full object-cover" />
+                                                                            {asBuiltPrintUrls.length > 0 && (
+                                                                                <div className="flex flex-wrap gap-2">
+                                                                                    {asBuiltPrintUrls.map((url, i) => (
+                                                                                        <div key={i} className="relative aspect-video w-32 rounded-xl overflow-hidden border border-slate-200 group">
+                                                                                            <img src={url} className="w-full h-full object-cover" />
+                                                                                            <button 
+                                                                                                className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                                                onClick={() => setAsBuiltPrintUrls(prev => prev.filter((_, idx) => idx !== i))}
+                                                                                            >
+                                                                                                <X className="w-3 h-3" />
+                                                                                            </button>
+                                                                                        </div>
+                                                                                    ))}
                                                                                 </div>
                                                                             )}
                                                                         </div>
@@ -432,12 +495,21 @@ export function VerificationModal({ isOpen, onClose, sala, disciplines, pendingA
                                                                 </div>
                                                                 <div className="flex justify-end gap-2">
                                                                     <Button size="sm" variant="ghost" onClick={() => setEditingApontamentoId(null)}>Cancelar</Button>
-                                                                    <Button size="sm" onClick={() => handleSaveAsBuilt(apont.id)} className="bg-[#940707] text-white">Salvar Verificação</Button>
+                                                                    <Button size="sm" onClick={() => handleSaveAsBuilt(apont.id, apont.status)} className="bg-[#940707] text-white">Salvar Verificação</Button>
                                                                 </div>
                                                             </div>
                                                         ) : (
                                                             <div className="space-y-3">
-                                                                {(apont.asBuiltNota || apont.asBuiltPrintUrl) && (
+                                                                {(apont.asBuiltNota || apont.asBuiltPrintUrl) && (() => {
+                                                                    let urls: string[] = [];
+                                                                    try {
+                                                                        const parsed = JSON.parse(apont.asBuiltPrintUrl || "[]");
+                                                                        urls = Array.isArray(parsed) ? parsed : (apont.asBuiltPrintUrl ? [apont.asBuiltPrintUrl] : []);
+                                                                    } catch (e) {
+                                                                        urls = apont.asBuiltPrintUrl ? [apont.asBuiltPrintUrl] : [];
+                                                                    }
+                                                                    
+                                                                    return (
                                                                     <div className="bg-emerald-50/30 p-3 rounded-2xl border border-emerald-100/50">
                                                                         {apont.asBuiltNota && (
                                                                             <p className="text-xs text-slate-600 italic mb-2 flex gap-2">
@@ -445,19 +517,29 @@ export function VerificationModal({ isOpen, onClose, sala, disciplines, pendingA
                                                                                 {apont.asBuiltNota}
                                                                             </p>
                                                                         )}
-                                                                        {apont.asBuiltPrintUrl && (
-                                                                            <div className="max-w-[300px] aspect-video rounded-lg overflow-hidden border border-emerald-200 shadow-sm cursor-zoom-in" onClick={() => window.open(apont.asBuiltPrintUrl, '_blank')}>
-                                                                                <img src={apont.asBuiltPrintUrl} className="w-full h-full object-cover" />
+                                                                        {urls.length > 0 && (
+                                                                            <div className="flex gap-2 flex-wrap mt-2">
+                                                                                {urls.map((url, i) => (
+                                                                                    <div key={i} className="max-w-[300px] aspect-video rounded-lg overflow-hidden border border-emerald-200 shadow-sm cursor-zoom-in" onClick={() => window.open(url, '_blank')}>
+                                                                                        <img src={url} className="w-full h-full object-cover" />
+                                                                                    </div>
+                                                                                ))}
                                                                             </div>
                                                                         )}
                                                                     </div>
-                                                                )}
+                                                                );})()}
                                                                 <button 
                                                                     className="text-[10px] font-bold text-[#940707] hover:underline flex items-center gap-1.5"
                                                                     onClick={() => {
                                                                         setEditingApontamentoId(apont.id);
                                                                         setAsBuiltNota(apont.asBuiltNota || "");
-                                                                        setAsBuiltPrintUrl(apont.asBuiltPrintUrl || "");
+                                                                        try {
+                                                                            const parsed = JSON.parse(apont.asBuiltPrintUrl || "[]");
+                                                                            setAsBuiltPrintUrls(Array.isArray(parsed) ? parsed : (apont.asBuiltPrintUrl ? [apont.asBuiltPrintUrl] : []));
+                                                                        } catch (e) {
+                                                                            setAsBuiltPrintUrls(apont.asBuiltPrintUrl ? [apont.asBuiltPrintUrl] : []);
+                                                                        }
+                                                                        setAsBuiltPrintUrlInput("");
                                                                     }}
                                                                 >
                                                                     <ImageIcon className="w-3.5 h-3.5" />
