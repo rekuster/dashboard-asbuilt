@@ -197,11 +197,17 @@ export default function IssueManagerTab() {
         });
 
         const discChartData = Object.entries(discStats)
-            .map(([name, data]) => ({ name, ...data }))
+            .map(([name, data]: [string, any]) => {
+                const qualidade = data.total > 0 ? ((data.resolvida / data.total) * 100).toFixed(1) : "0.0";
+                return { originalName: name, name: `${name} [${qualidade}% OK]`, ...data };
+            })
             .sort((a, b) => (b.ativa + b.revisao) - (a.ativa + a.revisao));
 
         const respChartData = Object.entries(respStats)
-            .map(([name, data]) => ({ name, ...data }))
+            .map(([name, data]: [string, any]) => {
+                const qualidade = data.total > 0 ? ((data.resolvida / data.total) * 100).toFixed(1) : "0.0";
+                return { originalName: name, name: `${name} [${qualidade}% OK]`, ...data };
+            })
             .sort((a, b) => (b.ativa + b.revisao) - (a.ativa + a.revisao));
 
         return { discChartData, respChartData };
@@ -366,7 +372,7 @@ export default function IssueManagerTab() {
                                 <YAxis 
                                     dataKey="name" 
                                     type="category" 
-                                    width={140} 
+                                    width={200} 
                                     axisLine={false} 
                                     tickLine={false} 
                                     tick={{ fontSize: 9, fontWeight: 'bold', fill: '#64748b' }} 
@@ -404,7 +410,7 @@ export default function IssueManagerTab() {
                                 <YAxis 
                                     dataKey="name" 
                                     type="category" 
-                                    width={140} 
+                                    width={200} 
                                     axisLine={false} 
                                     tickLine={false} 
                                     tick={{ fontSize: 9, fontWeight: 'bold', fill: '#64748b' }} 
@@ -466,8 +472,17 @@ export default function IssueManagerTab() {
                                             <Badge className="bg-slate-100 text-slate-600 border-none text-[10px] font-bold px-3">{dOkSalas}/{dTotalSalas} SALAS OK</Badge>
                                         </div>
                                         <div className="flex items-center gap-4">
+                                            <div className="flex items-center gap-1.5 mr-2">
+                                                <span className="text-[10px] font-bold text-slate-400 uppercase">Qualidade:</span>
+                                                <span className={`text-[10px] font-black px-2 py-0.5 rounded ${dOkSalas === dTotalSalas && dTotalSalas > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                    {dTotalSalas > 0 ? ((dOkSalas / dTotalSalas) * 100).toFixed(1) : '0.0'}% OK
+                                                </span>
+                                            </div>
                                             <div className="w-32 h-2 bg-slate-100 rounded-full overflow-hidden">
-                                                <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${(dOkSalas/dTotalSalas)*100}%` }} />
+                                                <div 
+                                                    className={`h-full transition-all duration-500 ${dOkSalas === dTotalSalas && dTotalSalas > 0 ? 'bg-emerald-500' : 'bg-[#940707]'}`} 
+                                                    style={{ width: `${dTotalSalas > 0 ? (dOkSalas / dTotalSalas) * 100 : 0}%` }} 
+                                                />
                                             </div>
                                         </div>
                                     </div>
