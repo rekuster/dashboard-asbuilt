@@ -81,9 +81,17 @@ export default function TopBar() {
                             <span className="text-[10px] font-bold bg-primary/10 text-primary px-1.5 py-0.5 rounded leading-none shrink-0">
                                 {project.code}
                             </span>
-                            <span className="text-slate-700 font-semibold truncate max-w-[120px] sm:max-w-[200px] md:max-w-[300px]">
+                            <span className="text-slate-700 font-semibold truncate max-w-[100px] sm:max-w-[180px]">
                                 {project.name}
                             </span>
+                            {project.client && (
+                                <>
+                                    <span className="text-slate-300 text-xs">•</span>
+                                    <span className="text-slate-400 font-medium truncate max-w-[80px] sm:max-w-[150px]">
+                                        {project.client}
+                                    </span>
+                                </>
+                            )}
                         </div>
                     ) : (
                         <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest hidden sm:inline">

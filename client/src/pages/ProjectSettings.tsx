@@ -5,7 +5,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import {
     ArrowLeft, Save, Loader2, Plus, Trash2, ChevronDown, ChevronRight,
-    Building2, Layers, MapPin, Cpu, Sparkles, Users, ShieldAlert
+    Building2, Layers, MapPin, Cpu, Sparkles, Users, ShieldAlert,
+    FileText, FileSpreadsheet, Info
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -140,6 +141,10 @@ export default function ProjectSettings() {
                             <Users className="w-4 h-4 mr-2" />
                             Membros do Projeto
                         </TabsTrigger>
+                        <TabsTrigger value="reports" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                            <FileText className="w-4 h-4 mr-2" />
+                            Relatórios
+                        </TabsTrigger>
                     </TabsList>
 
                     {/* General Info Tab */}
@@ -225,6 +230,11 @@ export default function ProjectSettings() {
                     {/* Members Management Tab */}
                     <TabsContent value="members">
                         <MembersTab projectId={id!} />
+                    </TabsContent>
+
+                    {/* Reports Tab */}
+                    <TabsContent value="reports">
+                        <ReportsTab projectId={id!} />
                     </TabsContent>
                 </Tabs>
             </div>
@@ -1169,6 +1179,130 @@ function AsBuiltConfigTab({ projectId, inputClass }: { projectId: string; inputC
                             </div>
                         </div>
 
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
+    );
+}
+
+// ============================================================================
+// Reports Tab
+// ============================================================================
+function ReportsTab({ projectId }: { projectId: string }) {
+    const [selectedEdificacao, setSelectedEdificacao] = useState<string | null>(null);
+    const utils = trpc.useUtils();
+
+    const { data: edificacoes } = trpc.dashboard.getEdificacoes.useQuery({ projectId });
+
+    const downloadBase64 = (base64: string, fileName: string, contentType: string) => {
+        const byteCharacters = atob(base64);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: contentType });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
+    return (
+        <div className="space-y-6">
+            <Card>
+                <CardHeader>
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-primary/10 rounded-lg text-primary">
+                            <FileText className="w-5 h-5" />
+                        </div>
+                        <CardTitle>Geração de Relatórios</CardTitle>
+                    </div>
+                    <CardDescription>
+                        Exporte os dados do dashboard em formatos profissionais para apresentações e análises técnicas.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    {/* Compact building filter dropdown without extra label */}
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-slate-50 p-4 rounded-lg">
+                        <span className="text-sm font-semibold text-muted-foreground whitespace-nowrap">
+                            Filtrar Relatório por Edificação:
+                        </span>
+                        <select
+                            className="flex h-10 w-[280px] rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                            value={selectedEdificacao || ""}
+                            onChange={(e) => setSelectedEdificacao(e.target.value || null)}
+                        >
+                            <option value="">Todas as Edificações</option>
+                            {edificacoes?.map((ed: string) => (
+                                <option key={ed} value={ed}>
+                                    {ed}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <Button
+                            variant="outline"
+                            className="h-24 flex flex-col items-center justify-center gap-2 hover:bg-primary/5 hover:border-primary/50 transition-all border-dashed"
+                            onClick={async () => {
+                                const fileName = `Relatorio_AsBuilt_${selectedEdificacao || 'Geral'}_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.pdf`;
+                                try {
+                                    const base64 = await utils.dashboard.getPDFReport.fetch({
+                                        projectId,
+                                        edificacao: selectedEdificacao || undefined
+                                    });
+                                    downloadBase64(base64, fileName, 'application/pdf');
+                                    toast.success('PDF gerado com sucesso!');
+                                } catch (e) {
+                                    console.error('PDF Error:', e);
+                                    toast.error('Erro ao gerar PDF');
+                                }
+                            }}
+                        >
+                            <FileText className="w-8 h-8 text-primary" />
+                            <div className="text-center">
+                                <div className="font-bold">Baixar PDF</div>
+                                <div className="text-[10px] text-muted-foreground uppercase tracking-widest">Resumo Executivo</div>
+                            </div>
+                        </Button>
+                        <Button
+                            variant="outline"
+                            className="h-24 flex flex-col items-center justify-center gap-2 hover:bg-emerald-50 hover:border-emerald-500/50 transition-all border-dashed"
+                            onClick={async () => {
+                                const fileName = `Apontamentos_AsBuilt_${selectedEdificacao || 'Geral'}_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.xlsx`;
+                                try {
+                                    const base64 = await utils.dashboard.getExcelReport.fetch({
+                                        projectId,
+                                        edificacao: selectedEdificacao || undefined
+                                    });
+                                    downloadBase64(base64, fileName, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+                                    toast.success('Excel exportado com sucesso!');
+                                } catch (e) {
+                                    console.error('Excel Error:', e);
+                                    toast.error('Erro ao gerar Excel');
+                                }
+                            }}
+                        >
+                            <FileSpreadsheet className="w-8 h-8 text-emerald-600" />
+                            <div className="text-center">
+                                <div className="font-bold">Exportar Excel</div>
+                                <div className="text-[10px] text-muted-foreground uppercase tracking-widest">Lista Detalhada</div>
+                            </div>
+                        </Button>
+                    </div>
+
+                    <div className="p-3 bg-slate-50 rounded-lg text-[11px] text-slate-500 flex items-start gap-2">
+                        <Info className="w-4 h-4 mt-0.5 shrink-0" />
+                        <p>
+                            O conteúdo dos relatórios será filtrado por <strong>{selectedEdificacao || 'Todas as Edificações'}</strong> conforme selecionado no menu acima.
+                        </p>
                     </div>
                 </CardContent>
             </Card>

@@ -182,7 +182,7 @@ export default function Dashboard() {
                 <DataIntegrityAlert projectId={projectId!} />
 
                 <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-                    <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                         <TabsList className="bg-white border p-1 h-12 shadow-sm overflow-x-auto flex-nowrap whitespace-nowrap flex-1">
                             {!isParceiro && (
                                 <>
@@ -212,12 +212,6 @@ export default function Dashboard() {
                                 <AlertCircle className="w-4 h-4 mr-2" />
                                 Painel de Divergências
                             </TabsTrigger>
-                            {!isParceiro && (
-                                <TabsTrigger value="management" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                                    <Settings className="w-4 h-4 mr-2" />
-                                    Configurações e Relatórios
-                                </TabsTrigger>
-                            )}
                         </TabsList>
 
                         <div className="shrink-0">
@@ -388,82 +382,7 @@ export default function Dashboard() {
                         </div>
                     </TabsContent>
 
-                    <TabsContent value="management" className="space-y-6 animate-in fade-in duration-500">
-                        <div className="grid grid-cols-1 gap-6">
-                            <Card>
-                                <CardHeader>
-                                    <div className="flex items-center gap-3">
-                                        <div className="p-2 bg-primary/10 rounded-lg text-primary">
-                                            <FileText className="w-5 h-5" />
-                                        </div>
-                                        <CardTitle>Geração de Relatórios</CardTitle>
-                                    </div>
-                                    <CardDescription>
-                                        Exporte os dados do dashboard em formatos profissionais para apresentações e análises técnicas.
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                        <Button
-                                            variant="outline"
-                                            className="h-24 flex flex-col items-center justify-center gap-2 hover:bg-primary/5 hover:border-primary/50 transition-all border-dashed"
-                                            onClick={async () => {
-                                                const fileName = `Relatorio_AsBuilt_${selectedEdificacao || 'Geral'}_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.pdf`;
-                                                try {
-                                                    const base64 = await utils.dashboard.getPDFReport.fetch({
-                                                        projectId: projectId!,
-                                                        edificacao: selectedEdificacao || undefined
-                                                    });
-                                                    downloadBase64(base64, fileName, 'application/pdf');
-                                                    toast.success('PDF gerado com sucesso!');
-                                                } catch (e) {
-                                                    console.error('PDF Error:', e);
-                                                    toast.error('Erro ao gerar PDF');
-                                                }
-                                            }}
-                                        >
-                                            <FileText className="w-8 h-8 text-primary" />
-                                            <div className="text-center">
-                                                <div className="font-bold">Baixar PDF</div>
-                                                <div className="text-[10px] text-muted-foreground uppercase tracking-widest">Resumo Executivo</div>
-                                            </div>
-                                        </Button>
-                                        <Button
-                                            variant="outline"
-                                            className="h-24 flex flex-col items-center justify-center gap-2 hover:bg-emerald-50 hover:border-emerald-500/50 transition-all border-dashed"
-                                            onClick={async () => {
-                                                const fileName = `Apontamentos_AsBuilt_${selectedEdificacao || 'Geral'}_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.xlsx`;
-                                                try {
-                                                    const base64 = await utils.dashboard.getExcelReport.fetch({
-                                                        projectId: projectId!,
-                                                        edificacao: selectedEdificacao || undefined
-                                                    });
-                                                    downloadBase64(base64, fileName, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-                                                    toast.success('Excel exportado com sucesso!');
-                                                } catch (e) {
-                                                    console.error('Excel Error:', e);
-                                                    toast.error('Erro ao gerar Excel');
-                                                }
-                                            }}
-                                        >
-                                            <FileSpreadsheet className="w-8 h-8 text-emerald-600" />
-                                            <div className="text-center">
-                                                <div className="font-bold">Exportar Excel</div>
-                                                <div className="text-[10px] text-muted-foreground uppercase tracking-widest">Lista Detalhada</div>
-                                            </div>
-                                        </Button>
-                                    </div>
 
-                                    <div className="p-3 bg-slate-50 rounded-lg text-[11px] text-slate-500 flex items-start gap-2">
-                                        <Info className="w-4 h-4 mt-0.5 shrink-0" />
-                                        <p>
-                                            O conteúdo dos relatórios será filtrado por <strong>{selectedEdificacao || 'Todas as Edificações'}</strong> conforme selecionado no topo do dashboard.
-                                        </p>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </div>
-                    </TabsContent>
 
                 </Tabs>
             </div>
