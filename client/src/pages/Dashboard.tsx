@@ -177,70 +177,57 @@ export default function Dashboard() {
 
     return (
         <div className="min-h-[calc(100vh-3.5rem)] bg-slate-50/50">
-            <div className="max-w-[1600px] mx-auto p-4 md:p-8 space-y-8">
-
-                {/* Header Section */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-6">
-                    <div>
-                        <p className="text-[10px] font-bold text-primary uppercase tracking-widest">
-                            {project?.code || 'PROJETO'}
-                        </p>
-                        <h1 className="text-2xl font-bold tracking-tight text-foreground mt-1">
-                            {project?.name || 'ACOMPANHAMENTO DE PROJETOS'}
-                        </h1>
-                        <p className="text-slate-500 text-sm font-medium mt-1">
-                            Dashboard As Built {project?.client ? `| ${project.client}` : ''}
-                        </p>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                        <EdificacaoSelector
-                            projectId={projectId!}
-                            selectedEdificacao={selectedEdificacao}
-                            onSelect={setSelectedEdificacao}
-                        />
-                    </div>
-                </div>
+            <div className="max-w-[1600px] mx-auto p-4 md:px-8 md:py-6 space-y-5">
 
                 <DataIntegrityAlert projectId={projectId!} />
 
                 <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-                    <TabsList className="bg-white border p-1 h-12 shadow-sm overflow-x-auto flex-nowrap whitespace-nowrap">
-                        {!isParceiro && (
-                            <>
-                                <TabsTrigger value="overview" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                                    <LayoutDashboard className="w-4 h-4 mr-2" />
-                                    Visão Geral
-                                </TabsTrigger>
-                                <TabsTrigger value="data" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                                    <Database className="w-4 h-4 mr-2" />
-                                    Tabelas e Dados
-                                </TabsTrigger>
-                                <TabsTrigger value="field" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                                    <Smartphone className="w-4 h-4 mr-2" />
-                                    Relato de Campo
-                                </TabsTrigger>
-                                <TabsTrigger value="asbuilt" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                                    <CheckCircle className="w-4 h-4 mr-2" />
-                                    Status As-Built
-                                </TabsTrigger>
-                                <TabsTrigger value="entregas" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                                    <FileText className="w-4 h-4 mr-2" />
-                                    Gestão de Entregas e Escopo
-                                </TabsTrigger>
-                            </>
-                        )}
-                        <TabsTrigger value="issues" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                            <AlertCircle className="w-4 h-4 mr-2" />
-                            Painel de Divergências
-                        </TabsTrigger>
-                        {!isParceiro && (
-                            <TabsTrigger value="management" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                                <Settings className="w-4 h-4 mr-2" />
-                                Configurações e Relatórios
+                    <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+                        <TabsList className="bg-white border p-1 h-12 shadow-sm overflow-x-auto flex-nowrap whitespace-nowrap flex-1">
+                            {!isParceiro && (
+                                <>
+                                    <TabsTrigger value="overview" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                                        <LayoutDashboard className="w-4 h-4 mr-2" />
+                                        Visão Geral
+                                    </TabsTrigger>
+                                    <TabsTrigger value="data" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                                        <Database className="w-4 h-4 mr-2" />
+                                        Tabelas e Dados
+                                    </TabsTrigger>
+                                    <TabsTrigger value="field" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                                        <Smartphone className="w-4 h-4 mr-2" />
+                                        Relato de Campo
+                                    </TabsTrigger>
+                                    <TabsTrigger value="asbuilt" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                                        <CheckCircle className="w-4 h-4 mr-2" />
+                                        Status As-Built
+                                    </TabsTrigger>
+                                    <TabsTrigger value="entregas" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                                        <FileText className="w-4 h-4 mr-2" />
+                                        Gestão de Entregas e Escopo
+                                    </TabsTrigger>
+                                </>
+                            )}
+                            <TabsTrigger value="issues" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                                <AlertCircle className="w-4 h-4 mr-2" />
+                                Painel de Divergências
                             </TabsTrigger>
-                        )}
-                    </TabsList>
+                            {!isParceiro && (
+                                <TabsTrigger value="management" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                                    <Settings className="w-4 h-4 mr-2" />
+                                    Configurações e Relatórios
+                                </TabsTrigger>
+                            )}
+                        </TabsList>
+
+                        <div className="shrink-0">
+                            <EdificacaoSelector
+                                projectId={projectId!}
+                                selectedEdificacao={selectedEdificacao}
+                                onSelect={setSelectedEdificacao}
+                            />
+                        </div>
+                    </div>
 
                     <TabsContent value="data" className="animate-in fade-in duration-500">
                         <DataHubTab projectId={projectId!} />

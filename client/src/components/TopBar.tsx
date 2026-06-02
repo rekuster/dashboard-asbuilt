@@ -2,6 +2,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useProjectRole, type ProjectRole } from '@/hooks/useProjectRole';
 import { useParams, useLocation } from 'wouter';
 import { LogOut, Shield, ArrowLeft, Settings } from 'lucide-react';
+import { trpc } from '@/lib/trpc';
 
 const ROLE_BADGES: Record<string, string> = {
     owner: 'bg-rose-500/10 text-rose-500 border-rose-500/20',
@@ -28,6 +29,11 @@ export default function TopBar() {
     const projectId = projectMatch?.[1];
 
     const { role, isAdmin } = useProjectRole(projectId);
+
+    const { data: project } = trpc.projects.getById.useQuery(
+        { id: projectId! },
+        { enabled: !!projectId }
+    );
 
     const userName = user?.user_metadata?.name || user?.email?.split('@')[0] || 'Usuário';
     const userInitials = userName
@@ -70,9 +76,20 @@ export default function TopBar() {
 
                     <div className="w-px h-6 bg-slate-200 hidden sm:block" />
 
-                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest hidden sm:inline">
-                        Plataforma As-Built
-                    </span>
+                    {isInsideProject && project ? (
+                        <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
+                            <span className="text-[10px] font-bold bg-primary/10 text-primary px-1.5 py-0.5 rounded leading-none shrink-0">
+                                {project.code}
+                            </span>
+                            <span className="text-slate-700 font-semibold truncate max-w-[120px] sm:max-w-[200px] md:max-w-[300px]">
+                                {project.name}
+                            </span>
+                        </div>
+                    ) : (
+                        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest hidden sm:inline">
+                            Plataforma As-Built
+                        </span>
+                    )}
                 </div>
 
                 {/* Right side */}
