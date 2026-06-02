@@ -5,18 +5,18 @@ import { Button } from "@/components/ui/button";
 import { Upload, FileBox, Loader2, CheckCircle2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-export default function IfcUploader() {
+export default function IfcUploader({ projectId }: { projectId: string }) {
     const [file, setFile] = useState<File | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [edificacao, setEdificacao] = useState<string>("");
 
     const utils = trpc.useUtils();
-    const { data: ifcFiles = [] } = trpc.ifc.getAllFiles.useQuery();
+    const { data: ifcFiles = [] } = trpc.ifc.getAllFiles.useQuery({ projectId });
 
     const uploadMutation = trpc.ifc.uploadFile.useMutation({
         onSuccess: () => {
             toast.success("Arquivo IFC carregado e mapeado com sucesso!");
-            utils.ifc.getAllFiles.invalidate();
+            utils.ifc.getAllFiles.invalidate({ projectId });
             setFile(null);
         },
         onError: (error) => {
@@ -28,7 +28,7 @@ export default function IfcUploader() {
     const deleteIfcMutation = trpc.ifc.deleteFile.useMutation({
         onSuccess: () => {
             toast.success("Arquivo IFC removido.");
-            utils.ifc.getAllFiles.invalidate();
+            utils.ifc.getAllFiles.invalidate({ projectId });
         },
         onError: (err: any) => {
             toast.error(`Erro ao remover: ${err.message}`);
@@ -56,6 +56,7 @@ export default function IfcUploader() {
             try {
                 const base64 = (reader.result as string).split(',')[1];
                 await uploadMutation.mutateAsync({
+                    projectId,
                     fileBuffer: base64,
                     fileName: file.name,
                     edificacao: edificacao || null,
@@ -155,7 +156,7 @@ export default function IfcUploader() {
                                         className="text-destructive opacity-40 group-hover:opacity-100 transition-opacity"
                                         onClick={() => {
                                             if (confirm(`Excluir permanentemente o modelo ${file.fileName}?`)) {
-                                                deleteIfcMutation.mutate({ fileId: file.id });
+                                                deleteIfcMutation.mutate({ projectId, fileId: file.id });
                                             }
                                         }}
                                     >

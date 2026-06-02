@@ -251,7 +251,7 @@ async function drawSummaryPage(doc: any, data: any[], backgroundPath: string, ha
  * Ela filtra os dados selecionados pelo usuário, organiza por disciplina e sala,
  * e gera todas as páginas, incluindo fotos e mapas.
  */
-export async function generatePDFReport(filters?: { 
+export async function generatePDFReport(projectId: string, filters?: { 
     edificacao?: string; 
     disciplina?: string; 
     responsavel?: string; 
@@ -282,7 +282,7 @@ export async function generatePDFReport(filters?: {
         .from(apontamentos)
         .innerJoin(salas, eq(apontamentos.sala, salas.nome));
 
-    const conditions: any[] = [];
+    const conditions: any[] = [eq(apontamentos.projectId, projectId)];
 
     if (filters?.edificacao && filters.edificacao !== "Todas") {
         conditions.push(eq(apontamentos.edificacao, filters.edificacao));
@@ -529,7 +529,7 @@ export async function generatePDFReport(filters?: {
  * EXPLICAÇÃO SIMPLES: Semelhante à anterior, mas foca em gerar o relatório de 
  * Verificação As-Built, que mostra o que foi modelado e o que foi feito na obra.
  */
-export async function generateAsBuiltReport(filters?: { 
+export async function generateAsBuiltReport(projectId: string, filters?: { 
     edificacao?: string; 
     pavimento?: string;
     startDate?: string;
@@ -555,7 +555,7 @@ export async function generateAsBuiltReport(filters?: {
         .from(apontamentos)
         .innerJoin(salas, eq(apontamentos.sala, salas.nome));
 
-    const conditions: any[] = [];
+    const conditions: any[] = [eq(apontamentos.projectId, projectId)];
 
     if (filters?.edificacao && filters.edificacao !== "Todas") {
         conditions.push(eq(apontamentos.edificacao, filters.edificacao));
@@ -647,13 +647,13 @@ export async function generateAsBuiltReport(filters?: {
 /**
  * Gera o relatório Excel consolidado.
  */
-export async function generateExcelReport(edificacao?: string): Promise<Buffer> {
+export async function generateExcelReport(projectId: string, edificacao?: string): Promise<Buffer> {
     const workbook = new ExcelJS.Workbook();
     const database = await getDb();
     if (!database) throw new Error('DB initialization failed');
 
-    let sQuery = database.select().from(salas);
-    if (edificacao) sQuery = sQuery.where(eq(salas.edificacao, edificacao)) as any;
+    let sQuery = database.select().from(salas).where(eq(salas.projectId, projectId));
+    if (edificacao) sQuery = sQuery.where(and(eq(salas.projectId, projectId), eq(salas.edificacao, edificacao))) as any;
     const rawSalasData = await sQuery;
 
     const salasData = [...rawSalasData].sort((a, b) => {
@@ -662,8 +662,8 @@ export async function generateExcelReport(edificacao?: string): Promise<Buffer> 
         return nA - nB;
     });
 
-    let aQuery = database.select().from(apontamentos);
-    if (edificacao) aQuery = aQuery.where(eq(apontamentos.edificacao, edificacao)) as any;
+    let aQuery = database.select().from(apontamentos).where(eq(apontamentos.projectId, projectId));
+    if (edificacao) aQuery = aQuery.where(and(eq(apontamentos.projectId, projectId), eq(apontamentos.edificacao, edificacao))) as any;
     const apontamentosData = await aQuery;
 
     // Planilha 1: Mapeamento

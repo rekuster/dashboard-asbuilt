@@ -1,4 +1,4 @@
-import { Plus, Building2, LogOut } from 'lucide-react';
+import { Plus, Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { trpc } from '@/lib/trpc';
@@ -7,45 +7,11 @@ import CreateProjectDialog from '@/components/projects/CreateProjectDialog';
 import { Loader2 } from 'lucide-react';
 
 export default function Projects() {
-    const { user, signOut } = useAuth();
+    const { user } = useAuth();
     const { data: projects, isLoading } = trpc.projects.list.useQuery();
 
-    const userName = user?.user_metadata?.name || user?.email?.split('@')[0] || 'Usuário';
-
     return (
-        <div className="min-h-screen bg-slate-50/50">
-            {/* Header */}
-            <div className="bg-white border-b shadow-sm">
-                <div className="max-w-[1400px] mx-auto px-4 md:px-8 h-16 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <img
-                            src="/logos_stecla/versao_horizontal@4x.png"
-                            alt="Stecla Engenharia"
-                            className="h-8 object-contain hidden sm:block"
-                        />
-                        <div className="w-px h-8 bg-slate-200 hidden sm:block" />
-                        <div>
-                            <h1 className="text-sm font-bold text-foreground uppercase tracking-wider">
-                                Plataforma As-Built
-                            </h1>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                        <span className="text-sm text-muted-foreground hidden sm:inline">
-                            Olá, <strong className="text-foreground">{userName}</strong>
-                        </span>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={signOut}
-                            className="text-muted-foreground hover:text-destructive"
-                        >
-                            <LogOut className="w-4 h-4" />
-                        </Button>
-                    </div>
-                </div>
-            </div>
+        <div className="min-h-[calc(100vh-3.5rem)] bg-slate-50/50">
 
             {/* Content */}
             <div className="max-w-[1400px] mx-auto px-4 md:px-8 py-8">

@@ -6,7 +6,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import JSZip from "jszip"; 
 
-export function useIfcViewer() {
+export function useIfcViewer(projectId: string) {
     const componentsRef = useRef<OBC.Components | null>(null);
     const fragmentsRef = useRef<OBC.FragmentsManager | null>(null);
     const loaderRef = useRef<OBC.IfcLoader | null>(null);
@@ -25,7 +25,7 @@ export function useIfcViewer() {
     const [mappingMode, setMappingMode] = useState(false);
     
     
-    const { data: roomColors } = trpc.ifc.getRoomsWithColors.useQuery();
+    const { data: roomColors } = trpc.ifc.getRoomsWithColors.useQuery({ projectId });
 
     const init = useCallback((container: HTMLDivElement) => {
         if (!container) return () => { };

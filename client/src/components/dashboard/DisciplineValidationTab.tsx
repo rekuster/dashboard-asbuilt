@@ -65,7 +65,7 @@ const isSameDiscipline = (apontamentoDisc: string, escopoDisc: string) => {
     return mapped && mapped.toUpperCase() === e;
 };
 
-export default function DisciplineValidationTab() {
+export default function DisciplineValidationTab({ projectId }: { projectId: string }) {
     const [search, setSearch] = useState("");
     const [expandedDisciplines, setExpandedDisciplines] = useState<string[]>([]);
     
@@ -74,10 +74,10 @@ export default function DisciplineValidationTab() {
     const [selectedDisciplineForModal, setSelectedDisciplineForModal] = useState<string>("");
     const [isModalOpen, setIsModalOpen] = useState(false);
 
-    const { data: salas = [] } = trpc.dashboard.getSalas.useQuery();
-    const { data: escopos = [] } = trpc.dashboard.getEscopos.useQuery();
-    const { data: apontamentos = [] } = trpc.dashboard.getApontamentos.useQuery();
-    const { data: allVerificacoes = [] } = trpc.dashboard.getAllVerificacoes.useQuery();
+    const { data: salas = [] } = trpc.dashboard.getSalas.useQuery({ projectId });
+    const { data: escopos = [] } = trpc.dashboard.getEscopos.useQuery({ projectId });
+    const { data: apontamentos = [] } = trpc.dashboard.getApontamentos.useQuery({ projectId });
+    const { data: allVerificacoes = [] } = trpc.dashboard.getAllVerificacoes.useQuery({ projectId });
 
     const toggleDiscipline = (discipline: string) => {
         setExpandedDisciplines(prev => 
@@ -399,6 +399,7 @@ export default function DisciplineValidationTab() {
 
             {isModalOpen && selectedSala && (
                 <VerificationModal 
+                    projectId={projectId}
                     isOpen={isModalOpen}
                     onClose={() => setIsModalOpen(false)}
                     sala={selectedSala}

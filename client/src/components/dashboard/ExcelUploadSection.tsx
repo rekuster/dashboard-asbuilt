@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Upload, FileSpreadsheet, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 
-export default function ExcelUploadSection() {
+export default function ExcelUploadSection({ projectId }: { projectId: string }) {
     const [file, setFile] = useState<File | null>(null);
     const [isUploading, setIsUploading] = useState(false);
 
@@ -39,6 +39,7 @@ export default function ExcelUploadSection() {
             reader.onload = async () => {
                 const base64 = (reader.result as string).split(',')[1];
                 await uploadMutation.mutateAsync({
+                    projectId,
                     fileBuffer: base64,
                     fileName: file.name,
                 });

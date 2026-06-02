@@ -2,12 +2,13 @@ import { trpc } from "@/lib/trpc";
 import { Label } from "@/components/ui/label";
 
 interface EdificacaoSelectorProps {
+    projectId: string;
     selectedEdificacao: string | null;
     onSelect: (edificacao: string | null) => void;
 }
 
-export default function EdificacaoSelector({ selectedEdificacao, onSelect }: EdificacaoSelectorProps) {
-    const { data: edificacoes } = trpc.dashboard.getEdificacoes.useQuery();
+export default function EdificacaoSelector({ projectId, selectedEdificacao, onSelect }: EdificacaoSelectorProps) {
+    const { data: edificacoes } = trpc.dashboard.getEdificacoes.useQuery({ projectId });
 
     return (
         <div className="flex flex-col space-y-2">

@@ -37,7 +37,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ReportPreviewModal } from "@/components/dashboard/ReportPreviewModal";
 import { EditApontamentoModal } from "@/components/dashboard/EditApontamentoModal";
 
-export default function DataHubTab() {
+export default function DataHubTab({ projectId }: { projectId: string }) {
     const [search, setSearch] = useState("");
     const [subTab, setSubTab] = useState("mapping");
 
@@ -51,20 +51,20 @@ export default function DataHubTab() {
     const utils = trpc.useUtils();
 
     // Data Fetching
-    const { data: salas = [] } = trpc.dashboard.getSalas.useQuery();
-    const { data: apontamentos = [] } = trpc.dashboard.getApontamentos.useQuery();
+    const { data: salas = [] } = trpc.dashboard.getSalas.useQuery({ projectId });
+    const { data: apontamentos = [] } = trpc.dashboard.getApontamentos.useQuery({ projectId });
 
     // Mutations
     const updateSala = trpc.dashboard.updateSalaStatus.useMutation({
         onMutate: async (variables) => {
             // Cancel outgoing refetches
-            await utils.dashboard.getSalas.cancel();
+            await utils.dashboard.getSalas.cancel({ projectId });
 
             // Snapshot previous value
-            const previousSalas = utils.dashboard.getSalas.getData();
+            const previousSalas = utils.dashboard.getSalas.getData({ projectId });
 
             // Optimistically update
-            utils.dashboard.getSalas.setData(undefined, (old: any) => {
+            utils.dashboard.getSalas.setData({ projectId }, (old: any) => {
                 if (!old) return old;
                 return old.map((s: any) => {
                     if (s.id === variables.id) {
@@ -98,19 +98,19 @@ export default function DataHubTab() {
         onError: (err, _variables, context) => {
             console.error(err);
             if (context?.previousSalas) {
-                utils.dashboard.getSalas.setData(undefined, context.previousSalas);
+                utils.dashboard.getSalas.setData({ projectId }, context.previousSalas);
             }
             toast.error("Erro ao atualizar!");
         },
         onSettled: () => {
-            utils.dashboard.getSalas.invalidate();
+            utils.dashboard.getSalas.invalidate({ projectId });
         },
     });
 
     const updateApontamento = trpc.dashboard.updateApontamento.useMutation({
         onSuccess: () => {
             toast.success("Apontamento atualizado!");
-            utils.dashboard.getApontamentos.invalidate();
+            utils.dashboard.getApontamentos.invalidate({ projectId });
         },
         onError: () => toast.error("Erro ao atualizar apontamento.")
     });
@@ -119,8 +119,8 @@ export default function DataHubTab() {
     const deleteApontamento = trpc.dashboard.deleteApontamento.useMutation({
         onSuccess: () => {
             toast.success("Apontamento excluído! Numeração ajustada.");
-            utils.dashboard.getApontamentos.invalidate();
-            utils.dashboard.getKPIs.invalidate();
+            utils.dashboard.getApontamentos.invalidate({ projectId });
+            utils.dashboard.getKPIs.invalidate({ projectId });
         },
         onError: () => toast.error("Erro ao excluir apontamento.")
     });
@@ -143,7 +143,7 @@ export default function DataHubTab() {
     const downloadExcel = async () => {
         try {
             toast.info("Gerando Excel...");
-            const base64 = await utils.dashboard.getExcelReport.fetch();
+            const base64 = await utils.dashboard.getExcelReport.fetch({ projectId });
             const link = document.createElement('a');
             link.href = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${base64}`;
             link.download = `Relatorio_Controle_${new Date().toISOString().split('T')[0]}.xlsx`;
@@ -195,13 +195,14 @@ export default function DataHubTab() {
     // Checklist progress stats (for Mapeamento Salas tab)
     const checklistStats = useMemo(() => {
         const total = sortedSalas.length;
-        if (total === 0) return { total: 0, planta: 0, augin: 0, tracker: 0, qr: 0, liberado: 0 };
+        if (total === 0) return { total: 0, planta: 0, augin: 0, tracker: 0, qr: 0, forro: 0, liberado: 0 };
         const planta = sortedSalas.filter((s: any) => !!s.imagemPlantaUrl).length;
         const augin = sortedSalas.filter((s: any) => !!s.augin).length;
         const tracker = sortedSalas.filter((s: any) => !!s.trackerPosicionado).length;
         const qr = sortedSalas.filter((s: any) => !!s.qrCodePlastificado).length;
+        const forro = sortedSalas.filter((s: any) => !!s.temForro).length;
         const liberado = sortedSalas.filter((s: any) => (s.statusRA || '').toUpperCase().includes('LIBERADO')).length;
-        return { total, planta, augin, tracker, qr, liberado };
+        return { total, planta, augin, tracker, qr, forro, liberado };
     }, [sortedSalas]);
 
     const sortedApontamentos = useMemo(() => {
@@ -251,6 +252,7 @@ export default function DataHubTab() {
                     </Button>
 
                     <ReportPreviewModal
+                        projectId={projectId}
                         edificacoes={uniqueEdificacoes}
                         disciplinas={uniqueDisciplinas}
                         responsaveis={uniqueResponsaveis}
@@ -303,6 +305,7 @@ export default function DataHubTab() {
                                             <TableHead className="text-center font-bold w-[60px]">Augin?</TableHead>
                                             <TableHead className="text-center font-bold w-[60px]">Tracker?</TableHead>
                                             <TableHead className="text-center font-bold w-[80px]">QR Plast.?</TableHead>
+                                            <TableHead className="text-center font-bold w-[60px]">Forro?</TableHead>
                                             <TableHead className="text-center font-bold w-[100px]">Status RA</TableHead>
                                         </TableRow>
                                         {/* Progress summary row */}
@@ -311,13 +314,16 @@ export default function DataHubTab() {
                                                 Progresso ({checklistStats.total} salas):
                                             </TableCell>
                                             {[
-                                                { done: checklistStats.planta, label: 'Planta' },
-                                                { done: checklistStats.augin, label: 'Augin' },
-                                                { done: checklistStats.tracker, label: 'Tracker' },
-                                                { done: checklistStats.qr, label: 'QR' },
+                                                { done: checklistStats.planta, label: 'Planta', colorClass: '' },
+                                                { done: checklistStats.augin, label: 'Augin', colorClass: '' },
+                                                { done: checklistStats.tracker, label: 'Tracker', colorClass: '' },
+                                                { done: checklistStats.qr, label: 'QR', colorClass: '' },
+                                                { done: checklistStats.forro, label: 'Forro', colorClass: 'teal' },
                                             ].map((col) => {
                                                 const pct = checklistStats.total > 0 ? (col.done / checklistStats.total) * 100 : 0;
-                                                const color = pct >= 100 ? 'text-emerald-700 bg-emerald-50' : pct > 0 ? 'text-amber-700 bg-amber-50' : 'text-slate-500 bg-slate-50';
+                                                const color = col.colorClass === 'teal'
+                                                    ? pct >= 100 ? 'text-teal-700 bg-teal-50' : pct > 0 ? 'text-teal-600 bg-teal-50/60' : 'text-slate-500 bg-slate-50'
+                                                    : pct >= 100 ? 'text-emerald-700 bg-emerald-50' : pct > 0 ? 'text-amber-700 bg-amber-50' : 'text-slate-500 bg-slate-50';
                                                 return (
                                                     <TableCell key={col.label} className="text-center py-1.5">
                                                         <div className={`inline-flex flex-col items-center rounded-md px-2 py-0.5 ${color}`}>
@@ -402,6 +408,19 @@ export default function DataHubTab() {
                                                                 className="sr-only peer"
                                                             />
                                                             <div className="w-5 h-5 bg-white border-2 border-slate-300 rounded-md peer-checked:bg-[#940707] peer-checked:border-[#940707] transition-all flex items-center justify-center after:content-['✓'] after:text-white after:text-xs after:hidden peer-checked:after:block hover:border-[#940707]/50" />
+                                                        </label>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-center">
+                                                    <div className="flex justify-center">
+                                                        <label className="relative flex items-center cursor-pointer group">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={!!sala.temForro}
+                                                                onChange={(e) => updateSala.mutate({ id: sala.id, temForro: e.target.checked ? 1 : 0 })}
+                                                                className="sr-only peer"
+                                                            />
+                                                            <div className="w-5 h-5 bg-white border-2 border-slate-300 rounded-md peer-checked:bg-teal-600 peer-checked:border-teal-600 transition-all flex items-center justify-center after:content-['✓'] after:text-white after:text-xs after:hidden peer-checked:after:block hover:border-teal-500/50" />
                                                         </label>
                                                     </div>
                                                 </TableCell>
@@ -696,6 +715,7 @@ export default function DataHubTab() {
 
             {selectedApontamento && (
                 <EditApontamentoModal 
+                    projectId={projectId}
                     isOpen={isEditModalOpen}
                     onClose={() => {
                         setIsEditModalOpen(false);

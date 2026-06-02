@@ -16,6 +16,7 @@ import TopImpactedRooms from "@/components/dashboard/TopImpactedRooms";
 // import IfcViewer from "@/components/ifc/IfcViewer";
 
 interface PresentationTabProps {
+    projectId: string;
     edificacao: string | null;
     activeModelUrl?: string;
     ifcFiles: any[];
@@ -23,33 +24,34 @@ interface PresentationTabProps {
 }
 
 export default function PresentationTab({
+    projectId,
     edificacao,
     activeModelUrl,
     ifcFiles,
     onSelectModel,
 }: PresentationTabProps) {
-    const { data: globalKpis } = trpc.dashboard.getKPIs.useQuery();
+    const { data: globalKpis } = trpc.dashboard.getKPIs.useQuery({ projectId });
     const { data: filteredKpis } = trpc.dashboard.getKPIsPorEdificacao.useQuery(
-        { edificacao: edificacao || "" },
+        { projectId, edificacao: edificacao || "" },
         { enabled: !!edificacao }
     );
 
     const { data: chartSemana = [] } = trpc.dashboard.getApontamentosPorSemana.useQuery(
-        { edificacao: edificacao || undefined }
+        { projectId, edificacao: edificacao || undefined }
     );
     const { data: chartDisciplina = [] } = trpc.dashboard.getApontamentosPorDisciplina.useQuery(
-        { edificacao: edificacao || undefined }
+        { projectId, edificacao: edificacao || undefined }
     );
     const { data: topSalas = [] } = trpc.dashboard.getTopSalasImpactadas.useQuery(
-        { edificacao: edificacao || undefined }
+        { projectId, edificacao: edificacao || undefined }
     );
-    const allSalasQuery = trpc.dashboard.getAllSalas.useQuery();
+    const allSalasQuery = trpc.dashboard.getAllSalas.useQuery({ projectId });
     const { data: chartTendenciaGeral = [] } = trpc.dashboard.getTendenciaVerificacao.useQuery(
-        undefined,
+        { projectId },
         { enabled: !edificacao }
     );
     const { data: chartTendenciaFiltrada = [] } = trpc.dashboard.getTendenciaVerificacaoPorEdificacao.useQuery(
-        { edificacao: edificacao || "" },
+        { projectId, edificacao: edificacao || "" },
         { enabled: !!edificacao }
     );
     const tendenciaData = edificacao ? chartTendenciaFiltrada : chartTendenciaGeral;
@@ -68,7 +70,7 @@ export default function PresentationTab({
 
     const handleDeleteModel = async (id: number, name: string) => {
         if (confirm(`Tem certeza que deseja excluir o modelo "${name}"? Esta ação não pode ser desfeita.`)) {
-            await deleteMutation.mutateAsync({ fileId: id });
+            await deleteMutation.mutateAsync({ projectId, fileId: id });
             if (activeModelUrl && activeModelUrl.includes(name)) {
                 onSelectModel(""); // Clear selection if deleted
             }

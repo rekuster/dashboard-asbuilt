@@ -2,6 +2,8 @@
 // @ts-nocheck
 import React, { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/contexts/AuthContext";
+import { useProjectRole } from "@/hooks/useProjectRole";
 import {
     Table,
     TableBody,
@@ -97,17 +99,60 @@ const normalizeEdificacao = (name: string) => {
  * Painel central para gestão de apontamentos, prioridades e resoluções.
  */
 
-export default function IssueManagerTab() {
+export default function IssueManagerTab({ projectId }: { projectId: string }) {
     const [search, setSearch] = useState("");
     const [statusFilter, setStatusFilter] = useState<string>("TODOS");
     const [priorityFilter, setPriorityFilter] = useState<string>("TODAS");
     const [disciplineFilter, setDisciplineFilter] = useState<string>("TODAS");
+    const [edificacaoChartFilter, setEdificacaoChartFilter] = useState<string>("TODAS");
 
     const utils = trpc.useUtils();
-    const { data: issues = [], isLoading } = trpc.dashboard.getApontamentos.useQuery();
-    const { data: salas = [] } = trpc.dashboard.getSalas.useQuery();
-    const { data: escopos = [] } = trpc.dashboard.getEscopos.useQuery();
-    const { data: allVerificacoes = [] } = trpc.dashboard.getAllVerificacoes.useQuery();
+    
+    // Auth & Roles Checks
+    const { user } = useAuth();
+    const { role: projectRole, isEditor, isParceiro, isAdmin } = useProjectRole(projectId);
+    const { data: project } = trpc.projects.getById.useQuery({ id: projectId }, { enabled: !!projectId });
+
+    // Configured companies in this project
+    const companies = useMemo(() => {
+        if (project?.companiesConfig) {
+            try {
+                return JSON.parse(project.companiesConfig) as string[];
+            } catch (e) {
+                // ignore
+            }
+        }
+        return ["Thá", "Ocle", "Stecla", "Instaladora"];
+    }, [project]);
+
+    // Match parceiro user to their company
+    const userCompany = useMemo(() => {
+        if (!user) return null;
+        if (user.user_metadata?.company) {
+            return user.user_metadata.company.trim().toLowerCase();
+        }
+        const email = (user.email || "").toLowerCase();
+        if (email.includes("tha")) return "thá";
+        if (email.includes("ocle")) return "ocle";
+        if (email.includes("stecla")) return "stecla";
+
+        const match = companies.find(c => {
+            const cleanC = c.toLowerCase();
+            return email.includes(cleanC) || (user.user_metadata?.name || "").toLowerCase().includes(cleanC);
+        });
+        return match ? match.toLowerCase() : null;
+    }, [user, companies]);
+
+    const { data: issues = [], isLoading } = trpc.dashboard.getApontamentos.useQuery({ projectId });
+    const { data: salas = [] } = trpc.dashboard.getSalas.useQuery({ projectId });
+    const { data: escopos = [] } = trpc.dashboard.getEscopos.useQuery({ projectId });
+    const { data: allVerificacoes = [] } = trpc.dashboard.getAllVerificacoes.useQuery({ projectId });
+
+    const uniqueEdificacoes = useMemo(() => {
+        const edifs = new Set(salas.map((s: any) => s.edificacao).filter(Boolean));
+        issues.forEach((i: any) => { if (i.edificacao) edifs.add(i.edificacao) });
+        return Array.from(edifs).sort() as string[];
+    }, [salas, issues]);
 
     const [expandedDisciplines, setExpandedDisciplines] = useState<string[]>([]);
     const [selectedSala, setSelectedSala] = useState<any>(null);
@@ -116,7 +161,7 @@ export default function IssueManagerTab() {
 
     const updateStatusMutation = trpc.dashboard.updateApontamento.useMutation({
         onSuccess: () => {
-            utils.dashboard.getApontamentos.invalidate();
+            utils.dashboard.getApontamentos.invalidate({ projectId });
         }
     });
 
@@ -139,6 +184,15 @@ export default function IssueManagerTab() {
     // Filtros e Busca
     const filteredIssues = useMemo(() => {
         return issues.filter((issue: any) => {
+            // For partners, only show issues matching their company
+            if (isParceiro && userCompany) {
+                const issueResp = (issue.responsavel || "").toLowerCase();
+                const cleanComp = userCompany.toLowerCase();
+                if (!issueResp.includes(cleanComp) && !cleanComp.includes(issueResp)) {
+                    return false;
+                }
+            }
+
             const matchesSearch = 
                 issue.divergencia?.toLowerCase().includes(search.toLowerCase()) ||
                 issue.sala?.toLowerCase().includes(search.toLowerCase()) ||
@@ -150,14 +204,22 @@ export default function IssueManagerTab() {
 
             return matchesSearch && matchesStatus && matchesPriority && matchesDiscipline;
         }).sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-    }, [issues, search, statusFilter, priorityFilter, disciplineFilter]);
+    }, [issues, search, statusFilter, priorityFilter, disciplineFilter, isParceiro, userCompany]);
 
     // Estatísticas para os Cards
     const stats = useMemo(() => {
-        const total = issues.length;
-        const active = issues.filter((i: any) => i.status === 'ATIVA').length;
-        const revision = issues.filter((i: any) => i.status === 'EM_REVISAO').length;
-        const resolved = issues.filter((i: any) => i.status === 'RESOLVIDA').length;
+        const scopeIssues = isParceiro && userCompany
+            ? issues.filter((issue: any) => {
+                const issueResp = (issue.responsavel || "").toLowerCase();
+                const cleanComp = userCompany.toLowerCase();
+                return issueResp.includes(cleanComp) || cleanComp.includes(issueResp);
+              })
+            : issues;
+
+        const total = scopeIssues.length;
+        const active = scopeIssues.filter((i: any) => i.status === 'ATIVA').length;
+        const revision = scopeIssues.filter((i: any) => i.status === 'EM_REVISAO').length;
+        const resolved = scopeIssues.filter((i: any) => i.status === 'RESOLVIDA').length;
         const qualityRate = total > 0 ? (resolved / total) * 100 : 0;
 
         return {
@@ -167,51 +229,71 @@ export default function IssueManagerTab() {
             resolved,
             qualityRate
         };
-    }, [issues]);
+    }, [issues, isParceiro, userCompany]);
 
     // Estatísticas Detalhadas para Gráficos
-    const chartStats = useMemo(() => {
-        // Por Disciplina
-        const discStats = {};
-        issues.forEach(i => {
-            if (!discStats[i.disciplina]) {
-                discStats[i.disciplina] = { ativa: 0, revisao: 0, resolvida: 0, total: 0 };
+    const chartStatsPerResponsavel = useMemo(() => {
+        const filteredForCharts = issues.filter((i: any) => {
+            if (isParceiro && userCompany) {
+                const issueResp = (i.responsavel || "").toLowerCase();
+                const cleanComp = userCompany.toLowerCase();
+                if (!issueResp.includes(cleanComp) && !cleanComp.includes(issueResp)) {
+                    return false;
+                }
             }
-            if (i.status === 'ATIVA') discStats[i.disciplina].ativa++;
-            else if (i.status === 'EM_REVISAO') discStats[i.disciplina].revisao++;
-            else if (i.status === 'RESOLVIDA') discStats[i.disciplina].resolvida++;
-            discStats[i.disciplina].total++;
+            return edificacaoChartFilter === "TODAS" || i.edificacao === edificacaoChartFilter;
         });
 
-        // Por Responsável
-        const respStats = {};
-        issues.forEach(i => {
+        const respMap: Record<string, Record<string, any>> = {};
+
+        filteredForCharts.forEach((i: any) => {
             const resp = i.responsavel || "Não Atribuído";
-            if (!respStats[resp]) {
-                respStats[resp] = { ativa: 0, revisao: 0, resolvida: 0, total: 0 };
+            const disc = i.disciplina || "Sem Disciplina";
+
+            if (!respMap[resp]) {
+                respMap[resp] = {};
             }
-            if (i.status === 'ATIVA') respStats[resp].ativa++;
-            else if (i.status === 'EM_REVISAO') respStats[resp].revisao++;
-            else if (i.status === 'RESOLVIDA') respStats[resp].resolvida++;
-            respStats[resp].total++;
+
+            if (!respMap[resp][disc]) {
+                respMap[resp][disc] = { ativa: 0, revisao: 0, resolvida: 0, total: 0 };
+            }
+
+            if (i.status === 'ATIVA') respMap[resp][disc].ativa++;
+            else if (i.status === 'EM_REVISAO') respMap[resp][disc].revisao++;
+            else if (i.status === 'RESOLVIDA') respMap[resp][disc].resolvida++;
+            
+            respMap[resp][disc].total++;
         });
 
-        const discChartData = Object.entries(discStats)
-            .map(([name, data]: [string, any]) => {
-                const qualidade = data.total > 0 ? ((data.resolvida / data.total) * 100).toFixed(1) : "0.0";
-                return { originalName: name, name: `${name} [${qualidade}% OK]`, ...data };
-            })
-            .sort((a, b) => (b.ativa + b.revisao) - (a.ativa + a.revisao));
+        const result = Object.entries(respMap).map(([respName, disciplinesMap]) => {
+            let respTotal = 0;
+            let respResolved = 0;
 
-        const respChartData = Object.entries(respStats)
-            .map(([name, data]: [string, any]) => {
-                const qualidade = data.total > 0 ? ((data.resolvida / data.total) * 100).toFixed(1) : "0.0";
-                return { originalName: name, name: `${name} [${qualidade}% OK]`, ...data };
-            })
-            .sort((a, b) => (b.ativa + b.revisao) - (a.ativa + a.revisao));
+            const chartData = Object.entries(disciplinesMap)
+                .map(([discName, data]: [string, any]) => {
+                    const qualidade = data.total > 0 ? ((data.resolvida / data.total) * 100).toFixed(1) : "0.0";
+                    respTotal += data.total;
+                    respResolved += data.resolvida;
+                    return { 
+                        originalName: discName, 
+                        name: discName, 
+                        qualidade: `${qualidade}% OK`,
+                        ...data 
+                    };
+                })
+                .sort((a, b) => (b.ativa + b.revisao) - (a.ativa + a.revisao));
 
-        return { discChartData, respChartData };
-    }, [issues]);
+            const totalQuality = respTotal > 0 ? ((respResolved / respTotal) * 100).toFixed(1) : "0.0";
+
+            return {
+                responsavel: respName,
+                totalQuality,
+                data: chartData
+            };
+        });
+
+        return result.sort((a, b) => a.responsavel.localeCompare(b.responsavel));
+    }, [issues, edificacaoChartFilter, isParceiro, userCompany]);
 
     // Lógica de Validação por Disciplina integrada
     const groupedValidation = useMemo(() => {
@@ -263,7 +345,20 @@ export default function IssueManagerTab() {
         return map;
     }, [salas, escopos, issues, allVerificacoes]);
 
-    const activeDisciplines = Object.keys(groupedValidation).sort();
+    const activeDisciplines = useMemo(() => {
+        return Object.keys(groupedValidation).sort();
+    }, [groupedValidation]);
+
+    const canChangeStatus = (issue: any) => {
+        if (isAdmin || isEditor) return true;
+        if (isParceiro) {
+            if (!userCompany) return false;
+            const issueResp = (issue.responsavel || "").toLowerCase();
+            const cleanComp = userCompany.toLowerCase();
+            return issueResp.includes(cleanComp) || cleanComp.includes(issueResp);
+        }
+        return false;
+    };
 
     const handleUpdateStatus = async (id: number, status: string) => {
         try {
@@ -356,83 +451,83 @@ export default function IssueManagerTab() {
                 />
             </div>
 
-            {/* Gráficos de Distribuição */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card className="border-none shadow-sm p-6 bg-white overflow-hidden">
-                    <CardHeader className="p-0 mb-6">
-                        <div className="flex items-center gap-2">
-                            <Tag className="w-4 h-4 text-[#940707]" />
-                            <CardTitle className="text-[11px] font-black uppercase text-slate-500 tracking-tighter">Pendências por Disciplina</CardTitle>
-                        </div>
-                    </CardHeader>
-                    <div className="h-[350px] w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={chartStats.discChartData} layout="vertical" margin={{ left: 10, right: 40, top: 0, bottom: 0 }}>
-                                <XAxis type="number" hide />
-                                <YAxis 
-                                    dataKey="name" 
-                                    type="category" 
-                                    width={200} 
-                                    axisLine={false} 
-                                    tickLine={false} 
-                                    tick={{ fontSize: 9, fontWeight: 'bold', fill: '#64748b' }} 
-                                    interval={0}
-                                />
-                                <RechartsTooltip 
-                                    cursor={{fill: '#f8fafc'}}
-                                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '10px' }}
-                                />
-                                <Bar dataKey="resolvida" stackId="a" name="Sanadas" fill="#10b981" radius={[0, 0, 0, 0]} barSize={20}>
-                                    <LabelList dataKey="resolvida" position="center" style={{ fontSize: '9px', fontWeight: 'black', fill: 'white' }} formatter={(val) => val > 0 ? val : ''} />
-                                </Bar>
-                                <Bar dataKey="revisao" stackId="a" name="Em Revisão" fill="#f59e0b" radius={[0, 0, 0, 0]} barSize={20}>
-                                    <LabelList dataKey="revisao" position="center" style={{ fontSize: '9px', fontWeight: 'black', fill: 'white' }} formatter={(val) => val > 0 ? val : ''} />
-                                </Bar>
-                                <Bar dataKey="ativa" stackId="a" name="Ativas" fill="#940707" radius={[0, 4, 4, 0]} barSize={20}>
-                                    <LabelList dataKey="ativa" position="center" style={{ fontSize: '9px', fontWeight: 'black', fill: 'white' }} formatter={(val) => val > 0 ? val : ''} />
-                                </Bar>
-                            </BarChart>
-                        </ResponsiveContainer>
+            {/* Gráficos de Distribuição por Responsável */}
+            <div className="flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 px-2">
+                        <BarChart3 className="w-5 h-5 text-[#940707]" />
+                        <h3 className="text-sm font-black uppercase text-slate-700 tracking-wider">Desempenho por Responsável</h3>
                     </div>
-                </Card>
+                    <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-full shadow-sm border border-slate-100">
+                        <Filter className="w-4 h-4 text-slate-400" />
+                        <span className="text-[10px] font-bold text-slate-500 uppercase">Edificação:</span>
+                        <select 
+                            className="text-xs font-bold bg-transparent border-none focus:ring-0 cursor-pointer p-0 pr-4 text-slate-700 outline-none"
+                            value={edificacaoChartFilter}
+                            onChange={(e) => setEdificacaoChartFilter(e.target.value)}
+                        >
+                            <option value="TODAS">Todas</option>
+                            {uniqueEdificacoes.map(e => (
+                                <option key={e} value={e}>{e}</option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
 
-                <Card className="border-none shadow-sm p-6 bg-white overflow-hidden">
-                    <CardHeader className="p-0 mb-6">
-                        <div className="flex items-center gap-2">
-                            <User className="w-4 h-4 text-[#940707]" />
-                            <CardTitle className="text-[11px] font-black uppercase text-slate-500 tracking-tighter">Pendências por Responsável</CardTitle>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+                    {chartStatsPerResponsavel.map((respStat, idx) => (
+                        <Card key={idx} className="border-none shadow-sm p-6 bg-white overflow-hidden min-h-[300px]">
+                            <CardHeader className="p-0 mb-6">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <User className="w-4 h-4 text-[#940707]" />
+                                        <CardTitle className="text-[11px] font-black uppercase text-slate-500 tracking-tighter">
+                                            {respStat.responsavel}
+                                        </CardTitle>
+                                    </div>
+                                    <Badge className="bg-emerald-50 text-emerald-700 border-emerald-100 text-[10px] font-black">
+                                        {respStat.totalQuality}% OK
+                                    </Badge>
+                                </div>
+                            </CardHeader>
+                            <div style={{ height: `${Math.max(120, respStat.data.length * 40 + 20)}px` }} className="w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={respStat.data} layout="vertical" margin={{ left: 0, right: 60, top: 0, bottom: 0 }}>
+                                        <XAxis type="number" hide />
+                                        <YAxis 
+                                            dataKey="name" 
+                                            type="category" 
+                                            width={60} 
+                                            axisLine={false} 
+                                            tickLine={false} 
+                                            tick={{ fontSize: 9, fontWeight: 'bold', fill: '#64748b' }} 
+                                            interval={0}
+                                        />
+                                        <RechartsTooltip 
+                                            cursor={{fill: '#f8fafc'}}
+                                            contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '10px' }}
+                                        />
+                                        <Bar dataKey="resolvida" stackId="a" name="Sanadas" fill="#10b981" radius={[0, 0, 0, 0]} barSize={20}>
+                                            <LabelList dataKey="resolvida" position="center" style={{ fontSize: '9px', fontWeight: 'black', fill: 'white' }} formatter={(val: any) => val > 0 ? val : ''} />
+                                        </Bar>
+                                        <Bar dataKey="revisao" stackId="a" name="Em Revisão" fill="#f59e0b" radius={[0, 0, 0, 0]} barSize={20}>
+                                            <LabelList dataKey="revisao" position="center" style={{ fontSize: '9px', fontWeight: 'black', fill: 'white' }} formatter={(val: any) => val > 0 ? val : ''} />
+                                        </Bar>
+                                        <Bar dataKey="ativa" stackId="a" name="Ativas" fill="#940707" radius={[0, 4, 4, 0]} barSize={20}>
+                                            <LabelList dataKey="ativa" position="center" style={{ fontSize: '9px', fontWeight: 'black', fill: 'white' }} formatter={(val: any) => val > 0 ? val : ''} />
+                                            <LabelList dataKey="qualidade" position="right" style={{ fontSize: '10px', fontWeight: '900', fill: '#047857', marginLeft: '12px' }} />
+                                        </Bar>
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </Card>
+                    ))}
+                    {chartStatsPerResponsavel.length === 0 && (
+                        <div className="col-span-1 lg:col-span-3 text-center py-10 bg-white rounded-2xl shadow-sm">
+                            <p className="text-slate-400 font-bold text-sm">Nenhum dado encontrado para esta edificação.</p>
                         </div>
-                    </CardHeader>
-                    <div className="h-[350px] w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={chartStats.respChartData} layout="vertical" margin={{ left: 10, right: 40, top: 0, bottom: 0 }}>
-                                <XAxis type="number" hide />
-                                <YAxis 
-                                    dataKey="name" 
-                                    type="category" 
-                                    width={200} 
-                                    axisLine={false} 
-                                    tickLine={false} 
-                                    tick={{ fontSize: 9, fontWeight: 'bold', fill: '#64748b' }} 
-                                    interval={0}
-                                />
-                                <RechartsTooltip 
-                                    cursor={{fill: '#f8fafc'}}
-                                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '10px' }}
-                                />
-                                <Bar dataKey="resolvida" stackId="a" name="Sanadas" fill="#10b981" radius={[0, 0, 0, 0]} barSize={20}>
-                                    <LabelList dataKey="resolvida" position="center" style={{ fontSize: '9px', fontWeight: 'black', fill: 'white' }} formatter={(val) => val > 0 ? val : ''} />
-                                </Bar>
-                                <Bar dataKey="revisao" stackId="a" name="Em Revisão" fill="#f59e0b" radius={[0, 0, 0, 0]} barSize={20}>
-                                    <LabelList dataKey="revisao" position="center" style={{ fontSize: '9px', fontWeight: 'black', fill: 'white' }} formatter={(val) => val > 0 ? val : ''} />
-                                </Bar>
-                                <Bar dataKey="ativa" stackId="a" name="Ativas" fill="#475569" radius={[0, 4, 4, 0]} barSize={20}>
-                                    <LabelList dataKey="ativa" position="center" style={{ fontSize: '9px', fontWeight: 'black', fill: 'white' }} formatter={(val) => val > 0 ? val : ''} />
-                                </Bar>
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
-                </Card>
+                    )}
+                </div>
             </div>
 
             {/* SEÇÃO INTEGRADA: VALIDAÇÃO POR DISCIPLINA */}
@@ -703,35 +798,50 @@ export default function IssueManagerTab() {
                                         </div>
                                     </TableCell>
                                     <TableCell className="text-center">
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" className={`h-7 px-3 rounded-full text-[10px] font-black uppercase border transition-all ${statusColors[issue.status] || statusColors['ATIVA']}`}>
-                                                    {issue.status || 'ATIVA'}
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="center" className="rounded-xl border-slate-100">
-                                                <DropdownMenuItem onClick={() => handleUpdateStatus(issue.id, 'ATIVA')} className="text-xs font-bold text-amber-600">Marcar como Ativa</DropdownMenuItem>
-                                                <DropdownMenuItem onClick={() => handleUpdateStatus(issue.id, 'EM_REVISAO')} className="text-xs font-bold text-blue-600">Enviar para Revisão</DropdownMenuItem>
-                                                <DropdownMenuItem onClick={() => handleUpdateStatus(issue.id, 'RESOLVIDA')} className="text-xs font-bold text-emerald-600">Marcar como Resolvida</DropdownMenuItem>
-                                                <DropdownMenuItem onClick={() => handleUpdateStatus(issue.id, 'NAO_PROCEDE')} className="text-xs font-bold text-slate-500">Não Procede</DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
+                                        {canChangeStatus(issue) ? (
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" className={`h-7 px-3 rounded-full text-[10px] font-black uppercase border transition-all ${statusColors[issue.status] || statusColors['ATIVA']}`}>
+                                                        {issue.status || 'ATIVA'}
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="center" className="rounded-xl border-slate-100">
+                                                    <DropdownMenuItem onClick={() => handleUpdateStatus(issue.id, 'ATIVA')} className="text-xs font-bold text-amber-600">Marcar como Ativa</DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => handleUpdateStatus(issue.id, 'EM_REVISAO')} className="text-xs font-bold text-blue-600">Enviar para Revisão</DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => handleUpdateStatus(issue.id, 'RESOLVIDA')} className="text-xs font-bold text-emerald-600">Marcar como Resolvida</DropdownMenuItem>
+                                                    {(isAdmin || isEditor) && (
+                                                        <DropdownMenuItem onClick={() => handleUpdateStatus(issue.id, 'NAO_PROCEDE')} className="text-xs font-bold text-slate-500">Não Procede</DropdownMenuItem>
+                                                    )}
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        ) : (
+                                            <span className={`inline-flex items-center h-7 px-3 rounded-full text-[10px] font-black uppercase border select-none ${statusColors[issue.status] || statusColors['ATIVA']}`}>
+                                                {issue.status || 'ATIVA'}
+                                            </span>
+                                        )}
                                     </TableCell>
                                     <TableCell className="text-center">
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" className={`h-7 gap-1.5 text-[10px] font-black uppercase rounded-full hover:bg-slate-50 ${priorityColors[issue.prioridade || 'NORMAL']}`}>
-                                                    <Flag className="w-3 h-3" />
-                                                    {issue.prioridade || 'NORMAL'}
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="center" className="rounded-xl border-slate-100">
-                                                <DropdownMenuItem onClick={() => handleUpdatePriority(issue.id, 'BAIXA')} className="text-xs font-bold text-slate-400">Baixa</DropdownMenuItem>
-                                                <DropdownMenuItem onClick={() => handleUpdatePriority(issue.id, 'NORMAL')} className="text-xs font-bold text-blue-500">Normal</DropdownMenuItem>
-                                                <DropdownMenuItem onClick={() => handleUpdatePriority(issue.id, 'ALTA')} className="text-xs font-bold text-orange-500">Alta</DropdownMenuItem>
-                                                <DropdownMenuItem onClick={() => handleUpdatePriority(issue.id, 'URGENTE')} className="text-xs font-bold text-rose-600">Urgente</DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
+                                        {isAdmin || isEditor ? (
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" className={`h-7 gap-1.5 text-[10px] font-black uppercase rounded-full hover:bg-slate-50 ${priorityColors[issue.prioridade || 'NORMAL']}`}>
+                                                        <Flag className="w-3 h-3" />
+                                                        {issue.prioridade || 'NORMAL'}
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="center" className="rounded-xl border-slate-100">
+                                                    <DropdownMenuItem onClick={() => handleUpdatePriority(issue.id, 'BAIXA')} className="text-xs font-bold text-slate-400">Baixa</DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => handleUpdatePriority(issue.id, 'NORMAL')} className="text-xs font-bold text-blue-500">Normal</DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => handleUpdatePriority(issue.id, 'ALTA')} className="text-xs font-bold text-orange-500">Alta</DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => handleUpdatePriority(issue.id, 'URGENTE')} className="text-xs font-bold text-rose-600">Urgente</DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        ) : (
+                                            <span className={`inline-flex items-center gap-1.5 text-[10px] font-black uppercase px-2 select-none ${priorityColors[issue.prioridade || 'NORMAL']}`}>
+                                                <Flag className="w-3 h-3" />
+                                                {issue.prioridade || 'NORMAL'}
+                                            </span>
+                                        )}
                                     </TableCell>
                                     <TableCell>
                                         <div className="flex items-center gap-2">
@@ -755,15 +865,19 @@ export default function IssueManagerTab() {
                                                 <DropdownMenuItem className="text-xs font-medium gap-2">
                                                     <MessageSquare className="w-3.5 h-3.5" /> Adicionar Comentário
                                                 </DropdownMenuItem>
-                                                <DropdownMenuItem 
-                                                    className="text-xs font-medium gap-2 text-blue-600"
-                                                    onClick={() => handleEditClick(issue)}
-                                                >
-                                                    <Pencil className="w-3.5 h-3.5" /> Editar Informações
-                                                </DropdownMenuItem>
-                                                <DropdownMenuItem className="text-xs font-medium gap-2 text-rose-600">
-                                                    <AlertCircle className="w-3.5 h-3.5" /> Excluir Apontamento
-                                                </DropdownMenuItem>
+                                                {(isAdmin || isEditor) && (
+                                                    <>
+                                                        <DropdownMenuItem 
+                                                            className="text-xs font-medium gap-2 text-blue-600"
+                                                            onClick={() => handleEditClick(issue)}
+                                                        >
+                                                            <Pencil className="w-3.5 h-3.5" /> Editar Informações
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem className="text-xs font-medium gap-2 text-rose-600">
+                                                            <AlertCircle className="w-3.5 h-3.5" /> Excluir Apontamento
+                                                        </DropdownMenuItem>
+                                                    </>
+                                                )}
                                             </DropdownMenuContent>
                                         </DropdownMenu>
                                     </TableCell>
@@ -776,6 +890,7 @@ export default function IssueManagerTab() {
 
             {isVModalOpen && selectedSala && (
                 <VerificationModal 
+                    projectId={projectId}
                     isOpen={isVModalOpen}
                     onClose={() => setIsVModalOpen(false)}
                     sala={selectedSala}
@@ -786,6 +901,7 @@ export default function IssueManagerTab() {
 
             {selectedApontamento && (
                 <EditApontamentoModal 
+                    projectId={projectId}
                     isOpen={isEditModalOpen}
                     onClose={() => {
                         setIsEditModalOpen(false);

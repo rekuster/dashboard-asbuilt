@@ -148,6 +148,9 @@ app.use(
                 userEmail: (req as any).userEmail,
             };
         },
+        onError: ({ path, error }) => {
+            console.error(`❌ tRPC Error on [${path}]:`, error);
+        }
     })
 );
 

@@ -9,10 +9,11 @@ import { useState, useMemo } from "react";
 import ColorLegend from "./ColorLegend";
 
 interface IfcViewerProps {
+    projectId: string;
     modelUrl?: string;
 }
 
-export default function IfcViewer({ modelUrl }: IfcViewerProps) {
+export default function IfcViewer({ projectId, modelUrl }: IfcViewerProps) {
     const {
         containerRef,
         init,
@@ -28,13 +29,13 @@ export default function IfcViewer({ modelUrl }: IfcViewerProps) {
         resetClip,
         xRay,
         setXRay
-    } = useIfcViewer();
+    } = useIfcViewer(projectId);
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedFloor, setSelectedFloor] = useState<number | null>(null);
     const [clippingEnabled, setClippingEnabled] = useState(false);
 
     const utils = trpc.useUtils();
-    const { data: allSalas } = trpc.dashboard.getSalas.useQuery();
+    const { data: allSalas } = trpc.dashboard.getSalas.useQuery({ projectId });
     const linkMutation = trpc.ifc.linkIfcToRoom.useMutation({
         onSuccess: () => {
             toast.success("Sala vinculada com sucesso!");
@@ -285,6 +286,7 @@ export default function IfcViewer({ modelUrl }: IfcViewerProps) {
 
                                                 if (sala) {
                                                     unlinkIdMutation.mutate({
+                                                        projectId,
                                                         salaId: sala.id,
                                                         ifcExpressId: selectedRoom.ifcExpressId
                                                     });
@@ -303,7 +305,7 @@ export default function IfcViewer({ modelUrl }: IfcViewerProps) {
                                                 ) || selectedRoom;
 
                                                 if (sala && sala.id) {
-                                                    linkMutation.mutate({ salaId: sala.id, ifcExpressId: null });
+                                                    linkMutation.mutate({ projectId, salaId: sala.id, ifcExpressId: null });
                                                 }
                                             }}
                                         >
@@ -330,6 +332,7 @@ export default function IfcViewer({ modelUrl }: IfcViewerProps) {
                                                 className={`w-full text-left p-2 rounded text-xs transition-colors ${(linkMutation as any).isPending ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-700 text-slate-300 hover:text-white'
                                                     }`}
                                                 onClick={() => linkMutation.mutate({
+                                                    projectId,
                                                     salaId: (sala as any).id,
                                                     ifcExpressId: (selectedRoom as any).ifcExpressId
                                                 })}

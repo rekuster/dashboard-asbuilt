@@ -17,6 +17,7 @@ const supabase = (supabaseUrl && supabaseKey)
  * Handle IFC file upload
  */
 export async function handleIfcUpload(
+    projectId: string,
     fileBuffer: Buffer,
     fileName: string,
     edificacao: string | null,
@@ -71,6 +72,7 @@ export async function handleIfcUpload(
         }
 
         const insertData: any = {
+            projectId,
             fileName: sanitizedFileName,
             filePath: publicUrl, // Save the full URL
             edificacao: edificacao || null,

@@ -22,12 +22,13 @@ import { ptBR } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
 
 interface ReportPreviewModalProps {
+    projectId: string;
     edificacoes: string[];
     disciplinas: string[];
     responsaveis: string[];
 }
 
-export function ReportPreviewModal({ edificacoes, disciplinas, responsaveis }: ReportPreviewModalProps) {
+export function ReportPreviewModal({ projectId, edificacoes, disciplinas, responsaveis }: ReportPreviewModalProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [reportType, setReportType] = useState<"CQ" | "AB">("CQ");
     const [base64Pdf, setBase64Pdf] = useState<string | null>(null);
@@ -50,12 +51,15 @@ export function ReportPreviewModal({ edificacoes, disciplinas, responsaveis }: R
 
     // Fetch pavimentos based on selected edificacao
     const { data: pavimentos = [] } = trpc.dashboard.getPavimentos.useQuery(
-        { edificacao: filterEdificacao !== "Todas" ? filterEdificacao : undefined },
-        { enabled: isOpen }
+        { projectId, edificacao: filterEdificacao !== "Todas" ? filterEdificacao : undefined },
+        { enabled: isOpen && !!projectId }
     );
 
     const utils = trpc.useUtils();
-    const { data: history = [], isLoading: isLoadingHistory } = trpc.dashboard.getHistoricoRelatorios.useQuery();
+    const { data: history = [], isLoading: isLoadingHistory } = trpc.dashboard.getHistoricoRelatorios.useQuery(
+        { projectId },
+        { enabled: isOpen && !!projectId }
+    );
     const markAsSentMutation = trpc.dashboard.markApontamentosAsSentByFilters.useMutation();
 
     // Converte base64 para Blob URL para o preview ser mais estável
@@ -101,6 +105,7 @@ export function ReportPreviewModal({ edificacoes, disciplinas, responsaveis }: R
 
             if (reportType === "CQ") {
                 base64 = await utils.dashboard.getPDFReport.fetch({
+                    projectId,
                     ...filters,
                     startDate: startDate || undefined,
                     endDate: endDate || undefined,
@@ -108,6 +113,7 @@ export function ReportPreviewModal({ edificacoes, disciplinas, responsaveis }: R
                 });
             } else {
                 base64 = await utils.dashboard.getAsBuiltReport.fetch({ 
+                    projectId,
                     edificacao: filters.edificacao,
                     pavimento: filters.pavimento,
                     startDate: startDate || undefined,
@@ -146,6 +152,7 @@ export function ReportPreviewModal({ edificacoes, disciplinas, responsaveis }: R
 
                 if (reportType === "CQ") {
                     dataToDownload = await utils.dashboard.getPDFReport.fetch({
+                        projectId,
                         ...filters,
                         startDate: startDate || undefined,
                         endDate: endDate || undefined,
@@ -153,6 +160,7 @@ export function ReportPreviewModal({ edificacoes, disciplinas, responsaveis }: R
                     });
                 } else {
                     dataToDownload = await utils.dashboard.getAsBuiltReport.fetch({ 
+                        projectId,
                         edificacao: filters.edificacao,
                         pavimento: filters.pavimento,
                         startDate: startDate || undefined,
@@ -175,6 +183,7 @@ export function ReportPreviewModal({ edificacoes, disciplinas, responsaveis }: R
             if (confirmarEnvio && reportType === "CQ") {
                 try {
                     const result = await markAsSentMutation.mutateAsync({
+                        projectId,
                         edificacao: filterEdificacao !== "Todas" ? filterEdificacao : undefined,
                         pavimento: filterPavimento !== "Todos" ? filterPavimento : undefined,
                         disciplina: filterDisciplina !== "Todas" ? filterDisciplina : undefined,
@@ -185,8 +194,8 @@ export function ReportPreviewModal({ edificacoes, disciplinas, responsaveis }: R
                     });
                     if (result.success) {
                         toast.success(`${result.count} itens marcados como enviados.`);
-                        utils.dashboard.getApontamentos.invalidate();
-                        utils.dashboard.getHistoricoRelatorios.invalidate();
+                        utils.dashboard.getApontamentos.invalidate({ projectId });
+                        utils.dashboard.getHistoricoRelatorios.invalidate({ projectId });
                     }
                 } catch (e) {
                     console.error("Erro ao marcar como enviado:", e);

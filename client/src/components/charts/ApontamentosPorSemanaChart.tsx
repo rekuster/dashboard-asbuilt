@@ -9,7 +9,7 @@ import {
     LineChart
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrendingUp } from "lucide-react";
+import { Calendar, TrendingUp } from "lucide-react";
 
 interface ApontamentosPorSemanaChartProps {
     data: { semana: string; count: number; verifiedRooms?: number }[];
@@ -56,7 +56,12 @@ export default function ApontamentosPorSemanaChart({ data, hideTitle }: Apontame
                     verticalAlign="bottom"
                     height={36}
                     iconType="circle"
-                    wrapperStyle={{ paddingTop: '10px' }}
+                    iconSize={8}
+                    wrapperStyle={{ paddingTop: '15px' }}
+                    formatter={(value) => {
+                        const colorClass = value === "Apontamentos" ? "text-[#940707]" : "text-[#22c55e]";
+                        return <span className={`text-[12px] font-bold ${colorClass} mr-4`}>{value}</span>;
+                    }}
                 />
                 <Line
                     name="Apontamentos"
@@ -85,16 +90,16 @@ export default function ApontamentosPorSemanaChart({ data, hideTitle }: Apontame
     if (hideTitle) return chartContent;
 
     return (
-        <Card className="h-[400px]">
-            <CardHeader>
-                <CardTitle className="text-xl font-bold flex items-center gap-2 text-primary">
-                    <TrendingUp className="w-5 h-5" />
-                    Cronograma de Evolução
-                </CardTitle>
-            </CardHeader>
-            <CardContent className="h-[300px]">
+        <Card className="bg-white border border-slate-100 shadow-sm rounded-2xl overflow-hidden p-5 h-[400px]">
+            <div className="flex items-center gap-2 mb-2">
+                <Calendar className="w-4 h-4 text-[#940707]" strokeWidth={2.5} />
+                <h2 className="text-[11px] font-black text-[#545F66] uppercase tracking-widest">
+                    Apontamentos por Semana
+                </h2>
+            </div>
+            <div className="h-[320px] pt-4">
                 {chartContent}
-            </CardContent>
+            </div>
         </Card>
     );
 }

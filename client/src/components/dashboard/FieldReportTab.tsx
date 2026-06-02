@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useProjectRole } from "@/hooks/useProjectRole";
 import {
     Smartphone,
     CloudOff,
@@ -22,7 +23,8 @@ import {
     Trash2,
     Send,
     CalendarDays,
-    List
+    List,
+    Lock
 } from "lucide-react";
 
 import { toast } from "sonner";
@@ -78,7 +80,8 @@ function getTodayString(): string {
     return `${y}-${m}-${d}`;
 }
 
-export default function FieldReportTab() {
+export default function FieldReportTab({ projectId }: { projectId: string }) {
+    const { isEditor, isLoading: roleLoading } = useProjectRole(projectId);
     const [selectedEdificacao, setSelectedEdificacao] = useState<string>("");
     const [selectedPavimento, setSelectedPavimento] = useState<string>("");
     const [selectedSala, setSelectedSala] = useState<any>(null);
@@ -116,7 +119,7 @@ export default function FieldReportTab() {
 
     // Buscar apontamentos já existentes para a sala selecionada
     const { data: existingApontamentos = [], refetch: refetchExisting } = trpc.dashboard.getApontamentosBySala.useQuery(
-        { sala: selectedSala?.nome || "" },
+        { projectId, sala: selectedSala?.nome || "" },
         { enabled: !!selectedSala }
     );
 
@@ -140,8 +143,8 @@ export default function FieldReportTab() {
     };
 
     // Fetch data
-    const { data: edificacoes = [] } = trpc.dashboard.getEdificacoes.useQuery();
-    const { data: salas = [] } = trpc.dashboard.getSalas.useQuery();
+    const { data: edificacoes = [] } = trpc.dashboard.getEdificacoes.useQuery({ projectId });
+    const { data: salas = [] } = trpc.dashboard.getSalas.useQuery({ projectId });
 
     const pavimentos = Array.from(new Set(
         (salas as any[]).filter(s => s.edificacao === selectedEdificacao).map(s => s.pavimento)
@@ -407,6 +410,29 @@ export default function FieldReportTab() {
         }
         setSelectedSala(sala);
     };
+
+    if (roleLoading) {
+        return (
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                <RefreshCcw className="h-8 w-8 animate-spin text-primary mb-4" />
+                <p className="text-sm font-medium">Carregando permissões...</p>
+            </div>
+        );
+    }
+
+    if (!isEditor) {
+        return (
+            <div className="flex flex-col items-center justify-center py-16 text-center max-w-md mx-auto">
+                <div className="h-16 w-16 rounded-full bg-slate-100/50 flex items-center justify-center text-slate-400 mb-4 border border-slate-200/50 shadow-inner backdrop-blur-sm">
+                    <Lock className="h-7 w-7 text-rose-500 animate-pulse" />
+                </div>
+                <h3 className="text-base font-bold text-foreground">Acesso Restrito</h3>
+                <p className="text-muted-foreground text-xs mt-2 leading-relaxed max-w-xs">
+                    Esta aba é destinada ao relato de divergências em campo e é restrita a <strong>Editores</strong> e <strong>Administradores</strong> do projeto.
+                </p>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6 max-w-6xl mx-auto pb-20">

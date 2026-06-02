@@ -29,11 +29,12 @@ import {
     Home,
     Network,
     Hammer,
-    Gauge
+    Gauge,
+    AlertCircle
 } from "lucide-react";
 import { VerificationModal } from "./VerificationModal";
 
-export default function ValidationTab() {
+export default function ValidationTab({ projectId }: { projectId: string }) {
     const [search, setSearch] = useState("");
     const [filterEdificacao, setFilterEdificacao] = useState("Todas");
     const [expandedDisciplines, setExpandedDisciplines] = useState<string[]>([]);
@@ -43,9 +44,9 @@ export default function ValidationTab() {
     const [modalDiscipline, setModalDiscipline] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
 
-    const { data: salas = [] } = trpc.dashboard.getSalas.useQuery();
-    const { data: pointingStats = [] } = trpc.dashboard.getApontamentos.useQuery();
-    const { data: allVerificacoes = [] } = trpc.dashboard.getAllVerificacoes.useQuery();
+    const { data: salas = [] } = trpc.dashboard.getSalas.useQuery({ projectId });
+    const { data: pointingStats = [] } = trpc.dashboard.getApontamentos.useQuery({ projectId });
+    const { data: allVerificacoes = [] } = trpc.dashboard.getAllVerificacoes.useQuery({ projectId });
 
     // Filtro de Edificações únicas
     const uniqueEdificacoes = useMemo(() => 
@@ -379,6 +380,7 @@ export default function ValidationTab() {
 
             {/* Verification Modal Integration */}
             <VerificationModal 
+                projectId={projectId}
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 sala={selectedSala}

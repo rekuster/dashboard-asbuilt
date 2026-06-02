@@ -8,7 +8,12 @@ import { processExcelFile } from './excelProcessor';
  * e coloca os dados novos da planilha, garantindo que o Dashboard esteja sempre atualizado com o seu Excel.
  */
 
-export async function handleExcelUpload(fileBuffer: Buffer, fileName: string = 'upload.xlsx', uploadedBy: number = 1): Promise<{
+export async function handleExcelUpload(
+    fileBuffer: Buffer, 
+    fileName: string = 'upload.xlsx', 
+    projectId: string = '8b821385-8648-4922-ba69-5e7357e2ab3e',
+    uploadedBy: number = 1
+): Promise<{
     success: boolean;
     totalSalas: number;
     totalApontamentos: number;
@@ -54,6 +59,7 @@ export async function handleExcelUpload(fileBuffer: Buffer, fileName: string = '
                 // RESTORE MAPPINGS: Apply backed-up IDs to new data
                 const enrichedChunk = chunk.map(sala => ({
                     ...sala,
+                    projectId,
                     ifcExpressId: mappingBackup.get(sala.nome) || null
                 }));
 
@@ -77,7 +83,11 @@ export async function handleExcelUpload(fileBuffer: Buffer, fileName: string = '
             const chunkSize = 50;
             for (let i = 0; i < entregasData.length; i += chunkSize) {
                 const chunk = entregasData.slice(i, i + chunkSize);
-                await db.insert(entregasAsBuilt).values(chunk);
+                const enrichedDeliveries = chunk.map(delivery => ({
+                    ...delivery,
+                    projectId
+                }));
+                await db.insert(entregasAsBuilt).values(enrichedDeliveries);
             }
         }
 

@@ -176,7 +176,7 @@ function PacketsListView({ entregas, onViewDetail, onDelete }: { entregas: any[]
 }
 
 
-export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao?: string }) {
+export default function EntregasTab({ projectId, selectedEdificacao }: { projectId: string; selectedEdificacao?: string }) {
     const [searchTerm, setSearchTerm] = useState("");
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingEntrega, setEditingEntrega] = useState<any>(null);
@@ -220,20 +220,20 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
     };
 
     const utils = trpc.useUtils();
-    const { data: entregas = [], isLoading } = trpc.dashboard.getEntregas.useQuery();
-    const { data: stats } = trpc.dashboard.getEntregasStats.useQuery({ edificacao: selectedEdificacao });
+    const { data: entregas = [], isLoading } = trpc.dashboard.getEntregas.useQuery({ projectId });
+    const { data: stats } = trpc.dashboard.getEntregasStats.useQuery({ projectId, edificacao: selectedEdificacao });
 
     const deleteMutation = trpc.dashboard.deleteEntrega.useMutation({
-        onSuccess: () => utils.dashboard.getEntregas.invalidate()
+        onSuccess: () => utils.dashboard.getEntregas.invalidate({ projectId })
     });
 
     // Mutação para atualização rápida de status diretamente na tabela
     const updateStatusMutation = trpc.dashboard.upsertEntrega.useMutation({
         onSuccess: () => {
-            utils.dashboard.getEntregas.invalidate();
-            utils.dashboard.getEntregasStats.invalidate();
+            utils.dashboard.getEntregas.invalidate({ projectId });
+            utils.dashboard.getEntregasStats.invalidate({ projectId });
             // Invalida também os dados do dashboard principal
-            utils.dashboard.getAsBuiltStatus.invalidate();
+            utils.dashboard.getAsBuiltStatus.invalidate({ projectId });
         }
     });
 
@@ -326,11 +326,12 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
         <div className="space-y-8 animate-in fade-in duration-500">
             {viewingDetail ? (
                 <EntregaDetailView
+                    projectId={projectId}
                     entrega={viewingDetail}
                     onBack={() => setViewingDetail(null)}
                     onUpdate={() => {
-                        utils.dashboard.getEntregas.invalidate();
-                        utils.dashboard.getEntregasStats.invalidate();
+                        utils.dashboard.getEntregas.invalidate({ projectId });
+                        utils.dashboard.getEntregasStats.invalidate({ projectId });
                     }}
                     onEdit={() => handleEdit(viewingDetail)}
                     onDelete={() => handleDelete(viewingDetail.id)}
@@ -496,7 +497,9 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
                                             </TableHeader>
                                             <TableBody>
                                                 {isLoading ? (
+                                                    <TableRow>
                                                         <TableCell colSpan={10} className="text-center py-10 text-slate-400 italic">Carregando entregas...</TableCell>
+                                                    </TableRow>
                                                 ) : filteredEntregas.length === 0 ? (
                                                     <TableRow>
                                                         <TableCell colSpan={10} className="text-center py-10 text-slate-400 italic">Nenhuma entrega encontrada.</TableCell>
@@ -590,6 +593,7 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
 
                         <TabsContent value="scope">
                             <ScopeManagementView 
+                                projectId={projectId}
                                 entregas={entregas} 
                                 selectedEdificacao={selectedEdificacao} 
                                 onViewEntrega={handleViewDetail}
@@ -601,6 +605,7 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
 
             {isFormOpen && (
                 <EntregaForm
+                    projectId={projectId}
                     onClose={() => setIsFormOpen(false)}
                     entrega={editingEntrega}
                     selectedEdificacao={selectedEdificacao}
@@ -609,6 +614,7 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
 
             {isBatchFormOpen && (
                 <BatchEntregaForm
+                    projectId={projectId}
                     onClose={() => setIsBatchFormOpen(false)}
                     selectedEdificacao={selectedEdificacao}
                 />
@@ -620,7 +626,7 @@ export default function EntregasTab({ selectedEdificacao }: { selectedEdificacao
 // ------------------------------------------------------------------
 // SCOPE MANAGEMENT VIEW (v2) — LISTA MESTRA + TIMELINE + VERIFICAÇÃO
 // ------------------------------------------------------------------
-function ScopeManagementView({ entregas, selectedEdificacao, onViewEntrega }: { entregas: any[], selectedEdificacao?: string, onViewEntrega: (e: any) => void }) {
+function ScopeManagementView({ projectId, entregas, selectedEdificacao, onViewEntrega }: { projectId: string, entregas: any[], selectedEdificacao?: string, onViewEntrega: (e: any) => void }) {
     const [selectedEscopo, setSelectedEscopo] = useState<any>(null);
     const [isEscopoFormOpen, setIsEscopoFormOpen] = useState(false);
     const [editingEscopo, setEditingEscopo] = useState<any>(null);
@@ -630,10 +636,10 @@ function ScopeManagementView({ entregas, selectedEdificacao, onViewEntrega }: { 
     const [filterStatus, setFilterStatus] = useState("todos");
     const [groupByEdificacao, setGroupByEdificacao] = useState(true);
 
-    const { data: escopos = [], isLoading: loadingEscopos } = trpc.dashboard.getEscopos.useQuery();
+    const { data: escopos = [], isLoading: loadingEscopos } = trpc.dashboard.getEscopos.useQuery({ projectId });
     const utils = trpc.useUtils();
     const deleteMutation = trpc.dashboard.deleteEscopo.useMutation({
-        onSuccess: () => utils.dashboard.getEscopos.invalidate()
+        onSuccess: () => utils.dashboard.getEscopos.invalidate({ projectId })
     });
 
     // Opções para os filtros
@@ -870,6 +876,7 @@ function ScopeManagementView({ entregas, selectedEdificacao, onViewEntrega }: { 
 
             {isEscopoFormOpen && (
                 <EscopoForm
+                    projectId={projectId}
                     escopo={editingEscopo}
                     selectedEdificacao={selectedEdificacao}
                     onClose={() => setIsEscopoFormOpen(false)}
@@ -882,11 +889,11 @@ function ScopeManagementView({ entregas, selectedEdificacao, onViewEntrega }: { 
 // ------------------------------------------------------------------
 // ESCOPO FORM MODAL
 // ------------------------------------------------------------------
-function EscopoForm({ escopo, selectedEdificacao, onClose }: { escopo?: any, selectedEdificacao?: string, onClose: () => void }) {
+function EscopoForm({ projectId, escopo, selectedEdificacao, onClose }: { projectId: string, escopo?: any, selectedEdificacao?: string, onClose: () => void }) {
     const utils = trpc.useUtils();
     const mutation = trpc.dashboard.upsertEscopo.useMutation({
         onSuccess: () => {
-            utils.dashboard.getEscopos.invalidate();
+            utils.dashboard.getEscopos.invalidate({ projectId });
             onClose();
         },
         onError: (error) => alert("Erro ao salvar: " + error.message)
@@ -1346,21 +1353,21 @@ function ParcialForm({ escopo, parcialCount, onClose }: { escopo: any, parcialCo
 // ------------------------------------------------------------------
 // DETAIL VIEW COMPONENT
 // ------------------------------------------------------------------
-function EntregaDetailView({ entrega, onBack, onUpdate, onEdit, onDelete }: any) {
+function EntregaDetailView({ projectId, entrega, onBack, onUpdate, onEdit, onDelete }: any) {
     const utils = trpc.useUtils();
     const [status, setStatus] = useState(entrega.status);
     const [comentario, setComentario] = useState("");
     const [isUpdating, setIsUpdating] = useState(false);
 
-    const { data: escopos = [] } = trpc.dashboard.getEscopos.useQuery();
+    const { data: escopos = [] } = trpc.dashboard.getEscopos.useQuery({ projectId });
     const { data: historico = [] } = trpc.dashboard.getHistoricoEntrega.useQuery({ id: entrega.id });
 
     const linkedScope = useMemo(() => escopos.find((s: any) => s.id === entrega.escopoId), [escopos, entrega.escopoId]);
 
     const mutation = trpc.dashboard.upsertEntrega.useMutation({
         onSuccess: () => {
-            utils.dashboard.getEntregas.invalidate();
-            utils.dashboard.getEntregasStats.invalidate();
+            utils.dashboard.getEntregas.invalidate({ projectId });
+            utils.dashboard.getEntregasStats.invalidate({ projectId });
             utils.dashboard.getHistoricoEntrega.invalidate({ id: entrega.id });
             onUpdate();
             setComentario("");
@@ -1574,15 +1581,15 @@ function EntregaDetailView({ entrega, onBack, onUpdate, onEdit, onDelete }: any)
 // ------------------------------------------------------------------
 // FORM COMPONENT
 // ------------------------------------------------------------------
-function EntregaForm({ onClose, entrega, selectedEdificacao }: any) {
+function EntregaForm({ projectId, onClose, entrega, selectedEdificacao }: any) {
     const utils = trpc.useUtils();
-    const { data: escopos = [] } = trpc.dashboard.getEscopos.useQuery();
-    const { data: allEntregas = [] } = trpc.dashboard.getEntregas.useQuery();
+    const { data: escopos = [] } = trpc.dashboard.getEscopos.useQuery({ projectId });
+    const { data: allEntregas = [] } = trpc.dashboard.getEntregas.useQuery({ projectId });
     
     const mutation = trpc.dashboard.upsertEntrega.useMutation({
         onSuccess: () => {
-            utils.dashboard.getEntregas.invalidate();
-            utils.dashboard.getEntregasStats.invalidate();
+            utils.dashboard.getEntregas.invalidate({ projectId });
+            utils.dashboard.getEntregasStats.invalidate({ projectId });
         },
         onError: (error) => alert("Erro ao salvar: " + error.message)
     });
@@ -1917,9 +1924,9 @@ function EntregaForm({ onClose, entrega, selectedEdificacao }: any) {
 // ------------------------------------------------------------------
 // BATCH DELIVERY FORM MODAL
 // ------------------------------------------------------------------
-function BatchEntregaForm({ selectedEdificacao, onClose }: { selectedEdificacao?: string, onClose: () => void }) {
+function BatchEntregaForm({ projectId, selectedEdificacao, onClose }: { projectId: string, selectedEdificacao?: string, onClose: () => void }) {
     const utils = trpc.useUtils();
-    const { data: escopos = [] } = trpc.dashboard.getEscopos.useQuery();
+    const { data: escopos = [] } = trpc.dashboard.getEscopos.useQuery({ projectId });
     
     const [selectedEmpresa, setSelectedEmpresa] = useState("");
     const [selectedEscopoIds, setSelectedEscopoIds] = useState<number[]>([]);
@@ -1946,8 +1953,8 @@ function BatchEntregaForm({ selectedEdificacao, onClose }: { selectedEdificacao?
 
     const mutation = trpc.dashboard.upsertEntrega.useMutation({
         onSuccess: () => {
-            utils.dashboard.getEntregas.invalidate();
-            utils.dashboard.getEntregasStats.invalidate();
+            utils.dashboard.getEntregas.invalidate({ projectId });
+            utils.dashboard.getEntregasStats.invalidate({ projectId });
             onClose();
         },
         onError: (err) => alert("Erro ao salvar: " + err.message)

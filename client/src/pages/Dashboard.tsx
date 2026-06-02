@@ -4,23 +4,24 @@
  * Eu adicionei a nova aba "Status As-Built" para que você possa alternar entre o controle de obra e o controle de entrega de modelos.
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { useProjectRole } from "@/hooks/useProjectRole";
 import {
     Loader2,
     LayoutDashboard,
     Database,
     FileText,
-    Box,
     FileSpreadsheet,
     Info,
     Smartphone,
-    ArrowLeft,
     CheckCircle,
     Settings,
     CalendarDays,
-    AlertCircle
+    AlertCircle,
+    Layers,
+    Box
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -35,25 +36,49 @@ import TopImpactedRooms from "@/components/dashboard/TopImpactedRooms";
 import SimuladorTendenciaCard from "@/components/dashboard/SimuladorTendenciaCard";
 import DataHubTab from "@/components/dashboard/DataHubTab";
 import DataIntegrityAlert from "@/components/dashboard/DataIntegrityAlert";
-import PresentationTab from "@/components/dashboard/PresentationTab";
 import EntregasTab from "@/components/dashboard/EntregasTab";
 import AsBuiltDashboard from "@/components/dashboard/AsBuiltDashboard";
 import FieldReportTab from "@/components/dashboard/FieldReportTab";
 import IssueManagerTab from "@/components/dashboard/IssueManagerTab";
-import { ErrorBoundary } from "@/components/dashboard/ErrorBoundary";
 import StatusDetailsModal from "@/components/dashboard/StatusDetailsModal";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
+const ROLE_BADGES = {
+    owner: 'bg-rose-500/10 text-rose-500 border-rose-500/20',
+    admin: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
+    editor: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
+    viewer: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
+    parceiro: 'bg-purple-500/10 text-purple-500 border-purple-500/20',
+};
+
+const ROLE_LABELS = {
+    owner: 'Proprietário',
+    admin: 'Administrador',
+    editor: 'Editor',
+    viewer: 'Visualizador',
+    parceiro: 'Parceiro',
+};
+
 export default function Dashboard() {
     const { id: projectId } = useParams<{ id: string }>();
     const [, setLocation] = useLocation();
     const [selectedEdificacao, setSelectedEdificacao] = useState<string | null>(null);
-    const [activeModelUrl, setActiveModelUrl] = useState<string | undefined>();
+    
+    // User role check
+    const { role: projectRole, isAdmin, isParceiro, isLoading: roleLoading } = useProjectRole(projectId);
     
     // Persistir aba ativa no refresh
     const [activeTab, setActiveTab] = useState(() => sessionStorage.getItem('dashboard_active_tab') || 'overview');
+
+    // Auto switch to issues tab for third party partners
+    useEffect(() => {
+        if (isParceiro && activeTab !== 'issues') {
+            setActiveTab('issues');
+            sessionStorage.setItem('dashboard_active_tab', 'issues');
+        }
+    }, [isParceiro, activeTab]);
 
     const handleTabChange = (val: string) => {
         setActiveTab(val);
@@ -92,48 +117,50 @@ export default function Dashboard() {
     };
 
     // Data fetching
-    const { data: globalKpis, isLoading: kpisLoading } = trpc.dashboard.getKPIs.useQuery();
+    const { data: globalKpis, isLoading: kpisLoading } = trpc.dashboard.getKPIs.useQuery(
+        { projectId: projectId! },
+        { enabled: !!projectId }
+    );
     const { data: filteredKpis } = trpc.dashboard.getKPIsPorEdificacao.useQuery(
-        { edificacao: selectedEdificacao || "" },
-        { enabled: !!selectedEdificacao }
+        { projectId: projectId!, edificacao: selectedEdificacao || "" },
+        { enabled: !!projectId && !!selectedEdificacao }
     );
 
-    const { data: chartSala = [] } = trpc.dashboard.getApontamentosPorSala.useQuery();
-    const { data: chartSemana = [] } = trpc.dashboard.getApontamentosPorSemana.useQuery();
+    const { data: chartSala = [] } = trpc.dashboard.getApontamentosPorSala.useQuery(
+        { projectId: projectId! },
+        { enabled: !!projectId }
+    );
+    const { data: chartSemana = [] } = trpc.dashboard.getApontamentosPorSemana.useQuery(
+        { projectId: projectId!, edificacao: selectedEdificacao || undefined },
+        { enabled: !!projectId }
+    );
     const { data: chartDisciplina = [] } = trpc.dashboard.getApontamentosPorDisciplina.useQuery(
-        { edificacao: selectedEdificacao || undefined }
+        { projectId: projectId!, edificacao: selectedEdificacao || undefined },
+        { enabled: !!projectId }
     );
     const { data: chartStatus = [] } = trpc.dashboard.getStatsStatus.useQuery(
-        { edificacao: selectedEdificacao || undefined }
+        { projectId: projectId!, edificacao: selectedEdificacao || undefined },
+        { enabled: !!projectId }
     );
     const { data: topSalas = [] } = trpc.dashboard.getTopSalasImpactadas.useQuery(
-        { edificacao: selectedEdificacao || undefined }
+        { projectId: projectId!, edificacao: selectedEdificacao || undefined },
+        { enabled: !!projectId }
     );
-    const { data: salas = [] } = trpc.dashboard.getAllSalas.useQuery();
+    const { data: salas = [] } = trpc.dashboard.getAllSalas.useQuery(
+        { projectId: projectId! },
+        { enabled: !!projectId }
+    );
     const { data: chartTendenciaGeral = [] } = trpc.dashboard.getTendenciaVerificacao.useQuery(
-        undefined,
-        { enabled: !selectedEdificacao }
+        { projectId: projectId! },
+        { enabled: !!projectId && !selectedEdificacao }
     );
     const { data: chartTendenciaFiltrada = [] } = trpc.dashboard.getTendenciaVerificacaoPorEdificacao.useQuery(
-        { edificacao: selectedEdificacao || "" },
-        { enabled: !!selectedEdificacao }
+        { projectId: projectId!, edificacao: selectedEdificacao || "" },
+        { enabled: !!projectId && !!selectedEdificacao }
     );
     const tendenciaData = selectedEdificacao ? chartTendenciaFiltrada : chartTendenciaGeral;
 
-    const { data: ifcFiles = [] } = trpc.ifc.getAllFiles.useQuery();
     const utils = trpc.useUtils();
-
-    // Auto-select first model if none active
-    useState(() => {
-        if (!activeModelUrl && ifcFiles.length > 0) {
-            setActiveModelUrl(ifcFiles[0].filePath);
-        }
-    });
-
-    // Also update if ifcFiles changes and none selected
-    if (activeModelUrl === undefined && ifcFiles.length > 0) {
-        setActiveModelUrl(ifcFiles[0].filePath);
-    }
 
 
     const kpis: any = selectedEdificacao && filteredKpis ? filteredKpis : globalKpis;
@@ -149,118 +176,95 @@ export default function Dashboard() {
     }
 
     return (
-        <div className="min-h-screen bg-slate-50/50">
+        <div className="min-h-[calc(100vh-3.5rem)] bg-slate-50/50">
             <div className="max-w-[1600px] mx-auto p-4 md:p-8 space-y-8">
 
                 {/* Header Section */}
-                <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 border-b pb-8">
-                    <div className="flex items-start gap-6">
-                        <button
-                            onClick={() => setLocation('/')}
-                            className="flex items-center gap-1 text-muted-foreground hover:text-primary transition-colors mt-1"
-                        >
-                            <ArrowLeft className="w-5 h-5" />
-                        </button>
-
-                        <img
-                            src="/logos_stecla/versao_horizontal@4x.png"
-                            alt="Stecla Engenharia"
-                            className="h-12 object-contain hidden md:block"
-                        />
-
-                        {/* Red Vertical Accent Bar */}
-                        <div className="w-1.5 h-12 bg-primary rounded-full hidden md:block" />
-
-                        <div>
-                            <p className="text-[10px] font-bold text-primary uppercase tracking-widest">
-                                {project?.code || 'PROJETO'}
-                            </p>
-                            <h1 className="text-2xl font-bold tracking-tight text-foreground">
-                                {project?.name || 'ACOMPANHAMENTO DE PROJETOS'}
-                            </h1>
-                            <p className="text-slate-500 text-sm font-medium">
-                                Dashboard As Built {project?.client ? `| ${project.client}` : ''}
-                            </p>
-                        </div>
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-6">
+                    <div>
+                        <p className="text-[10px] font-bold text-primary uppercase tracking-widest">
+                            {project?.code || 'PROJETO'}
+                        </p>
+                        <h1 className="text-2xl font-bold tracking-tight text-foreground mt-1">
+                            {project?.name || 'ACOMPANHAMENTO DE PROJETOS'}
+                        </h1>
+                        <p className="text-slate-500 text-sm font-medium mt-1">
+                            Dashboard As Built {project?.client ? `| ${project.client}` : ''}
+                        </p>
                     </div>
 
                     <div className="flex items-center gap-3">
                         <EdificacaoSelector
+                            projectId={projectId!}
                             selectedEdificacao={selectedEdificacao}
                             onSelect={setSelectedEdificacao}
                         />
-                        <button
-                            onClick={() => setLocation(`/project/${projectId}/settings`)}
-                            className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/5 transition-all"
-                            title="Configurações do Projeto"
-                        >
-                            <Settings className="w-5 h-5" />
-                        </button>
                     </div>
                 </div>
 
-                {/* Alerts Section */}
-                <DataIntegrityAlert />
+                <DataIntegrityAlert projectId={projectId!} />
 
                 <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
                     <TabsList className="bg-white border p-1 h-12 shadow-sm overflow-x-auto flex-nowrap whitespace-nowrap">
-                        <TabsTrigger value="overview" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                            <LayoutDashboard className="w-4 h-4 mr-2" />
-                            Visão Geral
-                        </TabsTrigger>
-                        <TabsTrigger value="3d" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                            <Box className="w-4 h-4 mr-2" />
-                            Acompanhamento 3D
-                        </TabsTrigger>
-                        <TabsTrigger value="data" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                            <Database className="w-4 h-4 mr-2" />
-                            Tabelas e Dados
-                        </TabsTrigger>
-                        <TabsTrigger value="field" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                            <Smartphone className="w-4 h-4 mr-2" />
-                            Relato de Campo
-                        </TabsTrigger>
-                        <TabsTrigger value="asbuilt" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                            <CheckCircle className="w-4 h-4 mr-2" />
-                            Status As-Built
-                        </TabsTrigger>
-                        <TabsTrigger value="entregas" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                            <FileText className="w-4 h-4 mr-2" />
-                            Gestão de Entregas e Escopo
-                        </TabsTrigger>
+                        {!isParceiro && (
+                            <>
+                                <TabsTrigger value="overview" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                                    <LayoutDashboard className="w-4 h-4 mr-2" />
+                                    Visão Geral
+                                </TabsTrigger>
+                                <TabsTrigger value="data" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                                    <Database className="w-4 h-4 mr-2" />
+                                    Tabelas e Dados
+                                </TabsTrigger>
+                                <TabsTrigger value="field" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                                    <Smartphone className="w-4 h-4 mr-2" />
+                                    Relato de Campo
+                                </TabsTrigger>
+                                <TabsTrigger value="asbuilt" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                                    <CheckCircle className="w-4 h-4 mr-2" />
+                                    Status As-Built
+                                </TabsTrigger>
+                                <TabsTrigger value="entregas" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                                    <FileText className="w-4 h-4 mr-2" />
+                                    Gestão de Entregas e Escopo
+                                </TabsTrigger>
+                            </>
+                        )}
                         <TabsTrigger value="issues" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                             <AlertCircle className="w-4 h-4 mr-2" />
                             Painel de Divergências
                         </TabsTrigger>
-                        <TabsTrigger value="management" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                            <Settings className="w-4 h-4 mr-2" />
-                            Configurações e Relatórios
-                        </TabsTrigger>
+                        {!isParceiro && (
+                            <TabsTrigger value="management" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                                <Settings className="w-4 h-4 mr-2" />
+                                Configurações e Relatórios
+                            </TabsTrigger>
+                        )}
                     </TabsList>
 
                     <TabsContent value="data" className="animate-in fade-in duration-500">
-                        <DataHubTab />
+                        <DataHubTab projectId={projectId!} />
                     </TabsContent>
 
                     <TabsContent value="field" className="animate-in fade-in duration-500">
-                        <FieldReportTab />
+                        <FieldReportTab projectId={projectId!} />
                     </TabsContent>
 
                     <TabsContent value="issues" className="animate-in fade-in duration-500">
-                        <IssueManagerTab />
+                        <IssueManagerTab projectId={projectId!} />
                     </TabsContent>
 
                     <TabsContent value="entregas" className="animate-in fade-in duration-500">
-                        <EntregasTab selectedEdificacao={selectedEdificacao || undefined} />
+                        <EntregasTab projectId={projectId!} selectedEdificacao={selectedEdificacao || undefined} />
                     </TabsContent>
 
                         <TabsContent value="asbuilt" className="m-0">
-                            <AsBuiltDashboard selectedEdificacao={selectedEdificacao} />
+                            <AsBuiltDashboard projectId={projectId!} selectedEdificacao={selectedEdificacao} />
                         </TabsContent>
 
                     <TabsContent value="overview" className="space-y-8 animate-in fade-in duration-500">
                         {/* KPIs Grid */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-6">
                             <KPICard
                                 title="Salas Mapeadas"
                                 value={kpis?.totalSalas || 0}
@@ -288,6 +292,23 @@ export default function Dashboard() {
                                 subtitle={`${kpis?.mediaApontamentos?.toFixed(1) || 0} média por sala`}
                                 icon={Database}
                                 variant="red"
+                            />
+                            <KPICard
+                                title="Salas com Forro"
+                                value={kpis?.salasComForro ?? 0}
+                                subtitle={
+                                    <div className="flex flex-col gap-0.5">
+                                        <span>{kpis?.salasVerificadasComForro ?? 0} verificadas</span>
+                                        <span className="text-[10px] font-bold" style={{ color: '#0d9488' }}>
+                                            {kpis?.percentualForroVerificadas != null
+                                                ? `${kpis.percentualForroVerificadas.toFixed(1)}% das c/ forro verificadas`
+                                                : 'Sem dados'}
+                                        </span>
+                                    </div>
+                                }
+                                icon={Layers}
+                                variant="default"
+                                className="border-l-4 border-teal-500"
                             />
                             <KPICard
                                 title="Previsão Término"
@@ -380,27 +401,8 @@ export default function Dashboard() {
                         </div>
                     </TabsContent>
 
-                    <TabsContent value="3d" className="space-y-6 animate-in fade-in duration-500">
-                        <ErrorBoundary>
-                            <PresentationTab
-                                edificacao={selectedEdificacao}
-                                activeModelUrl={activeModelUrl}
-                                ifcFiles={ifcFiles}
-                                onSelectModel={setActiveModelUrl}
-                            />
-                        </ErrorBoundary>
-                    </TabsContent>
-
                     <TabsContent value="management" className="space-y-6 animate-in fade-in duration-500">
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            {/* <IfcUploader /> */}
-                            <Card className="bg-slate-50 border-dashed border-2 flex flex-col items-center justify-center p-8 text-center">
-                                <Box className="w-12 h-12 text-slate-300 mb-4" />
-                                <CardTitle className="text-slate-500">Upload de Modelos IFC</CardTitle>
-                                <CardDescription className="mt-2">
-                                    Funcionalidade temporariamente desativada para manutenção técnica.
-                                </CardDescription>
-                            </Card>
+                        <div className="grid grid-cols-1 gap-6">
                             <Card>
                                 <CardHeader>
                                     <div className="flex items-center gap-3">
@@ -421,7 +423,10 @@ export default function Dashboard() {
                                             onClick={async () => {
                                                 const fileName = `Relatorio_AsBuilt_${selectedEdificacao || 'Geral'}_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.pdf`;
                                                 try {
-                                                    const base64 = await utils.dashboard.getPDFReport.fetch();
+                                                    const base64 = await utils.dashboard.getPDFReport.fetch({
+                                                        projectId: projectId!,
+                                                        edificacao: selectedEdificacao || undefined
+                                                    });
                                                     downloadBase64(base64, fileName, 'application/pdf');
                                                     toast.success('PDF gerado com sucesso!');
                                                 } catch (e) {
@@ -442,7 +447,10 @@ export default function Dashboard() {
                                             onClick={async () => {
                                                 const fileName = `Apontamentos_AsBuilt_${selectedEdificacao || 'Geral'}_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.xlsx`;
                                                 try {
-                                                    const base64 = await utils.dashboard.getExcelReport.fetch();
+                                                    const base64 = await utils.dashboard.getExcelReport.fetch({
+                                                        projectId: projectId!,
+                                                        edificacao: selectedEdificacao || undefined
+                                                    });
                                                     downloadBase64(base64, fileName, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
                                                     toast.success('Excel exportado com sucesso!');
                                                 } catch (e) {

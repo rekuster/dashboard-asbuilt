@@ -53,8 +53,9 @@ import {
 /**
  * Foca no controle da Lista Mestra (108 modelos) e rastreio de arquivos.
  */
-export default function AsBuiltDashboard({ selectedEdificacao }: { selectedEdificacao: string | null }) {
+export default function AsBuiltDashboard({ projectId, selectedEdificacao }: { projectId: string; selectedEdificacao: string | null }) {
     const { data: stats, isLoading } = trpc.dashboard.getAsBuiltStatus.useQuery({ 
+        projectId,
         edificacao: selectedEdificacao || undefined 
     });
 

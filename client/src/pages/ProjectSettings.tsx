@@ -5,11 +5,13 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import {
     ArrowLeft, Save, Loader2, Plus, Trash2, ChevronDown, ChevronRight,
-    Building2, Layers, MapPin
+    Building2, Layers, MapPin, Cpu, Sparkles, Users, ShieldAlert
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useProjectRole } from '@/hooks/useProjectRole';
+import MembersTab from '@/components/dashboard/MembersTab';
 
 export default function ProjectSettings() {
     const { id } = useParams<{ id: string }>();
@@ -17,6 +19,7 @@ export default function ProjectSettings() {
     const { user } = useAuth();
 
     const { data: project, isLoading } = trpc.projects.getById.useQuery({ id: id! });
+    const { isAdmin, isLoading: roleLoading } = useProjectRole(id);
     const utils = trpc.useUtils();
 
     // General info state
@@ -56,7 +59,7 @@ export default function ProjectSettings() {
         }
     }, [project]);
 
-    if (isLoading) {
+    if (isLoading || roleLoading) {
         return (
             <div className="flex flex-col items-center justify-center min-h-screen gap-4">
                 <Loader2 className="animate-spin w-10 h-10 text-primary" />
@@ -70,6 +73,19 @@ export default function ProjectSettings() {
             <div className="flex flex-col items-center justify-center min-h-screen gap-4">
                 <p className="text-muted-foreground">Projeto não encontrado.</p>
                 <Button variant="outline" onClick={() => setLocation('/')}>Voltar</Button>
+            </div>
+        );
+    }
+
+    if (!isAdmin) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-screen gap-4 max-w-md mx-auto text-center px-4">
+                <ShieldAlert className="w-16 h-16 text-rose-500 animate-bounce" />
+                <h1 className="text-xl font-bold text-slate-900">Acesso Negado</h1>
+                <p className="text-muted-foreground">Você não possui permissões de Administrador para gerenciar as configurações deste projeto.</p>
+                <Button variant="outline" onClick={() => setLocation(`/project/${id}`)} className="mt-2">
+                    Voltar ao Dashboard
+                </Button>
             </div>
         );
     }
@@ -95,23 +111,17 @@ export default function ProjectSettings() {
     };
 
     return (
-        <div className="min-h-screen bg-slate-50/50">
+        <div className="min-h-[calc(100vh-3.5rem)] bg-slate-50/50">
             {/* Header */}
-            <div className="bg-white border-b shadow-sm">
-                <div className="max-w-[1200px] mx-auto px-4 md:px-8 h-16 flex items-center gap-4">
-                    <Button variant="ghost" size="sm" onClick={() => setLocation(`/project/${id}`)}>
-                        <ArrowLeft className="w-4 h-4 mr-2" />
-                        Voltar ao Dashboard
-                    </Button>
-                    <div className="w-px h-8 bg-slate-200" />
-                    <div>
-                        <p className="text-[10px] font-bold text-primary uppercase tracking-widest">{project.code}</p>
-                        <h1 className="text-sm font-semibold">{project.name} — Configurações</h1>
-                    </div>
+            <div className="max-w-[1200px] mx-auto px-4 md:px-8 pt-8">
+                <div>
+                    <p className="text-[10px] font-bold text-primary uppercase tracking-widest">{project.code}</p>
+                    <h1 className="text-2xl font-bold tracking-tight text-foreground mt-1">Configurações do Projeto</h1>
+                    <p className="text-slate-500 text-sm font-medium mt-1">{project.name}</p>
                 </div>
             </div>
 
-            <div className="max-w-[1200px] mx-auto px-4 md:px-8 py-8">
+            <div className="max-w-[1200px] mx-auto px-4 md:px-8 py-6">
                 <Tabs defaultValue="general" className="space-y-6">
                     <TabsList className="bg-white border p-1 h-11 shadow-sm">
                         <TabsTrigger value="general" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
@@ -121,6 +131,14 @@ export default function ProjectSettings() {
                         <TabsTrigger value="master" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                             <Layers className="w-4 h-4 mr-2" />
                             Lista Mestra
+                        </TabsTrigger>
+                        <TabsTrigger value="asbuilt" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                            <Cpu className="w-4 h-4 mr-2" />
+                            Aba As-Built
+                        </TabsTrigger>
+                        <TabsTrigger value="members" className="px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                            <Users className="w-4 h-4 mr-2" />
+                            Membros do Projeto
                         </TabsTrigger>
                     </TabsList>
 
@@ -197,6 +215,16 @@ export default function ProjectSettings() {
                     {/* Master List Tab */}
                     <TabsContent value="master">
                         <MasterListTab projectId={id!} inputClass={inputClass} />
+                    </TabsContent>
+
+                    {/* As-Built Config Tab */}
+                    <TabsContent value="asbuilt">
+                        <AsBuiltConfigTab projectId={id!} inputClass={inputClass} />
+                    </TabsContent>
+
+                    {/* Members Management Tab */}
+                    <TabsContent value="members">
+                        <MembersTab projectId={id!} />
                     </TabsContent>
                 </Tabs>
             </div>
@@ -321,6 +349,7 @@ function MasterListTab({ projectId, inputClass }: { projectId: string; inputClas
     const saveEdit = () => {
         if (!editingId) return;
         updateSalaMutation.mutate({
+            projectId,
             id: editingId,
             nome: editNome.trim(),
             numeroSala: editNumero.trim(),
@@ -330,7 +359,7 @@ function MasterListTab({ projectId, inputClass }: { projectId: string; inputClas
 
     const handleDelete = (sala: any) => {
         if (confirm(`Excluir a sala "${sala.nome}" (Nº ${sala.numeroSala})?`)) {
-            deleteSalaMutation.mutate({ id: sala.id });
+            deleteSalaMutation.mutate({ projectId, id: sala.id });
         }
     };
 
@@ -676,3 +705,475 @@ function MasterListTab({ projectId, inputClass }: { projectId: string; inputClas
         </div>
     );
 }
+
+// ============================================================================
+// As-Built Config Tab — for configuring disciplines and responsibles per project
+// ============================================================================
+function AsBuiltConfigTab({ projectId, inputClass }: { projectId: string; inputClass: string }) {
+    const { data: project } = trpc.projects.getById.useQuery({ id: projectId });
+    const utils = trpc.useUtils();
+
+    type DisciplineEntry = {
+        sigla: string;
+        nome: string;
+        responsavel: string;
+    };
+
+    // State for disciplines
+    const [disciplines, setDisciplines] = useState<DisciplineEntry[]>([]);
+    const [newDisc, setNewDisc] = useState('');
+    const [newNome, setNewNome] = useState('');
+    const [newResp, setNewResp] = useState('');
+
+    // Inline edit state for disciplines
+    const [editingIdx, setEditingIdx] = useState<number | null>(null);
+    const [editSigla, setEditSigla] = useState('');
+    const [editNome, setEditNome] = useState('');
+    const [editResp, setEditResp] = useState('');
+
+    // State for companies
+    const [companies, setCompanies] = useState<string[]>([]);
+    const [newCompany, setNewCompany] = useState('');
+    const [saving, setSaving] = useState(false);
+
+    const updateProject = trpc.projects.update.useMutation({
+        onSuccess: () => {
+            toast.success('Configurações As-Built atualizadas com sucesso!');
+            utils.projects.getById.invalidate({ id: projectId });
+            setSaving(false);
+        },
+        onError: (err) => {
+            toast.error('Erro ao salvar configurações', { description: err.message });
+            setSaving(false);
+        }
+    });
+
+    // Populate states from DB or set defaults
+    useEffect(() => {
+        // Load disciplines with backwards compatibility
+        if (project?.disciplinesConfig) {
+            try {
+                const parsed = JSON.parse(project.disciplinesConfig);
+                const mapped = parsed.map((item: any) => ({
+                    sigla: item.sigla || item.disciplina || "",
+                    nome: item.nome || item.sigla || item.disciplina || "",
+                    responsavel: item.responsavel || ""
+                }));
+                setDisciplines(mapped);
+            } catch (e) {
+                setDisciplines([]);
+            }
+        } else {
+            setDisciplines([]);
+        }
+
+        // Load companies
+        if (project?.companiesConfig) {
+            try {
+                const loadedCompanies = JSON.parse(project.companiesConfig);
+                setCompanies(loadedCompanies);
+                if (loadedCompanies.length > 0 && !newResp) {
+                    setNewResp(loadedCompanies[0]);
+                }
+            } catch (e) {
+                const defaultList = ["Thá", "Ocle", "Stecla", "Instaladora"];
+                setCompanies(defaultList);
+                setNewResp(defaultList[0]);
+            }
+        } else {
+            const defaultList = ["Thá", "Ocle", "Stecla", "Instaladora"];
+            setCompanies(defaultList);
+            setNewResp(defaultList[0]);
+        }
+    }, [project]);
+
+    // Ensure selected dropdown responsible is valid when companies list changes
+    useEffect(() => {
+        if (companies.length > 0 && !companies.includes(newResp)) {
+            setNewResp(companies[0]);
+        }
+    }, [companies, newResp]);
+
+    // Companies handlers
+    const handleAddCompany = () => {
+        const cleanName = newCompany.trim();
+        if (!cleanName) {
+            toast.error('Informe o nome da empresa.');
+            return;
+        }
+        if (companies.some(c => c.toLowerCase() === cleanName.toLowerCase())) {
+            toast.error('Esta empresa já está cadastrada.');
+            return;
+        }
+        setCompanies(prev => [...prev, cleanName]);
+        setNewCompany('');
+        if (!newResp) setNewResp(cleanName);
+        toast.success(`Empresa "${cleanName}" adicionada à lista local.`);
+    };
+
+    const handleRemoveCompany = (company: string) => {
+        // Prevent removing if company is used in a discipline mapping
+        if (disciplines.some(d => d.responsavel.toLowerCase() === company.toLowerCase())) {
+            toast.error(`Não é possível excluir "${company}" pois ela está vinculada a uma disciplina cadastrada! Remova a disciplina primeiro.`);
+            return;
+        }
+        setCompanies(prev => prev.filter(c => c !== company));
+        toast.info(`Empresa "${company}" removida da lista local.`);
+    };
+
+    // Disciplines handlers
+    const handleAddDiscipline = () => {
+        const discUpper = newDisc.trim().toUpperCase();
+        const nomeClean = newNome.trim();
+        if (!discUpper) {
+            toast.error('Informe a sigla da disciplina (ex: ARQ).');
+            return;
+        }
+        if (!nomeClean) {
+            toast.error('Informe o nome completo da disciplina (ex: Arquitetura).');
+            return;
+        }
+        if (!newResp) {
+            toast.error('Cadastre pelo menos uma empresa parceira antes de vincular.');
+            return;
+        }
+        if (disciplines.some(d => d.sigla.toUpperCase() === discUpper)) {
+            toast.error('Esta sigla de disciplina já está cadastrada.');
+            return;
+        }
+        setDisciplines(prev => [...prev, { sigla: discUpper, nome: nomeClean, responsavel: newResp }]);
+        setNewDisc('');
+        setNewNome('');
+        toast.success(`Disciplina "${discUpper} - ${nomeClean}" vinculada.`);
+    };
+
+    const handleRemoveDiscipline = (index: number) => {
+        setDisciplines(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const startEditDiscipline = (idx: number, item: DisciplineEntry) => {
+        setEditingIdx(idx);
+        setEditSigla(item.sigla);
+        setEditNome(item.nome);
+        setEditResp(item.responsavel);
+    };
+
+    const saveEditDiscipline = (idx: number) => {
+        const cleanSigla = editSigla.trim().toUpperCase();
+        const cleanNome = editNome.trim();
+        if (!cleanSigla) {
+            toast.error('A sigla não pode ser vazia.');
+            return;
+        }
+        if (!cleanNome) {
+            toast.error('O nome completo não pode ser vazio.');
+            return;
+        }
+        if (disciplines.some((d, i) => i !== idx && d.sigla.toUpperCase() === cleanSigla)) {
+            toast.error('Esta sigla de disciplina já está sendo usada por outro mapeamento.');
+            return;
+        }
+
+        setDisciplines(prev => prev.map((item, i) => i === idx ? { sigla: cleanSigla, nome: cleanNome, responsavel: editResp } : item));
+        setEditingIdx(null);
+        toast.success('Alterações salvas localmente.');
+    };
+
+    const handleFillDefaults = () => {
+        const defaultStecla = [
+            { sigla: 'ARQ', nome: 'Arquitetura', responsavel: 'Thá' },
+            { sigla: 'EST', nome: 'Estrutura', responsavel: 'Thá' },
+            { sigla: 'HID', nome: 'Hidráulica', responsavel: 'Thá' },
+            { sigla: 'MET', nome: 'Metálica', responsavel: 'Thá' },
+            { sigla: 'ELE', nome: 'Elétrica', responsavel: 'Ocle' },
+            { sigla: 'CLI', nome: 'Climatização', responsavel: 'Ocle' },
+            { sigla: 'ELEMT', nome: 'Barramento e Média Tensão', responsavel: 'Ocle' },
+            { sigla: 'PCI', nome: 'Incêndio', responsavel: 'Ocle' },
+            { sigla: 'LOG', nome: 'Lógica', responsavel: 'Ocle' },
+            { sigla: 'SDAI', nome: 'Detecção e Alarme', responsavel: 'Ocle' },
+            { sigla: 'SPDA', nome: 'Para-raios', responsavel: 'Ocle' },
+            { sigla: 'UTI', nome: 'Utilidades', responsavel: 'Ocle' },
+            { sigla: 'FORRO', nome: 'Forro', responsavel: 'Stecla' }
+        ];
+
+        // Ensure default companies exist in list
+        setCompanies(prev => {
+            const merged = [...prev];
+            ["Thá", "Ocle", "Stecla", "Instaladora"].forEach(c => {
+                if (!merged.some(m => m.toLowerCase() === c.toLowerCase())) {
+                    merged.push(c);
+                }
+            });
+            return merged;
+        });
+        
+        // Merge disciplines
+        setDisciplines(prev => {
+            const merged = [...prev];
+            defaultStecla.forEach(def => {
+                if (!merged.some(m => m.sigla.toUpperCase() === def.sigla)) {
+                    merged.push(def);
+                }
+            });
+            return merged;
+        });
+        
+        toast.info('Disciplinas e empresas padrão Stecla carregadas!');
+    };
+
+    const handleSave = () => {
+        setSaving(true);
+        updateProject.mutate({
+            id: projectId,
+            disciplinesConfig: JSON.stringify(disciplines),
+            companiesConfig: JSON.stringify(companies)
+        });
+    };
+
+    const compactInputStyle = `px-2 py-1 rounded border border-input bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary/30 w-full`;
+
+    return (
+        <div className="space-y-6">
+            <Card className="border-none shadow-lg">
+                <CardHeader className="bg-slate-50/50 border-b pb-6">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                            <CardTitle className="flex items-center gap-2 text-slate-800">
+                                <Cpu className="w-5 h-5 text-primary" />
+                                Parametrização As-Built
+                            </CardTitle>
+                            <CardDescription>
+                                Configure as empresas parceiras, cadastre disciplinas com seus nomes completos e faça a amarração de responsabilidades.
+                            </CardDescription>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            <Button variant="outline" size="sm" onClick={handleFillDefaults} className="h-9">
+                                <Sparkles className="w-4 h-4 mr-2 text-amber-500 fill-amber-500/20" />
+                                Mapeamento Padrão Stecla
+                            </Button>
+                            <Button onClick={handleSave} disabled={saving} size="sm" className="h-9">
+                                {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                                Salvar Configurações
+                            </Button>
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent className="p-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        
+                        {/* 1. Companies Column (Left) */}
+                        <div className="space-y-6 lg:border-r lg:pr-8 border-slate-100">
+                            <div>
+                                <h3 className="text-sm font-bold text-slate-800 mb-1">1. Empresas Parceiras</h3>
+                                <p className="text-xs text-muted-foreground">Adicione ou remova empresas executoras e parceiras desta obra.</p>
+                            </div>
+
+                            {/* Add Company input */}
+                            <div className="flex gap-2">
+                                <input 
+                                    placeholder="Ex: AeB, Stecla, Ocle" 
+                                    value={newCompany} 
+                                    onChange={(e) => setNewCompany(e.target.value)} 
+                                    className={`${inputClass} h-10`}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') handleAddCompany(); }}
+                                />
+                                <Button type="button" onClick={handleAddCompany} className="h-10 shrink-0">
+                                    <Plus className="w-4 h-4" />
+                                </Button>
+                            </div>
+
+                            {/* List of Companies */}
+                            <div className="border rounded-2xl overflow-hidden bg-white">
+                                <div className="bg-slate-50 px-4 py-2 text-xs font-black text-slate-500 uppercase tracking-wider border-b">
+                                    Nome da Empresa
+                                </div>
+                                <div className="divide-y max-h-[300px] overflow-y-auto custom-scrollbar">
+                                    {companies.length === 0 ? (
+                                        <div className="p-6 text-center text-xs text-slate-400 italic">
+                                            Nenhuma empresa adicionada.
+                                        </div>
+                                    ) : (
+                                        companies.map((c, idx) => (
+                                            <div key={idx} className="px-4 py-2.5 flex items-center justify-between hover:bg-slate-50/50 transition-colors">
+                                                <span className="text-sm font-semibold text-slate-700">{c}</span>
+                                                <button 
+                                                    onClick={() => handleRemoveCompany(c)} 
+                                                    className="p-1 rounded hover:bg-red-50 text-slate-400 hover:text-destructive transition-all"
+                                                    title="Excluir Empresa"
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 2. Disciplines Configuration (Right) */}
+                        <div className="space-y-6 lg:col-span-2">
+                            <div>
+                                <h3 className="text-sm font-bold text-slate-800 mb-1">2. Vínculo de Disciplinas e Responsáveis</h3>
+                                <p className="text-xs text-muted-foreground">Cadastre disciplinas detalhadas (Sigla + Nome Completo) e vincule aos seus executores.</p>
+                            </div>
+
+                            {/* Add Discipline Form */}
+                            <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl flex flex-wrap items-end gap-3.5">
+                                <div className="space-y-1.5 w-[120px]">
+                                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Sigla *</label>
+                                    <input 
+                                        placeholder="Ex: SDAI" 
+                                        value={newDisc} 
+                                        onChange={(e) => setNewDisc(e.target.value)} 
+                                        className={inputClass}
+                                    />
+                                </div>
+                                <div className="space-y-1.5 flex-1 min-w-[200px]">
+                                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Nome Completo da Disciplina *</label>
+                                    <input 
+                                        placeholder="Ex: Detecção e Alarme de Incêndio" 
+                                        value={newNome} 
+                                        onChange={(e) => setNewNome(e.target.value)} 
+                                        className={inputClass}
+                                    />
+                                </div>
+                                <div className="space-y-1.5 w-[160px]">
+                                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Responsável *</label>
+                                    <select 
+                                        value={newResp} 
+                                        onChange={(e) => setNewResp(e.target.value)} 
+                                        className={inputClass}
+                                        disabled={companies.length === 0}
+                                    >
+                                        {companies.length === 0 ? (
+                                            <option value="">Sem empresas...</option>
+                                        ) : (
+                                            companies.map((c, i) => (
+                                                <option key={i} value={c}>{c}</option>
+                                            ))
+                                        )}
+                                    </select>
+                                </div>
+                                <Button type="button" onClick={handleAddDiscipline} className="h-10 shrink-0">
+                                    <Plus className="w-4 h-4 mr-2" />
+                                    Vincular
+                                </Button>
+                            </div>
+
+                            {/* Table of Disciplines Mapping */}
+                            <div className="border rounded-2xl overflow-hidden bg-white">
+                                <table className="w-full text-left text-sm border-collapse">
+                                    <thead>
+                                        <tr className="bg-slate-50 border-b text-xs font-black uppercase text-slate-500 tracking-wider">
+                                            <th className="px-5 py-3 w-[120px]">Sigla</th>
+                                            <th className="px-5 py-3">Nome Completo</th>
+                                            <th className="px-5 py-3 w-[160px]">Responsável</th>
+                                            <th className="px-5 py-3 text-right w-24">Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y">
+                                        {disciplines.length === 0 ? (
+                                            <tr>
+                                                <td colSpan={4} className="px-5 py-10 text-center text-slate-400 italic">
+                                                    Nenhum vínculo configurado. Novos apontamentos usarão a regra padrão de fallback do sistema.
+                                                </td>
+                                            </tr>
+                                        ) : (
+                                            disciplines.map((item, idx) => {
+                                                const isEditing = editingIdx === idx;
+
+                                                return (
+                                                    <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                                                        {isEditing ? (
+                                                            <>
+                                                                <td className="px-5 py-2">
+                                                                    <input 
+                                                                        value={editSigla} 
+                                                                        onChange={(e) => setEditSigla(e.target.value)} 
+                                                                        className={compactInputStyle}
+                                                                        title="Sigla"
+                                                                    />
+                                                                </td>
+                                                                <td className="px-5 py-2">
+                                                                    <input 
+                                                                        value={editNome} 
+                                                                        onChange={(e) => setEditNome(e.target.value)} 
+                                                                        className={compactInputStyle}
+                                                                        title="Nome Completo"
+                                                                    />
+                                                                </td>
+                                                                <td className="px-5 py-2">
+                                                                    <select 
+                                                                        value={editResp} 
+                                                                        onChange={(e) => setEditResp(e.target.value)} 
+                                                                        className={compactInputStyle}
+                                                                        title="Responsável"
+                                                                    >
+                                                                        {companies.map((c, i) => (
+                                                                            <option key={i} value={c}>{c}</option>
+                                                                        ))}
+                                                                    </select>
+                                                                </td>
+                                                                <td className="px-5 py-2 text-right flex justify-end gap-1">
+                                                                    <button 
+                                                                        onClick={() => saveEditDiscipline(idx)} 
+                                                                        className="p-1.5 rounded hover:bg-emerald-50 text-emerald-600 transition-all"
+                                                                        title="Salvar Edição"
+                                                                    >
+                                                                        <Save className="w-3.5 h-3.5" />
+                                                                    </button>
+                                                                    <button 
+                                                                        onClick={() => setEditingIdx(null)} 
+                                                                        className="p-1.5 rounded hover:bg-slate-100 text-slate-400 transition-all"
+                                                                        title="Cancelar"
+                                                                    >
+                                                                        ✕
+                                                                    </button>
+                                                                </td>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <td className="px-5 py-3 font-bold text-slate-700 uppercase">{item.sigla}</td>
+                                                                <td className="px-5 py-3 text-slate-600 font-medium">{item.nome}</td>
+                                                                <td className="px-5 py-3">
+                                                                    <span className="text-[11px] font-extrabold px-3 py-1 rounded-full border bg-slate-100 text-slate-600 border-slate-200">
+                                                                        {item.responsavel}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="px-5 py-3 text-right">
+                                                                    <div className="flex justify-end gap-1">
+                                                                        <button 
+                                                                            onClick={() => startEditDiscipline(idx, item)} 
+                                                                            className="p-1.5 rounded text-slate-400 hover:text-amber-500 hover:bg-amber-50 transition-all"
+                                                                            title="Editar Disciplina"
+                                                                        >
+                                                                            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                                                                        </button>
+                                                                        <button 
+                                                                            onClick={() => handleRemoveDiscipline(idx)} 
+                                                                            className="p-1.5 rounded text-slate-400 hover:text-destructive hover:bg-red-50 transition-all"
+                                                                            title="Excluir Disciplina"
+                                                                        >
+                                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                                        </button>
+                                                                    </div>
+                                                                </td>
+                                                            </>
+                                                        )}
+                                                    </tr>
+                                                );
+                                            })
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
+    );
+}
+
+

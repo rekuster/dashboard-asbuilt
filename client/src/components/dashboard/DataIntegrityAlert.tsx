@@ -4,8 +4,8 @@ import { useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 
-export default function DataIntegrityAlert() {
-    const { data: validacao } = trpc.dashboard.getValidacaoIntegridade.useQuery();
+export default function DataIntegrityAlert({ projectId }: { projectId: string }) {
+    const { data: validacao } = trpc.dashboard.getValidacaoIntegridade.useQuery({ projectId });
     const [isExpanded, setIsExpanded] = useState(false);
 
     if (!validacao || !validacao.temProblemas) return null;

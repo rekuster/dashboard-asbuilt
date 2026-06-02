@@ -8,7 +8,7 @@
  */
 
 import "dotenv/config";
-import { eq, and, sql, desc, like } from "drizzle-orm";
+import { eq, and, sql, desc, like, or, exists } from "drizzle-orm";
 // import { drizzle as drizzleSqlite } from "drizzle-orm/better-sqlite3"; // REMOVED STATIC IMPORT
 import { drizzle as drizzlePg } from "drizzle-orm/postgres-js";
 // import Database from "better-sqlite3"; // REMOVED STATIC IMPORT
@@ -43,7 +43,8 @@ export async function getDb() {
                 _client = postgres(process.env.DATABASE_URL, {
                     ssl: { rejectUnauthorized: false },
                     max: 10,
-                    prepare: false
+                    prepare: false,
+                    connect_timeout: 10 // Limite de 10 segundos para conectar, evitando travamentos
                 });
                 _db = drizzlePg(_client, { schema: pgSchema });
             } else {
@@ -96,19 +97,19 @@ export async function getUserByOpenId(openId: string) {
 // SALAS FUNCTIONS
 // ============================================================================
 
-export async function getAllSalas() {
+export async function getAllSalas(projectId: string) {
     const db = await getDb();
     if (!db) return [];
-    return db.select().from(salas);
+    return db.select().from(salas).where(eq(salas.projectId, projectId));
 }
 
-export async function getDistinctPavimentos(edificacao?: string) {
+export async function getDistinctPavimentos(projectId: string, edificacao?: string) {
     const db = await getDb();
     if (!db) return [];
     
-    let query = db.selectDistinct({ pavimento: salas.pavimento }).from(salas);
+    let query = db.selectDistinct({ pavimento: salas.pavimento }).from(salas).where(eq(salas.projectId, projectId));
     if (edificacao && edificacao !== "Todas") {
-        query = query.where(eq(salas.edificacao, edificacao));
+        query = query.where(and(eq(salas.projectId, projectId), eq(salas.edificacao, edificacao))) as any;
     }
     
     const result = await query;
@@ -188,10 +189,10 @@ export async function unlinkIfcFromRoom(salaId: number, ifcExpressId: number | s
 // APONTAMENTOS FUNCTIONS
 // ============================================================================
 
-export async function getAllApontamentos() {
+export async function getAllApontamentos(projectId: string) {
     const db = await getDb();
     if (!db) return [];
-    return db.select().from(apontamentos);
+    return db.select().from(apontamentos).where(eq(apontamentos.projectId, projectId));
 }
 
 export async function getApontamentosBySala(nomeSala: string) {
@@ -245,20 +246,32 @@ export async function deleteApontamento(id: number) {
 // KPI FUNCTIONS
 // ============================================================================
 
-export async function getKPIs(edificacao?: string) {
+export async function getKPIs(projectId: string, edificacao?: string) {
     const db = await getDb();
     if (!db) return null;
 
-    let sQuery = db.select().from(salas);
-    let aQuery = db.select().from(apontamentos);
+    let sQuery = db.select({
+        id: salas.id,
+        status: salas.status,
+        statusRA: salas.statusRA,
+        dataVerificada: salas.dataVerificada,
+        temForro: salas.temForro
+    }).from(salas).where(eq(salas.projectId, projectId));
 
-    if (edificacao) {
-        sQuery = sQuery.where(eq(salas.edificacao, edificacao)) as any;
-        aQuery = aQuery.where(eq(apontamentos.edificacao, edificacao)) as any;
+    let aQuery = db.select({
+        id: apontamentos.id,
+        sala: apontamentos.sala
+    }).from(apontamentos).where(eq(apontamentos.projectId, projectId));
+
+    if (edificacao && edificacao !== "Todas") {
+        sQuery = sQuery.where(and(eq(salas.projectId, projectId), eq(salas.edificacao, edificacao))) as any;
+        aQuery = aQuery.where(and(eq(apontamentos.projectId, projectId), eq(apontamentos.edificacao, edificacao))) as any;
     }
 
-    const allSalas = await sQuery;
-    const allApontamentos = await aQuery;
+    const [allSalas, allApontamentos] = await Promise.all([
+        sQuery,
+        aQuery
+    ]);
 
     const totalSalas = allSalas.length;
     const totalApontamentos = allApontamentos.length;
@@ -289,10 +302,19 @@ export async function getKPIs(edificacao?: string) {
     const limitePast = agora - (limitDays * 24 * 60 * 60 * 1000);
 
     // O ritmo de verificação é da equipe (global), independente do prédio
-    const globSalas = await db.select().from(salas);
-    const globDatasRecentes = globSalas
-        .map((s: any) => s.dataVerificada ? new Date(s.dataVerificada).getTime() : 0)
-        .filter((time: number) => time > limitePast);
+    // Otimização: Reaproveitar 'allSalas' se edificacao for global, evitando uma query extra ao banco.
+    // Caso contrário, seleciona apenas a coluna 'dataVerificada'.
+    let globDatasRecentes: number[] = [];
+    if (!edificacao || edificacao === "Todas") {
+        globDatasRecentes = allSalas
+            .map((s: any) => s.dataVerificada ? new Date(s.dataVerificada).getTime() : 0)
+            .filter((time: number) => time > limitePast);
+    } else {
+        const globSalas = await db.select({ dataVerificada: salas.dataVerificada }).from(salas).where(eq(salas.projectId, projectId));
+        globDatasRecentes = globSalas
+            .map((s: any) => s.dataVerificada ? new Date(s.dataVerificada).getTime() : 0)
+            .filter((time: number) => time > limitePast);
+    }
 
     let velocidadeVerificacao = 0; // salas por dia (global)
     if (globDatasRecentes.length > 0) {
@@ -315,6 +337,14 @@ export async function getKPIs(edificacao?: string) {
         estimativaTermino = new Date(agora).toISOString();
     }
 
+    const salasComForro = allSalas.filter((s: any) => !!s.temForro).length;
+
+    // Salas com forro que já foram verificadas
+    const salasVerificadasComForro = allSalas.filter((s: any) => {
+        const isVerificada = ['VERIFICADA', 'REVISAR', 'EM REVISÃO'].includes((s.status || '').trim().toUpperCase());
+        return !!s.temForro && isVerificada;
+    }).length;
+
     return {
         totalSalas,
         salasVerificadas,
@@ -326,18 +356,21 @@ export async function getKPIs(edificacao?: string) {
         taxaCriticidade: totalSalas > 0 ? (salasCriticas / totalSalas) * 100 : 0,
         mediaApontamentos: salasVerificadas > 0 ? totalApontamentos / salasVerificadas : 0,
         estimativaTermino,
-        velocidadeVerificacao
+        velocidadeVerificacao,
+        salasComForro,
+        salasVerificadasComForro,
+        percentualForroVerificadas: salasComForro > 0 ? (salasVerificadasComForro / salasComForro) * 100 : 0,
     };
 }
 
-export async function getTendenciaVerificacao(edificacao?: string) {
+export async function getTendenciaVerificacao(projectId: string, edificacao?: string) {
     const db = await getDb();
     if (!db) return [];
 
-    // Busca dados base da mesma forma que os KPIs para manter as métricas idênticas
-    let sQuery = db.select().from(salas);
-    if (edificacao) {
-        sQuery = db.select().from(salas).where(eq(salas.edificacao, edificacao));
+    // Otimização: Selecionar apenas a coluna necessária
+    let sQuery = db.select({ dataVerificada: salas.dataVerificada }).from(salas).where(eq(salas.projectId, projectId));
+    if (edificacao && edificacao !== "Todas") {
+        sQuery = db.select({ dataVerificada: salas.dataVerificada }).from(salas).where(and(eq(salas.projectId, projectId), eq(salas.edificacao, edificacao)));
     }
     const allSalas = await sQuery;
     const totalSalas = allSalas.length;
@@ -385,10 +418,19 @@ export async function getTendenciaVerificacao(edificacao?: string) {
         const agora = Date.now();
         const limitePast = agora - (limitDays * 24 * 60 * 60 * 1000);
         
-        const globSalas = await db.select().from(salas);
-        const globDatasRecentes = globSalas
-            .map((s: any) => s.dataVerificada ? new Date(s.dataVerificada).getTime() : 0)
-            .filter((time: number) => time > limitePast);
+        // Otimização: Reaproveitar 'allSalas' se edificacao for global, evitando uma query extra ao banco.
+        // Caso contrário, seleciona apenas a coluna 'dataVerificada'.
+        let globDatasRecentes: number[] = [];
+        if (!edificacao || edificacao === "Todas") {
+            globDatasRecentes = allSalas
+                .map((s: any) => s.dataVerificada ? new Date(s.dataVerificada).getTime() : 0)
+                .filter((time: number) => time > limitePast);
+        } else {
+            const globSalas = await db.select({ dataVerificada: salas.dataVerificada }).from(salas).where(eq(salas.projectId, projectId));
+            globDatasRecentes = globSalas
+                .map((s: any) => s.dataVerificada ? new Date(s.dataVerificada).getTime() : 0)
+                .filter((time: number) => time > limitePast);
+        }
 
         if (globDatasRecentes.length > 0) {
             const minDataRecente = Math.min(...globDatasRecentes);
@@ -446,20 +488,22 @@ export async function getTendenciaVerificacao(edificacao?: string) {
     return resultadoFinal;
 }
 
-export async function getStatsStatus(edificacao?: string) {
+export async function getStatsStatus(projectId: string, edificacao?: string) {
     const db = await getDb();
     if (!db) return [];
 
-    let sQuery = db.select().from(salas);
-    let aQuery = db.select().from(apontamentos);
+    let sQuery = db.select({ status: salas.status }).from(salas).where(eq(salas.projectId, projectId));
+    let aQuery = db.select({ sala: apontamentos.sala }).from(apontamentos).where(eq(apontamentos.projectId, projectId));
 
-    if (edificacao) {
-        sQuery = sQuery.where(eq(salas.edificacao, edificacao));
-        aQuery = aQuery.where(eq(apontamentos.edificacao, edificacao));
+    if (edificacao && edificacao !== "Todas") {
+        sQuery = sQuery.where(and(eq(salas.projectId, projectId), eq(salas.edificacao, edificacao))) as any;
+        aQuery = aQuery.where(and(eq(apontamentos.projectId, projectId), eq(apontamentos.edificacao, edificacao))) as any;
     }
 
-    const allRooms = await sQuery;
-    const allApontamentos = await aQuery;
+    const [allRooms, allApontamentos] = await Promise.all([
+        sQuery,
+        aQuery
+    ]);
 
     const issuesPerRoom = new Map<string, number>();
     allApontamentos.forEach((a: any) => {
@@ -487,7 +531,7 @@ export async function getStatsStatus(edificacao?: string) {
     ];
 }
 
-export async function getTopSalasImpactadas(edificacao?: string) {
+export async function getTopSalasImpactadas(projectId: string, edificacao?: string) {
     const db = await getDb();
     if (!db) return [];
 
@@ -495,10 +539,10 @@ export async function getTopSalasImpactadas(edificacao?: string) {
         sala: apontamentos.sala,
         count: sql<number>`count(*)`,
         edificacao: apontamentos.edificacao
-    }).from(apontamentos);
+    }).from(apontamentos).where(eq(apontamentos.projectId, projectId));
 
     if (edificacao) {
-        query.where(eq(apontamentos.edificacao, edificacao));
+        query = query.where(and(eq(apontamentos.projectId, projectId), eq(apontamentos.edificacao, edificacao))) as any;
     }
 
     // Simplificado group by para evitar erros no Postgres com colunas filtradas
@@ -508,18 +552,18 @@ export async function getTopSalasImpactadas(edificacao?: string) {
         .limit(5);
 }
 
-export async function getApontamentosPorSala() {
+export async function getApontamentosPorSala(projectId: string) {
     const db = await getDb();
     if (!db) return [];
     const results = await db.select({
         sala: apontamentos.sala,
         count: sql<number>`count(*)`
-    }).from(apontamentos).groupBy(apontamentos.sala).orderBy(desc(sql`count(*)`)).limit(10);
+    }).from(apontamentos).where(eq(apontamentos.projectId, projectId)).groupBy(apontamentos.sala).orderBy(desc(sql`count(*)`)).limit(10);
 
     return results.map((r: any) => ({ ...r, count: Number(r.count) }));
 }
 
-export async function getApontamentosPorDisciplina(edificacao?: string) {
+export async function getApontamentosPorDisciplina(projectId: string, edificacao?: string) {
     const db = await getDb();
     if (!db) return [];
 
@@ -531,9 +575,9 @@ export async function getApontamentosPorDisciplina(edificacao?: string) {
     let query: any = db.select({
         disciplina: disciplinaCol,
         count: sql<number>`count(*)`
-    }).from(apontamentos);
+    }).from(apontamentos).where(eq(apontamentos.projectId, projectId));
 
-    if (edificacao) query = query.where(eq(apontamentos.edificacao, edificacao));
+    if (edificacao) query = query.where(and(eq(apontamentos.projectId, projectId), eq(apontamentos.edificacao, edificacao)));
 
     const results = await query.groupBy(disciplinaCol).orderBy(desc(sql`count(*)`));
     return results.map((r: any) => ({
@@ -542,16 +586,16 @@ export async function getApontamentosPorDisciplina(edificacao?: string) {
     }));
 }
 
-export async function getTopDivergencias() {
+export async function getTopDivergencias(projectId: string) {
     const db = await getDb();
     if (!db) return [];
     return db.select({
         divergencia: apontamentos.divergencia,
         count: sql<number>`count(*)`
-    }).from(apontamentos).groupBy(apontamentos.divergencia).orderBy(desc(sql`count(*)`)).limit(5);
+    }).from(apontamentos).where(eq(apontamentos.projectId, projectId)).groupBy(apontamentos.divergencia).orderBy(desc(sql`count(*)`)).limit(5);
 }
 
-export async function getApontamentosPorSemana(edificacao?: string) {
+export async function getApontamentosPorSemana(projectId: string, edificacao?: string) {
     const db = await getDb();
     if (!db) return [];
 
@@ -566,35 +610,40 @@ export async function getApontamentosPorSemana(edificacao?: string) {
         ? sql<string>`to_char(${col}, 'IYYY-"W"IW')`
         : sql<string>`strftime('%Y-W%W', ${col} / 1000, 'unixepoch')`;
 
-    // 3. Query Appointments (count findings)
-    const weeklyApontamentos = await db.select({
-        semana: weekFormat,
-        count: sql<number>`count(*)`
-    }).from(apontamentos)
-        .where(edificacao ? eq(apontamentos.edificacao, edificacao) : sql`TRUE`)
-        .groupBy(weekFormat);
+    // Otimização: Rodar as 3 consultas de agrupamento em paralelo via Promise.all
+    const [weeklyApontamentos, weeklyV1, weeklyV2] = await Promise.all([
+        // 3. Query Appointments (count findings)
+        db.select({
+            semana: weekFormat,
+            count: sql<number>`count(*)`
+        }).from(apontamentos)
+            .where(edificacao && edificacao !== "Todas" ? and(eq(apontamentos.projectId, projectId), eq(apontamentos.edificacao, edificacao)) : eq(apontamentos.projectId, projectId))
+            .groupBy(weekFormat),
 
-    // 4. Query Verified Rooms - Date 1 (dataVerificada)
-    const weeklyV1 = await db.select({
-        semana: getWeekFormat(salas.dataVerificada),
-        count: sql<number>`count(*)`
-    }).from(salas)
-        .where(and(
-            sql`${salas.dataVerificada} IS NOT NULL`,
-            edificacao ? eq(salas.edificacao, edificacao) : sql`TRUE`
-        ))
-        .groupBy(getWeekFormat(salas.dataVerificada));
+        // 4. Query Verified Rooms - Date 1 (dataVerificada)
+        db.select({
+            semana: getWeekFormat(salas.dataVerificada),
+            count: sql<number>`count(*)`
+        }).from(salas)
+            .where(and(
+                sql`${salas.dataVerificada} IS NOT NULL`,
+                eq(salas.projectId, projectId),
+                edificacao && edificacao !== "Todas" ? eq(salas.edificacao, edificacao) : sql`TRUE`
+            ))
+            .groupBy(getWeekFormat(salas.dataVerificada)),
 
-    // 5. Query Verified Rooms - Date 2 (dataVerificacao2)
-    const weeklyV2 = await db.select({
-        semana: getWeekFormat(salas.dataVerificacao2),
-        count: sql<number>`count(*)`
-    }).from(salas)
-        .where(and(
-            sql`${salas.dataVerificacao2} IS NOT NULL`,
-            edificacao ? eq(salas.edificacao, edificacao) : sql`TRUE`
-        ))
-        .groupBy(getWeekFormat(salas.dataVerificacao2));
+        // 5. Query Verified Rooms - Date 2 (dataVerificacao2)
+        db.select({
+            semana: getWeekFormat(salas.dataVerificacao2),
+            count: sql<number>`count(*)`
+        }).from(salas)
+            .where(and(
+                sql`${salas.dataVerificacao2} IS NOT NULL`,
+                eq(salas.projectId, projectId),
+                edificacao && edificacao !== "Todas" ? eq(salas.edificacao, edificacao) : sql`TRUE`
+            ))
+            .groupBy(getWeekFormat(salas.dataVerificacao2))
+    ]);
 
     // 6. Merge results
     const weeksMap = new Map<string, { semana: string; count: number; verifiedRooms: number }>();
@@ -642,45 +691,45 @@ export async function getApontamentosPorSemana(edificacao?: string) {
 // EDIFICAÇÃO FUNCTIONS
 // ============================================================================
 
-export async function getEdificacoes() {
+export async function getEdificacoes(projectId: string) {
     const db = await getDb();
     if (!db) return [];
-    const result = await db.select({ edificacao: salas.edificacao }).from(salas).groupBy(salas.edificacao).orderBy(salas.edificacao);
+    const result = await db.select({ edificacao: salas.edificacao }).from(salas).where(eq(salas.projectId, projectId)).groupBy(salas.edificacao).orderBy(salas.edificacao);
     return result.map((r: any) => r.edificacao).filter(Boolean);
 }
 
-export async function getKPIsPorEdificacao(edificacao: string) {
-    const kpis = await getKPIs(edificacao);
+export async function getKPIsPorEdificacao(projectId: string, edificacao: string) {
+    const kpis = await getKPIs(projectId, edificacao);
     return kpis ? { ...kpis, edificacao } : null;
 }
 
-export async function getTendenciaVerificacaoPorEdificacao(edificacao: string) {
-    return await getTendenciaVerificacao(edificacao);
+export async function getTendenciaVerificacaoPorEdificacao(projectId: string, edificacao: string) {
+    return await getTendenciaVerificacao(projectId, edificacao);
 }
 
-export async function getSalasPorEdificacao() {
+export async function getSalasPorEdificacao(projectId: string) {
     const db = await getDb();
     if (!db) return [];
     return db.select({
         edificacao: salas.edificacao,
         count: sql<number>`count(*)`
-    }).from(salas).groupBy(salas.edificacao).orderBy(salas.edificacao);
+    }).from(salas).where(eq(salas.projectId, projectId)).groupBy(salas.edificacao).orderBy(salas.edificacao);
 }
 
-export async function getApontamentosPorEdificacao() {
+export async function getApontamentosPorEdificacao(projectId: string) {
     const db = await getDb();
     if (!db) return [];
     return db.select({
         edificacao: salas.edificacao,
         count: sql<number>`count(${apontamentos.id})`
-    }).from(salas).leftJoin(apontamentos, eq(salas.nome, apontamentos.sala)).groupBy(salas.edificacao).orderBy(salas.edificacao);
+    }).from(salas).leftJoin(apontamentos, eq(salas.nome, apontamentos.sala)).where(eq(salas.projectId, projectId)).groupBy(salas.edificacao).orderBy(salas.edificacao);
 }
 
 // ============================================================================
 // DATA INTEGRITY FUNCTIONS
 // ============================================================================
 
-export async function getValidacaoIntegridade() {
+export async function getValidacaoIntegridade(projectId: string) {
     const db = await getDb();
     if (!db) return null;
 
@@ -688,9 +737,9 @@ export async function getValidacaoIntegridade() {
         sala: apontamentos.sala,
         edificacao: apontamentos.edificacao,
         count: sql<number>`count(*)`
-    }).from(apontamentos).groupBy(apontamentos.sala, apontamentos.edificacao);
+    }).from(apontamentos).where(eq(apontamentos.projectId, projectId)).groupBy(apontamentos.sala, apontamentos.edificacao);
 
-    const salasResult = await db.select({ nome: salas.nome }).from(salas);
+    const salasResult = await db.select({ nome: salas.nome }).from(salas).where(eq(salas.projectId, projectId));
     const salasMapeadas = new Set(salasResult.map((s: any) => s.nome));
 
     const naoMapeados = apontamentosResult.filter((a: any) => !salasMapeadas.has(a.sala));
@@ -712,16 +761,21 @@ export async function getValidacaoIntegridade() {
 // IFC FILES FUNCTIONS
 // ============================================================================
 
-export async function getAllIfcFiles() {
+export async function getAllIfcFiles(projectId: string) {
     const db = await getDb();
     if (!db) return [];
-    return db.select().from(ifcFiles);
+    return db.select().from(ifcFiles).where(eq(ifcFiles.projectId, projectId));
 }
 
-export async function getIfcFilesByEdificacao(edificacao: string) {
+export async function getIfcFilesByEdificacao(projectId: string, edificacao: string) {
     const db = await getDb();
     if (!db) return [];
-    return db.select().from(ifcFiles).where(eq(ifcFiles.edificacao, edificacao));
+    return db.select().from(ifcFiles).where(
+        and(
+            eq(ifcFiles.projectId, projectId),
+            eq(ifcFiles.edificacao, edificacao)
+        )
+    );
 }
 
 export async function getIfcFileById(id: number) {
@@ -745,18 +799,18 @@ export async function getRoomStatusColor(nomeSala: string): Promise<string> {
     return '#9CA3AF';
 }
 
-export async function getAllRoomsWithColors() {
+export async function getAllRoomsWithColors(projectId: string) {
     const db = await getDb();
     if (!db) return [];
 
     // 1. Get all rooms
-    const allSalas = await db.select().from(salas);
+    const allSalas = await db.select().from(salas).where(eq(salas.projectId, projectId));
 
     // 2. Get pointing counts for ALL rooms in one go (much faster)
     const pointingCounts = await db.select({
         sala: apontamentos.sala,
         count: sql<number>`count(*)`
-    }).from(apontamentos).groupBy(apontamentos.sala);
+    }).from(apontamentos).where(eq(apontamentos.projectId, projectId)).groupBy(apontamentos.sala);
 
     const pointingMap = new Map(pointingCounts.map((p: any) => [p.sala, Number(p.count)]));
 
@@ -780,10 +834,13 @@ export async function getAllRoomsWithColors() {
 }
 
 // --- Entregas As-Built ---
-export async function getEntregas() {
+export async function getEntregas(projectId: string) {
     const db = await getDb();
     if (!db) return [];
-    return db.select().from(entregasAsBuilt).orderBy(desc(entregasAsBuilt.dataPrevista));
+    return db.select().from(entregasAsBuilt)
+        .innerJoin(escopoAsBuilt, eq(entregasAsBuilt.escopoId, escopoAsBuilt.id))
+        .where(eq(escopoAsBuilt.projectId, projectId))
+        .orderBy(desc(entregasAsBuilt.dataPrevista));
 }
 
 export async function getEntregasHistorico(id: number) {
@@ -951,23 +1008,26 @@ export async function deleteEntrega(id: number) {
     return true;
 }
 
-export async function getEntregasStats(edificacao?: string) {
+export async function getEntregasStats(projectId: string, edificacao?: string) {
     const db = await getDb();
     if (!db) return null;
 
     // 1. Get total from Master List (escopo)
-    let escopoQuery = db.select().from(escopoAsBuilt);
+    let escopoQuery = db.select().from(escopoAsBuilt).where(eq(escopoAsBuilt.projectId, projectId));
     if (edificacao) {
-        (escopoQuery as any) = escopoQuery.where(eq(escopoAsBuilt.edificacao, edificacao));
+        (escopoQuery as any) = escopoQuery.where(and(eq(escopoAsBuilt.projectId, projectId), eq(escopoAsBuilt.edificacao, edificacao)));
     }
     const escopos = await escopoQuery;
 
-    // 2. Get delivery log
-    let entregaQuery = db.select().from(entregasAsBuilt);
+    // 2. Get delivery log (filtered via escopoAsBuilt join)
+    let entregaQuery = db.select({ entregasAsBuilt }).from(entregasAsBuilt)
+        .innerJoin(escopoAsBuilt, eq(entregasAsBuilt.escopoId, escopoAsBuilt.id))
+        .where(eq(escopoAsBuilt.projectId, projectId));
     if (edificacao) {
-        (entregaQuery as any) = entregaQuery.where(eq(entregasAsBuilt.edificacao, edificacao));
+        (entregaQuery as any) = entregaQuery.where(and(eq(escopoAsBuilt.projectId, projectId), eq(entregasAsBuilt.edificacao, edificacao)));
     }
-    const entregas = await entregaQuery;
+    const entregasRaw = await entregaQuery;
+    const entregas = entregasRaw.map((r: any) => r.entregasAsBuilt);
     
     // 3. Calculate "Mapeado" (Aguardando)
     // It's the total models minus those that have at least one delivery recorded or validated
@@ -987,18 +1047,18 @@ export async function getEntregasStats(edificacao?: string) {
     };
 }
 
-export async function getAsBuiltStatus(edificacao?: string) {
+export async function getAsBuiltStatus(projectId: string, edificacao?: string) {
     const db = await getDb();
     if (!db) return null;
 
-    let escopoQuery = db.select().from(escopoAsBuilt);
+    let escopoQuery = db.select().from(escopoAsBuilt).where(eq(escopoAsBuilt.projectId, projectId));
     if (edificacao) {
         escopoQuery = db.select().from(escopoAsBuilt)
-            .where(sql`${escopoAsBuilt.edificacao} ILIKE ${'%' + edificacao + '%'}`) as any;
+            .where(and(eq(escopoAsBuilt.projectId, projectId), sql`${escopoAsBuilt.edificacao} ILIKE ${'%' + edificacao + '%'}`)) as any;
     }
     const escopos = await escopoQuery;
     
-    const { entregasMap, allEntregas } = await getEntregasPorEscopo(edificacao);
+    const { entregasMap, allEntregas } = await getEntregasPorEscopo(projectId, edificacao);
 
     const totalModelos = escopos.length;
     const projectModelsUnique = new Set(escopos.map((e: any) => e.nomeModelo).filter(Boolean));
@@ -1132,15 +1192,20 @@ export async function getAsBuiltStatus(edificacao?: string) {
 /**
  * Helper to get deliveries grouped by scope ID
  */
-async function getEntregasPorEscopo(edificacao?: string) {
+async function getEntregasPorEscopo(projectId: string, edificacao?: string) {
     const db = await getDb();
-    if (!db) return { entregasMap: new Map() };
+    if (!db) return { entregasMap: new Map(), allEntregas: [] };
 
-    let q = db.select().from(entregasAsBuilt);
+    let q = db.select({ entregasAsBuilt }).from(entregasAsBuilt)
+        .innerJoin(escopoAsBuilt, eq(entregasAsBuilt.escopoId, escopoAsBuilt.id))
+        .where(eq(escopoAsBuilt.projectId, projectId));
     if (edificacao) {
-        q = db.select().from(entregasAsBuilt).where(sql`${entregasAsBuilt.edificacao} ILIKE ${'%' + edificacao + '%'}`) as any;
+        q = db.select({ entregasAsBuilt }).from(entregasAsBuilt)
+            .innerJoin(escopoAsBuilt, eq(entregasAsBuilt.escopoId, escopoAsBuilt.id))
+            .where(and(eq(escopoAsBuilt.projectId, projectId), sql`${entregasAsBuilt.edificacao} ILIKE ${'%' + edificacao + '%'}`)) as any;
     }
-    const allEntregas = await q;
+    const raw = await q;
+    const allEntregas = raw.map((r: any) => r.entregasAsBuilt);
     
     const entregasMap = new Map<number, any[]>();
     allEntregas.forEach((e: any) => {
@@ -1158,10 +1223,10 @@ async function getEntregasPorEscopo(edificacao?: string) {
 // ESCOPO AS-BUILT (LISTA MESTRA) FUNCTIONS
 // ============================================================================
 
-export async function getEscopos() {
+export async function getEscopos(projectId: string) {
     const db = await getDb();
     if (!db) return [];
-    return db.select().from(escopoAsBuilt).orderBy(desc(escopoAsBuilt.createdAt));
+    return db.select().from(escopoAsBuilt).where(eq(escopoAsBuilt.projectId, projectId)).orderBy(desc(escopoAsBuilt.createdAt));
 }
 
 export async function upsertEscopo(data: {
@@ -1349,8 +1414,6 @@ export async function listProjects(ownerId: string, email?: string) {
     const db = await getDb();
     if (!db) return [];
     
-    const { or, eq, exists, and } = await import('drizzle-orm');
-    
     // Return projects where user is owner OR is a member by email
     const conditions = [eq(projects.ownerId, ownerId)];
     
@@ -1512,10 +1575,14 @@ export async function getVerificacoes(salaId: number) {
     return db.select().from(verificacaoModelo).where(eq(verificacaoModelo.salaId, salaId));
 }
 
-export async function getAllVerificacoes() {
+export async function getAllVerificacoes(projectId: string) {
     const db = await getDb();
     if (!db) return [];
-    return db.select().from(verificacaoModelo);
+    return db.select({ verificacaoModelo })
+        .from(verificacaoModelo)
+        .innerJoin(salas, eq(verificacaoModelo.salaId, salas.id))
+        .where(eq(salas.projectId, projectId))
+        .then((rows: any[]) => rows.map((r: any) => r.verificacaoModelo));
 }
 
 export async function upsertVerificacao(salaId: number, disciplina: string, status: string, observacao?: string | null, printUrl?: string | null) {
@@ -1571,23 +1638,25 @@ export async function updateApontamentoAsBuilt(id: number, asBuiltNota: string |
 /**
  * Busca o histórico de relatórios gerados (Divergências)
  */
-export async function getHistoricoRelatorios() {
+export async function getHistoricoRelatorios(projectId: string) {
     const db = await getDb();
     if (!db) return [];
     return db.select()
         .from(relatoriosDivergencia)
+        .where(eq(relatoriosDivergencia.projectId, projectId))
         .orderBy(desc(relatoriosDivergencia.createdAt));
 }
 
 /**
  * Registra um novo relatório no histórico
  */
-export async function registrarRelatorioDivergencia(data: any) {
+export async function registrarRelatorioDivergencia(projectId: string, data: any) {
     const db = await getDb();
     if (!db) return null;
     return await db.insert(relatoriosDivergencia)
         .values({
             ...data,
+            projectId,
             createdAt: new Date()
         })
         .returning();
@@ -1596,24 +1665,28 @@ export async function registrarRelatorioDivergencia(data: any) {
 /**
  * Calcula estatísticas de qualidade por disciplina (Para a aba Gestão por Disciplina)
  */
-export async function getStatsPorDisciplina(edificacao?: string) {
+export async function getStatsPorDisciplina(projectId: string, edificacao?: string) {
     const db = await getDb();
     if (!db) return [];
 
-    // 1. Buscar todas as verificações
-    const allVerificacoes = await db.select().from(verificacaoModelo);
+    // 1. Buscar todas as verificações do projeto
+    const allVerificacoes = await db.select({ verificacaoModelo })
+        .from(verificacaoModelo)
+        .innerJoin(salas, eq(verificacaoModelo.salaId, salas.id))
+        .where(eq(salas.projectId, projectId))
+        .then((rows: any[]) => rows.map((r: any) => r.verificacaoModelo));
     
     // 2. Buscar todos os apontamentos ativos
-    let apontamentosQuery = db.select().from(apontamentos).where(eq(apontamentos.status, 'ATIVA'));
+    let apontamentosQuery = db.select().from(apontamentos).where(and(eq(apontamentos.projectId, projectId), eq(apontamentos.status, 'ATIVA')));
     if (edificacao && edificacao !== "Todas") {
-        apontamentosQuery = apontamentosQuery.where(eq(apontamentos.edificacao, edificacao));
+        apontamentosQuery = apontamentosQuery.where(and(eq(apontamentos.projectId, projectId), eq(apontamentos.status, 'ATIVA'), eq(apontamentos.edificacao, edificacao)));
     }
     const allActiveApontamentos = await apontamentosQuery;
 
     // 3. Buscar total de salas
-    let salasQuery = db.select().from(salas);
+    let salasQuery = db.select().from(salas).where(eq(salas.projectId, projectId));
     if (edificacao && edificacao !== "Todas") {
-        salasQuery = salasQuery.where(eq(salas.edificacao, edificacao));
+        salasQuery = salasQuery.where(and(eq(salas.projectId, projectId), eq(salas.edificacao, edificacao)));
     }
     const allSalas = await salasQuery;
     const totalSalasCount = allSalas.length;

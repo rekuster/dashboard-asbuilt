@@ -4,7 +4,21 @@
  * Se você pedir para ver o status dos modelos, este arquivo "pergunta" ao banco de dados e "entrega" a resposta para a tela.
  */
 
-import { publicProcedure, router } from './_core/trpc';
+import {
+    publicProcedure,
+    router,
+    authedProcedure,
+    viewerProcedure,
+    parceiroProcedure,
+    editorProcedure,
+    adminProcedure
+} from './_core/trpc';
+import {
+    listProjectMembers,
+    inviteProjectMember,
+    updateProjectMemberRole,
+    removeProjectMember
+} from './membersService';
 import {
     getKPIs,
     getAllApontamentos,
@@ -80,15 +94,14 @@ export const appRouter = router({
     // PROJECTS ROUTER
     // =========================================================================
     projects: router({
-        list: publicProcedure
+        list: authedProcedure
             .query(async ({ ctx }) => {
-                // For now, use a dummy ownerId until auth middleware passes the real user
-                const userId = (ctx as any).userId || 'anonymous';
+                const userId = ctx.userId;
                 console.log(`[TRPC] listProjects for userId: ${userId}, email: ${ctx.userEmail}`);
                 return await listProjects(userId, ctx.userEmail);
             }),
 
-        create: publicProcedure
+        create: authedProcedure
             .input(z.object({
                 code: z.string().min(1),
                 name: z.string().min(1),
@@ -99,7 +112,7 @@ export const appRouter = router({
                 endDate: z.string().optional(),
             }))
             .mutation(async ({ input, ctx }) => {
-                const userId = (ctx as any).userId || 'anonymous';
+                const userId = ctx.userId;
                 return await createProject({
                     code: input.code,
                     name: input.name,
@@ -113,13 +126,13 @@ export const appRouter = router({
                 } as any);
             }),
 
-        getById: publicProcedure
+        getById: viewerProcedure
             .input(z.object({ id: z.string() }))
             .query(async ({ input }) => {
                 return await getProjectById(input.id);
             }),
 
-        update: publicProcedure
+        update: adminProcedure
             .input(z.object({
                 id: z.string(),
                 code: z.string().optional(),
@@ -130,6 +143,8 @@ export const appRouter = router({
                 startDate: z.string().optional(),
                 endDate: z.string().optional(),
                 status: z.string().optional(),
+                disciplinesConfig: z.string().optional(),
+                companiesConfig: z.string().optional(),
             }))
             .mutation(async ({ input }) => {
                 const { id, ...data } = input;
@@ -139,7 +154,7 @@ export const appRouter = router({
                 return await updateProject(id, updateData);
             }),
 
-        updateBaseline: publicProcedure
+        updateBaseline: adminProcedure
             .input(z.object({
                 id: z.string(),
                 baselineTargetDate: z.string().nullable(),
@@ -150,7 +165,7 @@ export const appRouter = router({
                 return await updateProjectBaseline(input.id, targetDate, input.baselineRoomsPerWeek);
             }),
 
-        saveMasterList: publicProcedure
+        saveMasterList: adminProcedure
             .input(z.object({
                 projectId: z.string(),
                 salas: z.array(z.object({
@@ -165,14 +180,21 @@ export const appRouter = router({
                 return await saveMasterList(input.projectId, input.salas);
             }),
 
-        getSalasByProject: publicProcedure
+        getSalasByProject: viewerProcedure
             .input(z.object({ projectId: z.string() }))
             .query(async ({ input }) => {
                 return await getSalasByProjectId(input.projectId);
             }),
 
-        updateSalaInProject: publicProcedure
+        getUserRole: viewerProcedure
+            .input(z.object({ projectId: z.string() }))
+            .query(({ ctx }) => {
+                return { role: ctx.projectRole as 'owner' | 'admin' | 'editor' | 'viewer' | 'parceiro' };
+            }),
+
+        updateSalaInProject: editorProcedure
             .input(z.object({
+                projectId: z.string(),
                 id: z.number(),
                 nome: z.string().optional(),
                 numeroSala: z.string().optional(),
@@ -181,17 +203,20 @@ export const appRouter = router({
                 setor: z.string().optional(),
             }))
             .mutation(async ({ input }) => {
-                const { id, ...data } = input;
+                const { id, projectId: pId, ...data } = input;
                 return await updateSala(id, data);
             }),
 
-        deleteSalaFromProject: publicProcedure
-            .input(z.object({ id: z.number() }))
+        deleteSalaFromProject: editorProcedure
+            .input(z.object({ 
+                projectId: z.string(),
+                id: z.number() 
+            }))
             .mutation(async ({ input }) => {
                 return await deleteSala(input.id);
             }),
 
-        insertSalaWithRenumber: publicProcedure
+        insertSalaWithRenumber: editorProcedure
             .input(z.object({
                 projectId: z.string(),
                 edificacao: z.string(),
@@ -222,131 +247,155 @@ export const appRouter = router({
 
     dashboard: router({
         // KPIs
-        getKPIs: publicProcedure.query(async () => {
-            return await getKPIs();
-        }),
+        getKPIs: viewerProcedure
+            .input(z.object({ projectId: z.string() }))
+            .query(async ({ input }) => {
+                return await getKPIs(input.projectId);
+            }),
 
         // Salas
-        getSalas: publicProcedure.query(async () => {
-            return await getAllSalas();
-        }),
+        getSalas: viewerProcedure
+            .input(z.object({ projectId: z.string() }))
+            .query(async ({ input }) => {
+                return await getAllSalas(input.projectId);
+            }),
 
-        getAllSalas: publicProcedure.query(async () => {
-            return await getAllSalas();
-        }),
+        getAllSalas: viewerProcedure
+            .input(z.object({ projectId: z.string() }))
+            .query(async ({ input }) => {
+                return await getAllSalas(input.projectId);
+            }),
 
-        getSalaByNome: publicProcedure
-            .input(z.object({ nome: z.string() }))
+        getSalaByNome: viewerProcedure
+            .input(z.object({ projectId: z.string(), nome: z.string() }))
             .query(async ({ input }) => {
                 return await getSalaByNome(input.nome);
             }),
 
         // Apontamentos
-        getApontamentos: publicProcedure.query(async () => {
-            return await getAllApontamentos();
-        }),
+        getApontamentos: viewerProcedure
+            .input(z.object({ projectId: z.string() }))
+            .query(async ({ input }) => {
+                return await getAllApontamentos(input.projectId);
+            }),
 
-        getApontamentosBySala: publicProcedure
-            .input(z.object({ sala: z.string() }))
+        getApontamentosBySala: viewerProcedure
+            .input(z.object({ projectId: z.string(), sala: z.string() }))
             .query(async ({ input }) => {
                 return await getApontamentosBySala(input.sala);
             }),
 
-        getApontamentosPorSala: publicProcedure.query(async () => {
-            return await getApontamentosPorSala();
-        }),
-
-        getApontamentosPorDisciplina: publicProcedure
-            .input(z.object({ edificacao: z.string().optional() }).optional())
+        getApontamentosPorSala: viewerProcedure
+            .input(z.object({ projectId: z.string() }))
             .query(async ({ input }) => {
-                return await getApontamentosPorDisciplina(input?.edificacao);
+                return await getApontamentosPorSala(input.projectId);
             }),
 
-        getTopDivergencias: publicProcedure.query(async () => {
-            return await getTopDivergencias();
-        }),
+        getApontamentosPorDisciplina: viewerProcedure
+            .input(z.object({ projectId: z.string(), edificacao: z.string().optional() }))
+            .query(async ({ input }) => {
+                return await getApontamentosPorDisciplina(input.projectId, input.edificacao);
+            }),
 
-        deleteApontamento: publicProcedure
+        getTopDivergencias: viewerProcedure
+            .input(z.object({ projectId: z.string() }))
+            .query(async ({ input }) => {
+                return await getTopDivergencias(input.projectId);
+            }),
+
+        deleteApontamento: editorProcedure
             .input(z.object({ id: z.number() }))
             .mutation(async ({ input }) => {
                 const { deleteApontamento } = await import('./db');
                 return await deleteApontamento(input.id);
             }),
 
-        getApontamentosPorSemana: publicProcedure
-            .input(z.object({ edificacao: z.string().optional() }).optional())
+        getApontamentosPorSemana: viewerProcedure
+            .input(z.object({ projectId: z.string(), edificacao: z.string().optional() }))
             .query(async ({ input }) => {
-                return await getApontamentosPorSemana(input?.edificacao);
+                return await getApontamentosPorSemana(input.projectId, input.edificacao);
             }),
 
         // Edificação
-        getEdificacoes: publicProcedure.query(async () => {
-            return await getEdificacoes();
-        }),
-
-        getKPIsPorEdificacao: publicProcedure
-            .input(z.object({ edificacao: z.string() }))
+        getEdificacoes: viewerProcedure
+            .input(z.object({ projectId: z.string() }))
             .query(async ({ input }) => {
-                return await getKPIsPorEdificacao(input.edificacao);
+                return await getEdificacoes(input.projectId);
+            }),
+
+        getKPIsPorEdificacao: viewerProcedure
+            .input(z.object({ projectId: z.string(), edificacao: z.string() }))
+            .query(async ({ input }) => {
+                return await getKPIsPorEdificacao(input.projectId, input.edificacao);
             }),
             
-        getTendenciaVerificacao: publicProcedure.query(async () => {
-            return await getTendenciaVerificacao();
-        }),
-
-        getTendenciaVerificacaoPorEdificacao: publicProcedure
-            .input(z.object({ edificacao: z.string() }))
+        getTendenciaVerificacao: viewerProcedure
+            .input(z.object({ projectId: z.string() }))
             .query(async ({ input }) => {
-                return await getTendenciaVerificacaoPorEdificacao(input.edificacao);
+                return await getTendenciaVerificacao(input.projectId);
             }),
 
-        getSalasPorEdificacao: publicProcedure.query(async () => {
-            return await getSalasPorEdificacao();
-        }),
+        getTendenciaVerificacaoPorEdificacao: viewerProcedure
+            .input(z.object({ projectId: z.string(), edificacao: z.string() }))
+            .query(async ({ input }) => {
+                return await getTendenciaVerificacaoPorEdificacao(input.projectId, input.edificacao);
+            }),
 
-        getApontamentosPorEdificacao: publicProcedure.query(async () => {
-            return await getApontamentosPorEdificacao();
-        }),
+        getSalasPorEdificacao: viewerProcedure
+            .input(z.object({ projectId: z.string() }))
+            .query(async ({ input }) => {
+                return await getSalasPorEdificacao(input.projectId);
+            }),
+
+        getApontamentosPorEdificacao: viewerProcedure
+            .input(z.object({ projectId: z.string() }))
+            .query(async ({ input }) => {
+                return await getApontamentosPorEdificacao(input.projectId);
+            }),
 
         // Data Integrity
-        getValidacaoIntegridade: publicProcedure.query(async () => {
-            return await getValidacaoIntegridade();
-        }),
+        getValidacaoIntegridade: viewerProcedure
+            .input(z.object({ projectId: z.string() }))
+            .query(async ({ input }) => {
+                return await getValidacaoIntegridade(input.projectId);
+            }),
 
         // Statistics
-        getStatsStatus: publicProcedure
-            .input(z.object({ edificacao: z.string().optional() }).optional())
+        getStatsStatus: viewerProcedure
+            .input(z.object({ projectId: z.string(), edificacao: z.string().optional() }))
             .query(async ({ input }) => {
-                return await getStatsStatus(input?.edificacao);
+                return await getStatsStatus(input.projectId, input.edificacao);
             }),
 
-        getTopSalasImpactadas: publicProcedure
-            .input(z.object({ edificacao: z.string().optional() }).optional())
+        getTopSalasImpactadas: viewerProcedure
+            .input(z.object({ projectId: z.string(), edificacao: z.string().optional() }))
             .query(async ({ input }) => {
-                return await getTopSalasImpactadas(input?.edificacao);
+                return await getTopSalasImpactadas(input.projectId, input.edificacao);
             }),
             
-        getStatsPorDisciplina: publicProcedure
-            .input(z.object({ edificacao: z.string().optional() }).optional())
+        getStatsPorDisciplina: viewerProcedure
+            .input(z.object({ projectId: z.string(), edificacao: z.string().optional() }))
             .query(async ({ input }) => {
-                return await getStatsPorDisciplina(input?.edificacao);
+                return await getStatsPorDisciplina(input.projectId, input.edificacao);
             }),
 
         // Excel Upload
-        uploadExcel: publicProcedure
+        uploadExcel: editorProcedure
             .input(z.object({
+                projectId: z.string(),
                 fileBuffer: z.string(),
                 fileName: z.string().optional(),
             }))
             .mutation(async ({ input }) => {
                 const buffer = Buffer.from(input.fileBuffer, 'base64');
-                const result = await handleExcelUpload(buffer, input.fileName);
+                const result = await handleExcelUpload(buffer, input.fileName, input.projectId);
                 return result;
             }),
 
         // Reports
         getPDFReport: publicProcedure
             .input(z.object({ 
+                projectId: z.string(),
                 edificacao: z.string().optional(),
                 pavimento: z.string().optional(),
                 startDate: z.string().optional(),
@@ -354,58 +403,62 @@ export const appRouter = router({
                 apenasNaoEnviados: z.boolean().optional(),
                 disciplina: z.string().optional(),
                 responsavel: z.string().optional(),
-            }).optional())
+            }))
             .query(async ({ input }) => {
-                const buffer = await generatePDFReport({ 
-                    edificacao: input?.edificacao,
-                    pavimento: input?.pavimento,
-                    startDate: input?.startDate,
-                    endDate: input?.endDate,
-                    apenasNaoEnviados: input?.apenasNaoEnviados,
-                    disciplina: input?.disciplina,
-                    responsavel: input?.responsavel,
+                const buffer = await generatePDFReport(input.projectId, { 
+                    edificacao: input.edificacao,
+                    pavimento: input.pavimento,
+                    startDate: input.startDate,
+                    endDate: input.endDate,
+                    apenasNaoEnviados: input.apenasNaoEnviados,
+                    disciplina: input.disciplina,
+                    responsavel: input.responsavel,
                 });
                 return buffer.toString('base64');
             }),
 
         getExcelReport: publicProcedure
             .input(z.object({ 
+                projectId: z.string(),
                 edificacao: z.string().optional(),
                 pavimento: z.string().optional()
-            }).optional())
+            }))
             .query(async ({ input }) => {
-                const buffer = await generateExcelReport(input?.edificacao); // Note: generateExcelReport might need update too if user wants pavimento there
+                const buffer = await generateExcelReport(input.projectId, input.edificacao);
                 return buffer.toString('base64');
             }),
 
         getAsBuiltReport: publicProcedure
             .input(z.object({ 
+                projectId: z.string(),
                 edificacao: z.string().optional(),
                 pavimento: z.string().optional(),
                 startDate: z.string().optional(),
                 endDate: z.string().optional(),
-            }).optional())
+            }))
             .query(async ({ input }) => {
-                const buffer = await generateAsBuiltReport({ 
-                    edificacao: input?.edificacao,
-                    pavimento: input?.pavimento,
-                    startDate: input?.startDate,
-                    endDate: input?.endDate,
+                const buffer = await generateAsBuiltReport(input.projectId, { 
+                    edificacao: input.edificacao,
+                    pavimento: input.pavimento,
+                    startDate: input.startDate,
+                    endDate: input.endDate,
                 });
                 return buffer.toString('base64');
             }),
 
         getPavimentos: publicProcedure
-            .input(z.object({ edificacao: z.string().optional() }).optional())
+            .input(z.object({ projectId: z.string(), edificacao: z.string().optional() }))
             .query(async ({ input }) => {
                 const { getDistinctPavimentos } = await import('./db');
-                return await getDistinctPavimentos(input?.edificacao);
+                return await getDistinctPavimentos(input.projectId, input.edificacao);
             }),
 
         // Entregas As-Built
-        getEntregas: publicProcedure.query(async () => {
-            return await getEntregas();
-        }),
+        getEntregas: publicProcedure
+            .input(z.object({ projectId: z.string() }))
+            .query(async ({ input }) => {
+                return await getEntregas(input.projectId);
+            }),
 
         upsertEntrega: publicProcedure
             .input(z.object({
@@ -455,21 +508,23 @@ export const appRouter = router({
             }),
 
         getEntregasStats: publicProcedure
-            .input(z.object({ edificacao: z.string().optional() }).optional())
+            .input(z.object({ projectId: z.string(), edificacao: z.string().optional() }))
             .query(async ({ input }) => {
-                return await getEntregasStats(input?.edificacao);
+                return await getEntregasStats(input.projectId, input.edificacao);
             }),
 
         getAsBuiltStatus: publicProcedure
-            .input(z.object({ edificacao: z.string().optional() }))
+            .input(z.object({ projectId: z.string(), edificacao: z.string().optional() }))
             .query(async ({ input }) => {
-                return await getAsBuiltStatus(input.edificacao);
+                return await getAsBuiltStatus(input.projectId, input.edificacao);
             }),
 
         // Escopo As-Built (Lista Mestra)
-        getEscopos: publicProcedure.query(async () => {
-            return await getEscopos();
-        }),
+        getEscopos: publicProcedure
+            .input(z.object({ projectId: z.string() }))
+            .query(async ({ input }) => {
+                return await getEscopos(input.projectId);
+            }),
 
         upsertEscopo: publicProcedure
             .input(z.object({
@@ -531,10 +586,35 @@ export const appRouter = router({
                 comentario: z.string().optional(),
             }))
             .mutation(async ({ input }) => {
+                let responsavel = "Não Definido";
+                
+                if (input.projectId) {
+                    const { getProjectById } = await import('./db');
+                    const proj = await getProjectById(input.projectId);
+                    if (proj?.disciplinesConfig) {
+                        try {
+                            const customConfigs = JSON.parse(proj.disciplinesConfig);
+                            // Search for a matching discipline (case insensitive)
+                            const match = customConfigs.find((c: any) => c.disciplina.toUpperCase() === input.disciplina.toUpperCase());
+                            if (match) {
+                                responsavel = match.responsavel;
+                            } else {
+                                responsavel = assignResponsavel(input.disciplina);
+                            }
+                        } catch (e) {
+                            responsavel = assignResponsavel(input.disciplina);
+                        }
+                    } else {
+                        responsavel = assignResponsavel(input.disciplina);
+                    }
+                } else {
+                    responsavel = assignResponsavel(input.disciplina);
+                }
+
                 const data = {
                     ...input,
                     data: typeof input.data === 'string' ? new Date(input.data) : input.data,
-                    responsavel: assignResponsavel(input.disciplina),
+                    responsavel,
                     status: input.status || 'ATIVA'
                 };
                 return await createApontamento(data as any);
@@ -592,6 +672,7 @@ export const appRouter = router({
                 obs2: z.string().optional(),
                 augin: z.number().optional(),
                 imagemPlantaUrl: z.string().optional(),
+                temForro: z.number().optional(),
             }))
             .mutation(async ({ input }) => {
                 const { id, ...data } = input;
@@ -665,9 +746,11 @@ export const appRouter = router({
                 return await db.updateApontamentoAsBuilt(id, asBuiltNota || null, asBuiltPrintUrl || null, status || undefined);
             }),
 
-        getAllVerificacoes: publicProcedure.query(async () => {
-            return await getAllVerificacoes();
-        }),
+        getAllVerificacoes: publicProcedure
+            .input(z.object({ projectId: z.string() }))
+            .query(async ({ input }) => {
+                return await getAllVerificacoes(input.projectId);
+            }),
 
         // Marca apontamentos como enviados em um relatório
         markApontamentosAsSent: publicProcedure
@@ -694,6 +777,7 @@ export const appRouter = router({
         // Marca apontamentos como enviados usando os mesmos filtros do relatório
         markApontamentosAsSentByFilters: publicProcedure
             .input(z.object({
+                projectId: z.string(),
                 edificacao: z.string().optional(),
                 pavimento: z.string().optional(),
                 startDate: z.string().optional(),
@@ -714,7 +798,7 @@ export const appRouter = router({
                     .from(apontamentos)
                     .innerJoin(salas, eq(apontamentos.sala, salas.nome));
 
-                const conditions: any[] = [];
+                const conditions: any[] = [eq(apontamentos.projectId, input.projectId)];
                 if (input.edificacao && input.edificacao !== "Todas") conditions.push(eq(apontamentos.edificacao, input.edificacao));
                 if (input.pavimento && input.pavimento !== "Todos") conditions.push(eq(apontamentos.pavimento, input.pavimento));
                 if (input.startDate) conditions.push(gte(apontamentos.data, new Date(input.startDate)));
@@ -751,7 +835,7 @@ export const appRouter = router({
 
                 // REGISTRAR NO HISTÓRICO
                 const { registrarRelatorioDivergencia } = await import('./db');
-                await registrarRelatorioDivergencia({
+                await registrarRelatorioDivergencia(input.projectId, {
                     titulo: `Relatório CQ - ${new Date().toLocaleDateString('pt-BR')}`,
                     periodoInicio: input.startDate ? new Date(input.startDate) : null,
                     periodoFim: input.endDate ? new Date(input.endDate) : null,
@@ -763,54 +847,62 @@ export const appRouter = router({
                 return { success: true, count: ids.length };
             }),
 
-        getHistoricoRelatorios: publicProcedure.query(async () => {
-            const { getHistoricoRelatorios } = await import('./db');
-            return await getHistoricoRelatorios();
-        }),
+        getHistoricoRelatorios: publicProcedure
+            .input(z.object({ projectId: z.string() }))
+            .query(async ({ input }) => {
+                const { getHistoricoRelatorios } = await import('./db');
+                return await getHistoricoRelatorios(input.projectId);
+            }),
     }),
 
     ifc: router({
         // Get all IFC files
-        getAllFiles: publicProcedure.query(async () => {
-            return await getAllIfcFiles();
-        }),
+        getAllFiles: viewerProcedure
+            .input(z.object({ projectId: z.string() }))
+            .query(async ({ input }) => {
+                return await getAllIfcFiles(input.projectId);
+            }),
 
         // Get IFC files by edificação
-        getFilesByEdificacao: publicProcedure
-            .input(z.object({ edificacao: z.string() }))
+        getFilesByEdificacao: viewerProcedure
+            .input(z.object({ projectId: z.string(), edificacao: z.string() }))
             .query(async ({ input }) => {
-                return await getIfcFilesByEdificacao(input.edificacao);
+                return await getIfcFilesByEdificacao(input.projectId, input.edificacao);
             }),
 
         // Get rooms with colors for IFC visualization
-        getRoomsWithColors: publicProcedure.query(async () => {
-            return await getAllRoomsWithColors();
-        }),
+        getRoomsWithColors: viewerProcedure
+            .input(z.object({ projectId: z.string() }))
+            .query(async ({ input }) => {
+                return await getAllRoomsWithColors(input.projectId);
+            }),
 
         // Upload IFC file
-        uploadFile: publicProcedure
+        uploadFile: editorProcedure
             .input(z.object({
+                projectId: z.string(),
                 fileBuffer: z.string(),
                 fileName: z.string(),
                 edificacao: z.string().nullable(),
             }))
             .mutation(async ({ input }) => {
                 const buffer = Buffer.from(input.fileBuffer, 'base64');
-                const result = await handleIfcUpload(buffer, input.fileName, input.edificacao);
+                const result = await handleIfcUpload(input.projectId, buffer, input.fileName, input.edificacao);
                 return result;
             }),
 
         // Delete IFC file
-        deleteFile: publicProcedure
-            .input(z.object({ fileId: z.number() }))
+        deleteFile: editorProcedure
+            .input(z.object({ projectId: z.string(), fileId: z.number() }))
             .mutation(async ({ input }) => {
                 const result = await deleteIfcFile(input.fileId);
                 return { success: result };
             }),
 
         // Link IFC element to room record
-        linkIfcToRoom: publicProcedure
+        linkIfcToRoom: editorProcedure
             .input(z.object({
+                projectId: z.string(),
                 salaId: z.number(),
                 ifcExpressId: z.number().or(z.string()).nullable()
             }))
@@ -820,14 +912,59 @@ export const appRouter = router({
             }),
 
         // Unlink specific IFC element from a room
-        unlinkIfcFromRoom: publicProcedure
+        unlinkIfcFromRoom: editorProcedure
             .input(z.object({
+                projectId: z.string(),
                 salaId: z.number(),
                 ifcExpressId: z.number().or(z.string())
             }))
             .mutation(async ({ input }) => {
                 const result = await unlinkIfcFromRoom(input.salaId, input.ifcExpressId);
                 return { success: result };
+            }),
+    }),
+
+    // =========================================================================
+    // MEMBERS ROUTER
+    // =========================================================================
+    members: router({
+        list: viewerProcedure
+            .input(z.object({ projectId: z.string() }))
+            .query(async ({ input }) => {
+                return await listProjectMembers(input.projectId);
+            }),
+
+        invite: adminProcedure
+            .input(z.object({
+                projectId: z.string(),
+                email: z.string().email(),
+                role: z.enum(['admin', 'editor', 'viewer', 'parceiro']),
+            }))
+            .mutation(async ({ input }) => {
+                return await inviteProjectMember({
+                    projectId: input.projectId,
+                    email: input.email,
+                    role: input.role,
+                });
+            }),
+
+        updateRole: adminProcedure
+            .input(z.object({
+                projectId: z.string(),
+                memberId: z.string(),
+                role: z.enum(['admin', 'editor', 'viewer', 'parceiro']),
+            }))
+            .mutation(async ({ input }) => {
+                return await updateProjectMemberRole(input.projectId, input.memberId, input.role);
+            }),
+
+        remove: adminProcedure
+            .input(z.object({
+                projectId: z.string(),
+                memberId: z.string(),
+            }))
+            .mutation(async ({ input }) => {
+                return await removeProjectMember(input.projectId, input.memberId);
             }),
     }),
 });

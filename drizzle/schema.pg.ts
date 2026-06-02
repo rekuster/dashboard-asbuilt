@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, timestamp, uuid, numeric } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, uuid, numeric, index } from "drizzle-orm/pg-core";
 
 /**
  * Projects table - each project represents one construction site / obra
@@ -17,6 +17,8 @@ export const projects = pgTable("projects", {
     status: text("status").default("ativo").notNull(),  // 'ativo' | 'concluido' | 'arquivado'
     baselineTargetDate: timestamp("baselineTargetDate"),
     baselineRoomsPerWeek: numeric("baselineRoomsPerWeek"),
+    disciplinesConfig: text("disciplinesConfig"),
+    companiesConfig: text("companiesConfig"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
@@ -72,11 +74,16 @@ export const salas = pgTable("salas", {
     trackerPosicionado: integer("trackerPosicionado").default(0),
     plantaImpressa: integer("plantaImpressa").default(0),
     qrCodePlastificado: integer("qrCodePlastificado").default(0),
+    temForro: integer("temForro").default(0),
     imagemPlantaUrl: text("imagemPlantaUrl"),
     ifcExpressId: text("ifcExpressId"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().notNull(),
-});
+}, (table) => ({
+    projectIdIdx: index("salas_project_id_idx").on(table.projectId),
+    edificacaoIdx: index("salas_edificacao_idx").on(table.edificacao),
+    nomeIdx: index("salas_nome_idx").on(table.nome),
+}));
 
 /**
  * Apontamentos table - stores divergences/issues found
@@ -106,7 +113,12 @@ export const apontamentos = pgTable("apontamentos", {
     asBuiltPrintUrl: text("asBuiltPrintUrl"),       // Print do modelo As-Built comprovando a resolução
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().notNull(),
-});
+}, (table) => ({
+    projectIdIdx: index("apontamentos_project_id_idx").on(table.projectId),
+    salaIdx: index("apontamentos_sala_idx").on(table.sala),
+    edificacaoIdx: index("apontamentos_edificacao_idx").on(table.edificacao),
+    disciplinaIdx: index("apontamentos_disciplina_idx").on(table.disciplina),
+}));
 
 /**
  * Uploads table - stores Excel upload history
@@ -162,7 +174,11 @@ export const escopoAsBuilt = pgTable("escopoAsBuilt", {
 
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().notNull(),
-});
+}, (table) => ({
+    projectIdIdx: index("escopo_project_id_idx").on(table.projectId),
+    empresaIdx: index("escopo_empresa_idx").on(table.empresa),
+    edificacaoIdx: index("escopo_edificacao_idx").on(table.edificacao),
+}));
 
 /**
  * As-Built Deliveries table - partial deliveries linked to scope items
@@ -198,7 +214,12 @@ export const entregasAsBuilt = pgTable("entregasAsBuilt", {
     
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().notNull(),
-});
+}, (table) => ({
+    projectIdIdx: index("entregas_project_id_idx").on(table.projectId),
+    escopoIdIdx: index("entregas_escopo_id_idx").on(table.escopoId),
+    edificacaoIdx: index("entregas_edificacao_idx").on(table.edificacao),
+    disciplinaIdx: index("entregas_disciplina_idx").on(table.disciplina),
+}));
 
 /**
  * As-Built Deliveries History table - logs changes and comments

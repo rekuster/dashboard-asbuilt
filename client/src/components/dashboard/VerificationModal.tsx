@@ -18,6 +18,7 @@ import { EditApontamentoModal } from "./EditApontamentoModal";
  */
 
 interface VerificationModalProps {
+    projectId: string;
     isOpen: boolean;
     onClose: () => void;
     sala: any; // Dados da sala selecionada
@@ -48,7 +49,7 @@ const isSameDiscipline = (apontamentoDisc: string, escopoDisc: string) => {
     return mapped && mapped.toUpperCase() === e;
 };
 
-export function VerificationModal({ isOpen, onClose, sala, disciplines, pendingApontamentos = {} }: VerificationModalProps) {
+export function VerificationModal({ projectId, isOpen, onClose, sala, disciplines, pendingApontamentos = {} }: VerificationModalProps) {
     const utils = trpc.useUtils();
     
     // Busca o status de verificação de cada disciplina para esta sala
@@ -58,7 +59,7 @@ export function VerificationModal({ isOpen, onClose, sala, disciplines, pendingA
     );
 
     // BUSCA DETALHADA DE APONTAMENTOS PARA MOSTRAR FOTOS
-    const { data: allApontamentos = [] } = trpc.dashboard.getApontamentos.useQuery();
+    const { data: allApontamentos = [] } = trpc.dashboard.getApontamentos.useQuery({ projectId });
 
     // Mutação para salvar/atualizar o status da checklist
     const upsertMutation = trpc.dashboard.upsertVerificacao.useMutation({
@@ -94,9 +95,9 @@ export function VerificationModal({ isOpen, onClose, sala, disciplines, pendingA
     // Mutação para salvar detalhes As-Built no apontamento
     const updateAsBuiltMutation = trpc.dashboard.updateApontamentoAsBuilt.useMutation({
         onMutate: async (newApont) => {
-            await utils.dashboard.getApontamentos.cancel();
-            const previous = utils.dashboard.getApontamentos.getData();
-            utils.dashboard.getApontamentos.setData(undefined, (old: any) => {
+            await utils.dashboard.getApontamentos.cancel({ projectId });
+            const previous = utils.dashboard.getApontamentos.getData({ projectId });
+            utils.dashboard.getApontamentos.setData({ projectId }, (old: any) => {
                 if (!old) return old;
                 return old.map((a: any) => a.id === newApont.id ? { ...a, asBuiltNota: newApont.asBuiltNota, asBuiltPrintUrl: newApont.asBuiltPrintUrl, status: newApont.status || a.status } : a);
             });
@@ -104,7 +105,7 @@ export function VerificationModal({ isOpen, onClose, sala, disciplines, pendingA
         },
         onError: (err, newApont, context) => {
             if (context?.previous) {
-                utils.dashboard.getApontamentos.setData(undefined, context.previous);
+                utils.dashboard.getApontamentos.setData({ projectId }, context.previous);
             }
             toast.error("Erro ao salvar detalhes.");
         },
@@ -116,16 +117,16 @@ export function VerificationModal({ isOpen, onClose, sala, disciplines, pendingA
             setAsBuiltPrintUrlInput("");
         },
         onSettled: () => {
-            utils.dashboard.getApontamentos.invalidate();
+            utils.dashboard.getApontamentos.invalidate({ projectId });
         }
     });
 
     // Mutação otimista para atualização de status de apontamentos
     const updateApontamentoMutation = trpc.dashboard.updateApontamento.useMutation({
         onMutate: async (newApont) => {
-            await utils.dashboard.getApontamentos.cancel();
-            const previous = utils.dashboard.getApontamentos.getData();
-            utils.dashboard.getApontamentos.setData(undefined, (old: any) => {
+            await utils.dashboard.getApontamentos.cancel({ projectId });
+            const previous = utils.dashboard.getApontamentos.getData({ projectId });
+            utils.dashboard.getApontamentos.setData({ projectId }, (old: any) => {
                 if (!old) return old;
                 return old.map((a: any) => a.id === newApont.id ? { ...a, status: newApont.status, dataResolvido: newApont.dataResolvido } : a);
             });
@@ -133,12 +134,12 @@ export function VerificationModal({ isOpen, onClose, sala, disciplines, pendingA
         },
         onError: (err, newApont, context) => {
             if (context?.previous) {
-                utils.dashboard.getApontamentos.setData(undefined, context.previous);
+                utils.dashboard.getApontamentos.setData({ projectId }, context.previous);
             }
             toast.error("Erro ao atualizar divergência.");
         },
         onSettled: () => {
-            utils.dashboard.getApontamentos.invalidate();
+            utils.dashboard.getApontamentos.invalidate({ projectId });
         }
     });
 
@@ -386,10 +387,10 @@ export function VerificationModal({ isOpen, onClose, sala, disciplines, pendingA
                                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
                                                         <div className="space-y-2">
                                                             <div className="flex items-center justify-between">
-                                                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-tight flex items-center gap-2">
+                                                                <div className="text-[10px] font-black text-slate-500 uppercase tracking-tight flex items-center gap-2">
                                                                     <div className="w-1.5 h-1.5 bg-[#940707] rounded-full"></div>
                                                                     Projeto / Referência RA
-                                                                </p>
+                                                                </div>
                                                             </div>
                                                             <div className="h-[450px] bg-slate-100 rounded-2xl overflow-hidden border-2 border-slate-200 shadow-inner group">
                                                                 {apont.fotoReferenciaUrl ? (
@@ -405,10 +406,10 @@ export function VerificationModal({ isOpen, onClose, sala, disciplines, pendingA
                                                         </div>
                                                         <div className="space-y-2">
                                                             <div className="flex items-center justify-between">
-                                                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-tight flex items-center gap-2">
+                                                                <div className="text-[10px] font-black text-slate-500 uppercase tracking-tight flex items-center gap-2">
                                                                     <div className="w-1.5 h-1.5 bg-amber-500 rounded-full"></div>
                                                                     Execução Real / Obra
-                                                                </p>
+                                                                </div>
                                                             </div>
                                                             <div className="h-[450px] bg-slate-100 rounded-2xl overflow-hidden border-2 border-slate-200 shadow-inner group">
                                                                 {apont.fotoUrl ? (
@@ -573,6 +574,7 @@ export function VerificationModal({ isOpen, onClose, sala, disciplines, pendingA
 
                 {selectedApontamento && (
                     <EditApontamentoModal 
+                        projectId={projectId}
                         isOpen={isEditModalOpen}
                         onClose={() => {
                             setIsEditModalOpen(false);

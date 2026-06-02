@@ -16,14 +16,15 @@ import {
 } from "@/components/ui/select";
 
 interface EditApontamentoModalProps {
+    projectId: string;
     isOpen: boolean;
     onClose: () => void;
     apontamento: any;
 }
 
-export function EditApontamentoModal({ isOpen, onClose, apontamento }: EditApontamentoModalProps) {
+export function EditApontamentoModal({ projectId, isOpen, onClose, apontamento }: EditApontamentoModalProps) {
     const utils = trpc.useUtils();
-    const { data: salas = [] } = trpc.dashboard.getSalas.useQuery();
+    const { data: salas = [] } = trpc.dashboard.getSalas.useQuery({ projectId });
 
     const [formData, setFormData] = useState<any>({
         edificacao: "",
@@ -59,8 +60,8 @@ export function EditApontamentoModal({ isOpen, onClose, apontamento }: EditApont
     const updateMutation = trpc.dashboard.updateApontamento.useMutation({
         onSuccess: () => {
             toast.success("Apontamento atualizado com sucesso!");
-            utils.dashboard.getApontamentos.invalidate();
-            utils.dashboard.getKPIs.invalidate();
+            utils.dashboard.getApontamentos.invalidate({ projectId });
+            utils.dashboard.getKPIs.invalidate({ projectId });
             onClose();
         },
         onError: (err) => {
@@ -70,14 +71,14 @@ export function EditApontamentoModal({ isOpen, onClose, apontamento }: EditApont
 
     const filteredSalas = useMemo(() => {
         if (!roomSearch) return [];
-        return salas.filter(s => 
+        return salas.filter((s: any) => 
             s.nome.toLowerCase().includes(roomSearch.toLowerCase()) ||
             s.numeroSala.includes(roomSearch)
         ).slice(0, 5);
     }, [salas, roomSearch]);
 
     const handleSelectRoom = (room: any) => {
-        setFormData(prev => ({
+        setFormData((prev: any) => ({
             ...prev,
             edificacao: room.edificacao,
             pavimento: room.pavimento,
@@ -132,7 +133,7 @@ export function EditApontamentoModal({ isOpen, onClose, apontamento }: EditApont
                             
                             {filteredSalas.length > 0 && roomSearch !== formData.sala && (
                                 <div className="absolute z-50 w-full mt-1 bg-white border border-slate-100 rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2">
-                                    {filteredSalas.map(s => (
+                                    {filteredSalas.map((s: any) => (
                                         <button
                                             key={s.id}
                                             className="w-full px-4 py-3 text-left hover:bg-slate-50 transition-colors flex items-center justify-between border-b border-slate-50 last:border-none"
