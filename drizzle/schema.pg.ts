@@ -111,6 +111,7 @@ export const apontamentos = pgTable("apontamentos", {
     enviado: integer("enviado").default(0).notNull(), // 0 = Não enviado, 1 = Enviado
     asBuiltNota: text("asBuiltNota"),               // Nota técnica específica da verificação As-Built
     asBuiltPrintUrl: text("asBuiltPrintUrl"),       // Print do modelo As-Built comprovando a resolução
+    bcfIssueId: text("bcfIssueId"),                 // ID ou Número da Issue no BCF/Navisworks
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 }, (table) => ({

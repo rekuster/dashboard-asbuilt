@@ -446,6 +446,21 @@ export const appRouter = router({
                 return buffer.toString('base64');
             }),
 
+        getVerificationReport: publicProcedure
+            .input(z.object({ 
+                projectId: z.string(),
+                edificacao: z.string().optional(),
+                disciplina: z.string().optional(),
+            }))
+            .mutation(async ({ input }) => {
+                const { generateVerificationReport } = await import('./reportGenerator');
+                const buffer = await generateVerificationReport(input.projectId, { 
+                    edificacao: input.edificacao,
+                    disciplina: input.disciplina,
+                });
+                return buffer.toString('base64');
+            }),
+
         getPavimentos: publicProcedure
             .input(z.object({ projectId: z.string(), edificacao: z.string().optional() }))
             .query(async ({ input }) => {
@@ -636,6 +651,7 @@ export const appRouter = router({
                 prioridade: z.string().optional(),
                 tipo: z.string().optional(),
                 comentario: z.string().optional(),
+                bcfIssueId: z.string().optional(),
                 dataResolvido: z.string().or(z.date()).nullable().optional(),
             }))
             .mutation(async ({ input }) => {
@@ -738,12 +754,13 @@ export const appRouter = router({
                 id: z.number(),
                 asBuiltNota: z.string().nullish(),
                 asBuiltPrintUrl: z.string().nullish(),
+                bcfIssueId: z.string().nullish(),
                 status: z.string().nullish()
             }))
             .mutation(async ({ input }) => {
-                const { id, asBuiltNota, asBuiltPrintUrl, status } = input;
+                const { id, asBuiltNota, asBuiltPrintUrl, bcfIssueId, status } = input;
                 const db = await import("./db");
-                return await db.updateApontamentoAsBuilt(id, asBuiltNota || null, asBuiltPrintUrl || null, status || undefined);
+                return await db.updateApontamentoAsBuilt(id, asBuiltNota || null, asBuiltPrintUrl || null, bcfIssueId || null, status || undefined);
             }),
 
         getAllVerificacoes: publicProcedure

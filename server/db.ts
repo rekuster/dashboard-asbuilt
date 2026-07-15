@@ -42,7 +42,7 @@ export async function getDb() {
                 // Postgres connection
                 _client = postgres(process.env.DATABASE_URL, {
                     ssl: { rejectUnauthorized: false },
-                    max: 10,
+                    max: 3, // Reduzido de 10 para 3 para evitar estourar o limite de 15 conexões do Supabase em desenvolvimento/hot-reload
                     prepare: false,
                     connect_timeout: 10 // Limite de 10 segundos para conectar, evitando travamentos
                 });
@@ -1612,25 +1612,26 @@ export async function upsertVerificacao(salaId: number, disciplina: string, stat
     }
 }
 
-export async function updateApontamentoAsBuilt(id: number, asBuiltNota: string | null, asBuiltPrintUrl: string | null, status?: string) {
+export async function updateApontamentoAsBuilt(id: number, asBuiltNota: string | null, asBuiltPrintUrl: string | null, bcfIssueId: string | null, status?: string) {
     const db = await getDb();
     if (!db) return null;
 
-    const updateData: any = {
+    const dataToUpdate: any = {
         asBuiltNota: asBuiltNota || null,
         asBuiltPrintUrl: asBuiltPrintUrl || null,
+        bcfIssueId: bcfIssueId || null,
         updatedAt: new Date()
     };
 
     if (status) {
-        updateData.status = status;
+        dataToUpdate.status = status;
         if (status === 'RESOLVIDA') {
-            updateData.dataResolvido = new Date();
+            dataToUpdate.dataResolvido = new Date();
         }
     }
 
     return await db.update(apontamentos)
-        .set(updateData)
+        .set(dataToUpdate)
         .where(eq(apontamentos.id, id))
         .returning();
 }

@@ -5,6 +5,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
+import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { CheckCircle2, Info, AlertCircle, Image as ImageIcon, ExternalLink, X, Upload, Loader2 as LoaderIcon, Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -90,6 +91,7 @@ export function VerificationModal({ projectId, isOpen, onClose, sala, discipline
     const [asBuiltNota, setAsBuiltNota] = useState("");
     const [asBuiltPrintUrls, setAsBuiltPrintUrls] = useState<string[]>([]);
     const [asBuiltPrintUrlInput, setAsBuiltPrintUrlInput] = useState("");
+    const [bcfIssueId, setBcfIssueId] = useState("");
     const [isUploading, setIsUploading] = useState(false);
 
     // Mutação para salvar detalhes As-Built no apontamento
@@ -99,7 +101,7 @@ export function VerificationModal({ projectId, isOpen, onClose, sala, discipline
             const previous = utils.dashboard.getApontamentos.getData({ projectId });
             utils.dashboard.getApontamentos.setData({ projectId }, (old: any) => {
                 if (!old) return old;
-                return old.map((a: any) => a.id === newApont.id ? { ...a, asBuiltNota: newApont.asBuiltNota, asBuiltPrintUrl: newApont.asBuiltPrintUrl, status: newApont.status || a.status } : a);
+                return old.map((a: any) => a.id === newApont.id ? { ...a, asBuiltNota: newApont.asBuiltNota, asBuiltPrintUrl: newApont.asBuiltPrintUrl, bcfIssueId: newApont.bcfIssueId, status: newApont.status || a.status } : a);
             });
             return { previous };
         },
@@ -115,6 +117,7 @@ export function VerificationModal({ projectId, isOpen, onClose, sala, discipline
             setAsBuiltNota("");
             setAsBuiltPrintUrls([]);
             setAsBuiltPrintUrlInput("");
+            setBcfIssueId("");
         },
         onSettled: () => {
             utils.dashboard.getApontamentos.invalidate({ projectId });
@@ -158,25 +161,32 @@ export function VerificationModal({ projectId, isOpen, onClose, sala, discipline
         if (!file) return;
 
         setIsUploading(true);
-        const formData = new FormData();
-        formData.append("image", file);
 
         try {
-            const response = await fetch("/api/upload-image", {
-                method: "POST",
-                body: formData,
-            });
+            // Sanitize filename and path
+            const sanitize = (str: string) => str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9\/\._-]/g, '_');
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
+            const filePath = sanitize(`apontamentos/real/${fileName}`);
 
-            const data = await response.json();
-            if (data.success && data.url) {
-                setAsBuiltPrintUrls(prev => [...prev, data.url]);
-                toast.success("Imagem carregada com sucesso!");
-            } else {
-                toast.error("Erro ao carregar imagem.");
+            const { error: uploadError } = await supabase.storage
+                .from('project-assets')
+                .upload(filePath, file);
+
+            if (uploadError) {
+                throw uploadError;
             }
-        } catch (error) {
+
+            // Get public URL
+            const { data: { publicUrl } } = supabase.storage
+                .from('project-assets')
+                .getPublicUrl(filePath);
+
+            setAsBuiltPrintUrls(prev => [...prev, publicUrl]);
+            toast.success("Imagem carregada com sucesso!");
+        } catch (error: any) {
             console.error("Upload error:", error);
-            toast.error("Erro na conexão com o servidor.");
+            toast.error(error.message || "Erro ao carregar imagem.");
         } finally {
             setIsUploading(false);
         }
@@ -201,16 +211,17 @@ export function VerificationModal({ projectId, isOpen, onClose, sala, discipline
     const handleSaveAsBuilt = (id: number, currentStatus?: string) => {
         updateAsBuiltMutation.mutate({
             id,
-            asBuiltNota,
+            asBuiltNota: asBuiltNota,
             asBuiltPrintUrl: JSON.stringify(asBuiltPrintUrls),
-            status: (asBuiltNota || asBuiltPrintUrls.length > 0) ? 'EM_REVISAO' : currentStatus
+            bcfIssueId: bcfIssueId,
+            status: (asBuiltNota || asBuiltPrintUrls.length > 0 || bcfIssueId) ? 'EM_REVISAO' : currentStatus
         });
     };
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-[1000px] font-sans rounded-3xl overflow-hidden flex flex-col max-h-[90vh]">
-                <DialogHeader className="px-6 py-4 border-b border-slate-100">
+            <DialogContent className="sm:max-w-[95vw] md:max-w-[1200px] xl:max-w-[1500px] font-sans rounded-3xl overflow-hidden flex flex-col max-h-[96vh] h-[96vh] p-0">
+                <DialogHeader className="px-6 py-3 border-b border-slate-100 bg-white">
                     <DialogTitle className="flex items-center gap-2 text-xl font-bold text-slate-800">
                         <CheckCircle2 className="w-6 h-6 text-[#940707]" />
                         Checklist As-Built: {sala?.nome}
@@ -220,7 +231,7 @@ export function VerificationModal({ projectId, isOpen, onClose, sala, discipline
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto px-4 py-2 space-y-3 custom-scrollbar bg-slate-50">
                     {disciplines.length === 0 && (
                         <div className="flex flex-col items-center justify-center py-10 text-center space-y-2">
                             <Info className="w-8 h-8 text-slate-300" />
@@ -250,7 +261,7 @@ export function VerificationModal({ projectId, isOpen, onClose, sala, discipline
                                             : 'border-slate-100 bg-slate-50/50'
                                 }`}
                             >
-                                <div className="p-4 bg-white/40">
+                                <div className="p-3 bg-white/40">
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-3">
                                             <Checkbox 
@@ -285,12 +296,12 @@ export function VerificationModal({ projectId, isOpen, onClose, sala, discipline
                                 </div>
 
                                 {pendingCount > 0 && (
-                                    <div className="border-t border-amber-100 bg-white/60 p-4 space-y-6">
-                                        <p className="text-[10px] uppercase font-black text-amber-500 tracking-widest mb-2">Detalhes das Divergências (Layout de Relatório):</p>
-                                        <div className="flex flex-col gap-8">
+                                    <div className="border-t border-amber-100 bg-white/60 p-3 space-y-4">
+                                        <p className="text-[10px] uppercase font-black text-amber-500 tracking-widest mb-1">Detalhes das Divergências (Layout de Relatório):</p>
+                                        <div className="flex flex-col gap-4">
                                             {roomApontamentos.map((apont: any, idx: number) => (
-                                                <div key={apont.id} className="space-y-4 bg-white p-5 rounded-3xl border border-amber-100 shadow-md">
-                                                    <div className="flex gap-4 items-start">
+                                                <div key={apont.id} className="space-y-3 bg-white p-3 rounded-2xl border border-amber-100 shadow-md">
+                                                    <div className="flex gap-3 items-start">
                                                         <Badge className={`${apont.status === 'RESOLVIDA' ? 'bg-emerald-500' : 'bg-amber-500'} h-8 w-8 rounded-full flex items-center justify-center p-0 shrink-0 text-white text-lg font-black shadow-lg`}>{idx + 1}</Badge>
                                                         <div className="flex-1 space-y-1">
                                                             <p className={`text-sm font-bold leading-relaxed italic ${apont.status === 'RESOLVIDA' ? 'text-slate-400 line-through' : 'text-slate-800'}`}>
@@ -384,15 +395,15 @@ export function VerificationModal({ projectId, isOpen, onClose, sala, discipline
                                                         </div>
                                                     </div>
 
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-                                                        <div className="space-y-2">
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                                                        <div className="space-y-1">
                                                             <div className="flex items-center justify-between">
                                                                 <div className="text-[10px] font-black text-slate-500 uppercase tracking-tight flex items-center gap-2">
                                                                     <div className="w-1.5 h-1.5 bg-[#940707] rounded-full"></div>
                                                                     Projeto / Referência RA
                                                                 </div>
                                                             </div>
-                                                            <div className="h-[450px] bg-slate-100 rounded-2xl overflow-hidden border-2 border-slate-200 shadow-inner group">
+                                                            <div className="h-[50vh] min-h-[350px] max-h-[600px] bg-slate-100 rounded-xl overflow-hidden border-2 border-slate-200 shadow-inner group">
                                                                 {apont.fotoReferenciaUrl ? (
                                                                     <img src={apont.fotoReferenciaUrl} alt="Referência" className="w-full h-full object-contain bg-slate-200 hover:scale-[1.02] transition-all duration-500 cursor-zoom-in" 
                                                                         onClick={() => window.open(apont.fotoReferenciaUrl, '_blank')}/>
@@ -404,14 +415,14 @@ export function VerificationModal({ projectId, isOpen, onClose, sala, discipline
                                                                 )}
                                                             </div>
                                                         </div>
-                                                        <div className="space-y-2">
+                                                        <div className="space-y-1">
                                                             <div className="flex items-center justify-between">
                                                                 <div className="text-[10px] font-black text-slate-500 uppercase tracking-tight flex items-center gap-2">
                                                                     <div className="w-1.5 h-1.5 bg-amber-500 rounded-full"></div>
                                                                     Execução Real / Obra
                                                                 </div>
                                                             </div>
-                                                            <div className="h-[450px] bg-slate-100 rounded-2xl overflow-hidden border-2 border-slate-200 shadow-inner group">
+                                                            <div className="h-[50vh] min-h-[350px] max-h-[600px] bg-slate-100 rounded-xl overflow-hidden border-2 border-slate-200 shadow-inner group">
                                                                 {apont.fotoUrl ? (
                                                                     <img src={apont.fotoUrl} alt="Campo" className="w-full h-full object-contain bg-slate-200 hover:scale-[1.02] transition-all duration-500 cursor-zoom-in" 
                                                                         onClick={() => window.open(apont.fotoUrl, '_blank')}/>
@@ -430,8 +441,18 @@ export function VerificationModal({ projectId, isOpen, onClose, sala, discipline
                                                         {editingApontamentoId === apont.id ? (
                                                             <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
                                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                                    <div className="space-y-2">
-                                                                        <label className="text-[10px] font-bold text-slate-500 uppercase">Nota Técnica As-Built</label>
+                                                                    <div className="space-y-4">
+                                                                        <div className="space-y-2">
+                                                                            <label className="text-[10px] font-bold text-slate-500 uppercase">Nº Issue BCF / Navisworks</label>
+                                                                            <Input 
+                                                                                placeholder="Ex: #105, Issue 12..."
+                                                                                value={bcfIssueId}
+                                                                                onChange={(e) => setBcfIssueId(e.target.value)}
+                                                                                className="text-xs h-9 rounded-lg border-slate-200 focus:ring-[#940707] focus:border-[#940707] bg-white"
+                                                                            />
+                                                                        </div>
+                                                                        <div className="space-y-2">
+                                                                            <label className="text-[10px] font-bold text-slate-500 uppercase">Nota Técnica As-Built</label>
                                                                         <Textarea 
                                                                             placeholder="Descreva a solução aplicada no As-Built..."
                                                                             value={asBuiltNota}
@@ -439,8 +460,9 @@ export function VerificationModal({ projectId, isOpen, onClose, sala, discipline
                                                                             className="text-xs min-h-[80px] rounded-xl border-slate-200 focus:ring-[#940707] focus:border-[#940707] bg-white"
                                                                         />
                                                                     </div>
-                                                                    <div className="space-y-2">
-                                                                        <label className="text-[10px] font-bold text-slate-500 uppercase">Prints de Verificação (Modelo)</label>
+                                                                </div>
+                                                                <div className="space-y-2">
+                                                                    <label className="text-[10px] font-bold text-slate-500 uppercase">Prints de Verificação (Modelo)</label>
                                                                         <div className="space-y-3">
                                                                             <div className="flex gap-2">
                                                                                 <Input 
@@ -501,7 +523,7 @@ export function VerificationModal({ projectId, isOpen, onClose, sala, discipline
                                                             </div>
                                                         ) : (
                                                             <div className="space-y-3">
-                                                                {(apont.asBuiltNota || apont.asBuiltPrintUrl) && (() => {
+                                                                {(apont.asBuiltNota || apont.asBuiltPrintUrl || apont.bcfIssueId) && (() => {
                                                                     let urls: string[] = [];
                                                                     try {
                                                                         const parsed = JSON.parse(apont.asBuiltPrintUrl || "[]");
@@ -511,7 +533,10 @@ export function VerificationModal({ projectId, isOpen, onClose, sala, discipline
                                                                     }
                                                                     
                                                                     return (
-                                                                    <div className="bg-emerald-50/30 p-3 rounded-2xl border border-emerald-100/50">
+                                                                    <div className="bg-emerald-50/30 p-3 rounded-2xl border border-emerald-100/50 space-y-2">
+                                                                        {apont.bcfIssueId && (
+                                                                            <p className="text-xs font-bold text-slate-700">BCF: {apont.bcfIssueId}</p>
+                                                                        )}
                                                                         {apont.asBuiltNota && (
                                                                             <p className="text-xs text-slate-600 italic mb-2 flex gap-2">
                                                                                 <Info className="w-4 h-4 text-emerald-500 shrink-0" />
@@ -534,6 +559,7 @@ export function VerificationModal({ projectId, isOpen, onClose, sala, discipline
                                                                     onClick={() => {
                                                                         setEditingApontamentoId(apont.id);
                                                                         setAsBuiltNota(apont.asBuiltNota || "");
+                                                                        setBcfIssueId(apont.bcfIssueId || "");
                                                                         try {
                                                                             const parsed = JSON.parse(apont.asBuiltPrintUrl || "[]");
                                                                             setAsBuiltPrintUrls(Array.isArray(parsed) ? parsed : (apont.asBuiltPrintUrl ? [apont.asBuiltPrintUrl] : []));
@@ -544,7 +570,7 @@ export function VerificationModal({ projectId, isOpen, onClose, sala, discipline
                                                                     }}
                                                                 >
                                                                     <ImageIcon className="w-3.5 h-3.5" />
-                                                                    {apont.asBuiltNota || apont.asBuiltPrintUrl ? "✎ Editar Verificação As-Built" : "+ Adicionar Nota Técnica e Print As-Built"}
+                                                                    {apont.asBuiltNota || apont.asBuiltPrintUrl || apont.bcfIssueId ? "✎ Editar Verificação As-Built" : "+ Adicionar Nota Técnica, Print e BCF"}
                                                                 </button>
                                                             </div>
                                                         )}

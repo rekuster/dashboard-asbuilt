@@ -220,7 +220,7 @@ export function ReportPreviewModal({ projectId, edificacoes, disciplinas, respon
             </DialogTrigger>
             <DialogContent className="max-w-5xl h-[95vh] flex flex-col p-0 overflow-hidden border-none shadow-2xl bg-white">
                 <DialogHeader className="px-6 pt-6 pb-2 shrink-0">
-                    <DialogTitle className="text-xl font-black text-[#940707] uppercase tracking-tight">Gerador de Relatórios As-Built</DialogTitle>
+                    <DialogTitle className="text-xl font-black text-[#940707] uppercase tracking-tight">Gerador de Relatório de Divergências</DialogTitle>
                 </DialogHeader>
 
                 <Tabs defaultValue="generator" className="flex-1 flex flex-col overflow-hidden">
@@ -239,20 +239,7 @@ export function ReportPreviewModal({ projectId, edificacoes, disciplinas, respon
 
                     <div className="flex-1 overflow-hidden px-6 pb-6 mt-2">
                         <TabsContent value="generator" className="h-full flex flex-col overflow-hidden m-0 gap-3">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2 pb-3 border-b items-end shrink-0">
-                                <div className="flex flex-col gap-1.5 lg:col-span-1">
-                                    <Label className="text-[10px] font-bold uppercase text-slate-500">Tipo</Label>
-                                    <Select value={reportType} onValueChange={(v: "CQ" | "AB") => setReportType(v)}>
-                                        <SelectTrigger className="h-9 bg-slate-50 border-slate-200">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="CQ">Divergências</SelectItem>
-                                            <SelectItem value="AB">As-Built</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 pb-3 border-b items-end shrink-0">
                                 <div className="flex flex-col gap-1.5 lg:col-span-1">
                                     <Label className="text-[10px] font-bold uppercase text-slate-500">Edificação</Label>
                                     <Select value={filterEdificacao} onValueChange={(v) => {

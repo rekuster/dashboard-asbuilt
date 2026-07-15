@@ -34,6 +34,7 @@ export function EditApontamentoModal({ projectId, isOpen, onClose, apontamento }
         disciplina: "",
         responsavel: "",
         divergencia: "",
+        bcfIssueId: "",
         prioridade: "NORMAL",
         status: "ATIVA",
     });
@@ -50,6 +51,7 @@ export function EditApontamentoModal({ projectId, isOpen, onClose, apontamento }
                 disciplina: apontamento.disciplina || "",
                 responsavel: apontamento.responsavel || "",
                 divergencia: apontamento.divergencia || "",
+                bcfIssueId: apontamento.bcfIssueId || "",
                 prioridade: apontamento.prioridade || "NORMAL",
                 status: apontamento.status || "ATIVA",
             });
@@ -212,6 +214,16 @@ export function EditApontamentoModal({ projectId, isOpen, onClose, apontamento }
                                 onChange={(e) => setFormData({...formData, divergencia: e.target.value})}
                                 className="min-h-[100px] rounded-xl border-slate-200 resize-none text-sm leading-relaxed"
                                 placeholder="Descreva o problema encontrado..."
+                            />
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-bold text-slate-600">Nº Issue BCF / Navisworks</Label>
+                            <Input 
+                                value={formData.bcfIssueId}
+                                onChange={(e) => setFormData({...formData, bcfIssueId: e.target.value})}
+                                className="h-10 rounded-xl border-slate-200"
+                                placeholder="Ex: #105, Issue 12..."
                             />
                         </div>
 

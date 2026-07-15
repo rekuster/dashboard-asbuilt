@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
+import { supabase } from "@/lib/supabase";
 import {
     Card,
     CardContent,
@@ -39,7 +40,8 @@ interface QueuedApontamento {
     sala: string;
     disciplina: string;
     divergencia: string;
-    fotoBase64?: string; // For offline storage
+    fotoRABase64?: string; // For offline storage
+    fotoRealBase64?: string; // For offline storage
     fotoUrl?: string; // For syncing
     fotoReferenciaUrl?: string; // For syncing reference photo
     data: string;
@@ -78,6 +80,18 @@ function getTodayString(): string {
     const m = String(now.getMonth() + 1).padStart(2, "0");
     const d = String(now.getDate()).padStart(2, "0");
     return `${y}-${m}-${d}`;
+}
+
+function dataURLtoBlob(dataurl: string): Blob {
+    const arr = dataurl.split(',');
+    const mime = arr[0].match(/:(.*?);/)![1];
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new Blob([u8arr], { type: mime });
 }
 
 export default function FieldReportTab({ projectId }: { projectId: string }) {
@@ -181,6 +195,57 @@ export default function FieldReportTab({ projectId }: { projectId: string }) {
 
         for (const item of offlineQueue) {
             try {
+                let finalFotoReferenciaUrl = item.fotoReferenciaUrl;
+                let finalFotoUrl = item.fotoUrl;
+
+                // Sincronizar foto de referência (RA) offline
+                if (item.fotoRABase64 && !finalFotoReferenciaUrl) {
+                    try {
+                        const blob = dataURLtoBlob(item.fotoRABase64);
+                        const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.jpg`;
+                        const filePath = `apontamentos/referencias/${fileName}`;
+                        
+                        const { error: uploadError } = await supabase.storage
+                            .from('project-assets')
+                            .upload(filePath, blob, { contentType: 'image/jpeg' });
+                        
+                        if (!uploadError) {
+                            const { data: { publicUrl } } = supabase.storage
+                                .from('project-assets')
+                                .getPublicUrl(filePath);
+                            finalFotoReferenciaUrl = publicUrl;
+                        } else {
+                            console.error("Error uploading offline fotoRA:", uploadError);
+                        }
+                    } catch (uploadEx) {
+                        console.error("Exception uploading offline fotoRA:", uploadEx);
+                    }
+                }
+
+                // Sincronizar foto real (Obra) offline
+                if (item.fotoRealBase64 && !finalFotoUrl) {
+                    try {
+                        const blob = dataURLtoBlob(item.fotoRealBase64);
+                        const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.jpg`;
+                        const filePath = `apontamentos/real/${fileName}`;
+                        
+                        const { error: uploadError } = await supabase.storage
+                            .from('project-assets')
+                            .upload(filePath, blob, { contentType: 'image/jpeg' });
+                        
+                        if (!uploadError) {
+                            const { data: { publicUrl } } = supabase.storage
+                                .from('project-assets')
+                                .getPublicUrl(filePath);
+                            finalFotoUrl = publicUrl;
+                        } else {
+                            console.error("Error uploading offline fotoReal:", uploadError);
+                        }
+                    } catch (uploadEx) {
+                        console.error("Exception uploading offline fotoReal:", uploadEx);
+                    }
+                }
+
                 await createApontamento.mutateAsync({
                     projectId: item.projectId, // Added projectId
                     data: item.data,
@@ -190,8 +255,8 @@ export default function FieldReportTab({ projectId }: { projectId: string }) {
                     sala: item.sala,
                     disciplina: item.disciplina,
                     divergencia: item.divergencia,
-                    fotoUrl: item.fotoUrl,
-                    fotoReferenciaUrl: item.fotoReferenciaUrl
+                    fotoUrl: finalFotoUrl,
+                    fotoReferenciaUrl: finalFotoReferenciaUrl
                 });
                 successIds.push(item.id);
                 // Pequeno atraso para não sobrecarregar a rede móvel
@@ -262,13 +327,37 @@ export default function FieldReportTab({ projectId }: { projectId: string }) {
         });
     };
 
-    const uploadImage = async (file: File): Promise<string | null> => {
+    const uploadImage = async (file: File, type: 'real' | 'referencias' = 'real'): Promise<string | null> => {
         try {
-            // Now we don't upload to API, we just compress and return Base64
-            // This bypasses the ephemeral filesystem issue on Vercel
-            return await compressImage(file);
-        } catch (e) {
-            console.error("Compression error:", e);
+            // 1. Compress image to Base64 first
+            const base64Data = await compressImage(file);
+            // 2. Convert Base64 back to a Blob for uploading
+            const blob = dataURLtoBlob(base64Data);
+            
+            // 3. Upload to Supabase Storage
+            const fileExt = file.name.split('.').pop() || 'jpg';
+            const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
+            const filePath = `apontamentos/${type}/${fileName}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from('project-assets')
+                .upload(filePath, blob, {
+                    contentType: 'image/jpeg'
+                });
+
+            if (uploadError) {
+                throw uploadError;
+            }
+
+            // 4. Get public URL
+            const { data: { publicUrl } } = supabase.storage
+                .from('project-assets')
+                .getPublicUrl(filePath);
+
+            return publicUrl;
+        } catch (e: any) {
+            console.error("Upload error:", e);
+            toast.error(`Erro ao enviar foto: ${e.message}`);
             return null;
         }
     };
@@ -324,11 +413,11 @@ export default function FieldReportTab({ projectId }: { projectId: string }) {
 
             // Upload photos if online
             if (isOnline && item.fotoRA) {
-                const url = await uploadImage(item.fotoRA);
+                const url = await uploadImage(item.fotoRA, 'referencias');
                 if (url) finalFotoReferenciaUrl = url;
             }
             if (isOnline && item.fotoReal) {
-                const url = await uploadImage(item.fotoReal);
+                const url = await uploadImage(item.fotoReal, 'real');
                 if (url) finalFotoUrl = url;
             }
 
@@ -359,7 +448,8 @@ export default function FieldReportTab({ projectId }: { projectId: string }) {
                         id: crypto.randomUUID(),
                         salaId: selectedSala.id,
                         ...payload,
-                        fotoBase64: item.fotoRAPreview || item.fotoRealPreview || undefined,
+                        fotoRABase64: item.fotoRAPreview || undefined,
+                        fotoRealBase64: item.fotoRealPreview || undefined,
                     };
                     const savedQueue = localStorage.getItem('field_report_queue');
                     const currentQueue = savedQueue ? JSON.parse(savedQueue) : [];
@@ -372,7 +462,8 @@ export default function FieldReportTab({ projectId }: { projectId: string }) {
                     id: crypto.randomUUID(),
                     salaId: selectedSala.id,
                     ...payload,
-                    fotoBase64: item.fotoRAPreview || item.fotoRealPreview || undefined,
+                    fotoRABase64: item.fotoRAPreview || undefined,
+                    fotoRealBase64: item.fotoRealPreview || undefined,
                 };
                 const savedQueue = localStorage.getItem('field_report_queue');
                 const currentQueue = savedQueue ? JSON.parse(savedQueue) : [];

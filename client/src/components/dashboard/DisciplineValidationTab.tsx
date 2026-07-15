@@ -38,6 +38,10 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { VerificationModal } from "./VerificationModal";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "sonner";
+import { FileDown, Loader2 } from "lucide-react";
 
 /**
  * MAPEAMENTO DE DISCIPLINAS (SIGLA -> NOME COMPLETO)
@@ -73,6 +77,12 @@ export default function DisciplineValidationTab({ projectId }: { projectId: stri
     const [selectedSala, setSelectedSala] = useState<any>(null);
     const [selectedDisciplineForModal, setSelectedDisciplineForModal] = useState<string>("");
     const [isModalOpen, setIsModalOpen] = useState(false);
+
+    // Report Modal State
+    const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+    const [reportEdificacao, setReportEdificacao] = useState<string>("Todas");
+    const [reportDisciplina, setReportDisciplina] = useState<string>("Todas");
+    const [isGenerating, setIsGenerating] = useState(false);
 
     const { data: salas = [] } = trpc.dashboard.getSalas.useQuery({ projectId });
     const { data: escopos = [] } = trpc.dashboard.getEscopos.useQuery({ projectId });
@@ -190,6 +200,100 @@ export default function DisciplineValidationTab({ projectId }: { projectId: stri
     }, [salas, escopos, apontamentos, allVerificacoes, search]);
 
     const disciplines = Object.keys(groupedData).sort();
+    const uniqueEdificacoes = Array.from(new Set(salas.map((s: any) => s.edificacao).filter(Boolean))).sort() as string[];
+
+    const getReportMutation = trpc.dashboard.getVerificationReport.useMutation({
+        onSuccess: (base64) => {
+            const link = document.createElement('a');
+            link.href = `data:application/pdf;base64,${base64}`;
+            link.download = `Relatorio_Verificacao_${new Date().getTime()}.pdf`;
+            link.click();
+            toast.success("Relatório gerado com sucesso!");
+            setIsGenerating(false);
+            setIsReportModalOpen(false);
+        },
+        onError: (err) => {
+            toast.error("Erro ao gerar relatório: " + err.message);
+            setIsGenerating(false);
+        }
+    });
+
+    const handleGenerateReport = () => {
+        setIsGenerating(true);
+        getReportMutation.mutate({
+            projectId,
+            edificacao: reportEdificacao === "Todas" ? undefined : reportEdificacao,
+            disciplina: reportDisciplina === "Todas" ? undefined : reportDisciplina,
+        });
+    };
+
+    const renderReportModal = () => (
+        <Dialog open={isReportModalOpen} onOpenChange={setIsReportModalOpen}>
+            <DialogContent className="sm:max-w-[425px] rounded-3xl font-sans border-none shadow-2xl p-0 overflow-hidden">
+                <DialogHeader className="px-6 py-5 bg-slate-50 border-b border-slate-100">
+                    <DialogTitle className="flex items-center gap-3 text-lg font-bold text-slate-800">
+                        <div className="bg-[#940707] p-2 rounded-xl shadow-lg shadow-[#940707]/20">
+                            <FileDown className="w-5 h-5 text-white" />
+                        </div>
+                        Gerar Relatório de Verificação
+                    </DialogTitle>
+                </DialogHeader>
+
+                <div className="p-6 space-y-5">
+                    <p className="text-sm text-slate-600">
+                        Este relatório (formato retrato) incluirá apenas os apontamentos com status <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">Em Revisão</Badge>, contendo os detalhes, fotos de campo, projeto e verificação.
+                    </p>
+
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-slate-700">Edificação</label>
+                            <Select value={reportEdificacao} onValueChange={setReportEdificacao}>
+                                <SelectTrigger className="w-full rounded-xl border-slate-200">
+                                    <SelectValue placeholder="Selecione..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Todas">Todas as Edificações</SelectItem>
+                                    {uniqueEdificacoes.map((edif) => (
+                                        <SelectItem key={edif} value={edif}>{edif}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-slate-700">Disciplina</label>
+                            <Select value={reportDisciplina} onValueChange={setReportDisciplina}>
+                                <SelectTrigger className="w-full rounded-xl border-slate-200">
+                                    <SelectValue placeholder="Selecione..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Todas">Todas as Disciplinas</SelectItem>
+                                    {disciplines.map((disc) => (
+                                        <SelectItem key={disc} value={disc}>{disc}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                </div>
+
+                <DialogFooter className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex gap-3">
+                    <Button variant="ghost" onClick={() => setIsReportModalOpen(false)} className="rounded-full font-bold text-slate-500">
+                        Cancelar
+                    </Button>
+                    <Button 
+                        onClick={handleGenerateReport} 
+                        disabled={isGenerating}
+                        className="bg-[#940707] hover:bg-[#7a0606] text-white rounded-full font-bold shadow-lg shadow-[#940707]/20 flex-1"
+                    >
+                        {isGenerating ? (
+                            <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Gerando PDF...</>
+                        ) : "Gerar PDF"}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
 
     return (
         <div className="space-y-6 font-sans pb-10">
@@ -203,15 +307,25 @@ export default function DisciplineValidationTab({ projectId }: { projectId: stri
                         Inverso da tabela de salas: selecione a disciplina para ver onde há divergências no modelo.
                     </p>
                 </div>
-                <div className="relative">
+            </div>
+
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div className="relative flex-1 max-w-md">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <Input
                         placeholder="Filtrar disciplina ou sala..."
-                        className="pl-9 w-[300px] bg-white border-slate-200 focus:ring-[#940707] transition-all rounded-full h-10 shadow-sm"
+                        className="pl-9 w-full bg-white border-slate-200 focus:ring-[#940707] transition-all rounded-full h-10 shadow-sm"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                     />
                 </div>
+                <Button 
+                    onClick={() => setIsReportModalOpen(true)}
+                    className="bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 rounded-full h-10 px-6 font-bold shadow-sm"
+                >
+                    <FileDown className="w-4 h-4 mr-2 text-[#940707]" />
+                    Gerar Relatório Retrato
+                </Button>
             </div>
 
             <div className="space-y-4">

@@ -503,6 +503,7 @@ export async function generatePDFReport(projectId: string, filters?: {
                 await drawImage(rightFotoUrl, leftX + imgWidth + 20, imgY, imgWidth, imgHeight, 'EXECUÇÃO REAL / OBRA');
             }
 
+
             // Planta da Sala
             if (item.imagemPlantaUrl) {
                 const pX = 610; // Moved from 580 to match info column
@@ -629,10 +630,10 @@ export async function generateAsBuiltReport(projectId: string, filters?: {
 
             // Legenda e Dados
             const legendY = 340;
-            doc.rect(rightX, legendY, 80, 20).fill('#FF0000');
-            doc.fillColor('#FFFFFF').fontSize(8).text('PROJETO', rightX + 5, legendY + 6);
-            doc.rect(rightX + 90, legendY, 80, 20).fill('#00FF00');
-            doc.fillColor('#000000').fontSize(8).text('AS-BUILT', rightX + 95, legendY + 6);
+            doc.rect(rightX, legendY, 130, 20).fill('#FF0000');
+            doc.fillColor('#FFFFFF').fontSize(8).font('Helvetica-Bold').text('MODELO DE PROJETO', rightX, legendY + 6, { width: 130, align: 'center' });
+            doc.rect(rightX + 140, legendY, 130, 20).fill('#00FF00');
+            doc.fillColor('#000000').fontSize(8).font('Helvetica-Bold').text('MODELO AS-BUILT', rightX + 140, legendY + 6, { width: 130, align: 'center' });
 
             doc.rect(rightX, legendY + 30, imgWidth, 90).stroke('#DDDDDD');
             doc.fillColor('#1E3A8A').fontSize(10).font('Helvetica-Bold').text('APONTAMENTOS', rightX + 10, legendY + 40);
@@ -723,3 +724,146 @@ export async function generateExcelReport(projectId: string, edificacao?: string
  * EXPLICAÇÃO SIMPLES: Esta função gera um arquivo Excel (planilha) com todos os
  * dados do relatório, permitindo que a equipe filtre e use as informações em tabelas.
  */
+
+export async function generateVerificationReport(projectId: string, filters?: { 
+    edificacao?: string; 
+    disciplina?: string; 
+}): Promise<Buffer> {
+    const doc = new PDFDocument({
+        margin: 40,
+        size: 'A4',
+        layout: 'landscape'
+    });
+    const chunks: Buffer[] = [];
+    doc.on('data', (chunk) => chunks.push(chunk));
+
+    const database = await getDb();
+    if (!database) throw new Error('DB initialization failed');
+
+    const logoPath = getAssetPath('client', 'public', 'logos_stecla', 'versão horizontal.png');
+    const hasLogo = fs.existsSync(logoPath);
+
+    // Busca apenas apontamentos "EM_REVISAO" (necessidade de ajuste)
+    let query = database.select({
+        apontamento: apontamentos,
+        numeroSala: salas.numeroSala,
+        salaNome: salas.nome
+    })
+        .from(apontamentos)
+        .innerJoin(salas, eq(apontamentos.sala, salas.nome));
+
+    const conditions: any[] = [
+        eq(apontamentos.projectId, projectId),
+        eq(apontamentos.status, 'EM_REVISAO')
+    ];
+
+    if (filters?.edificacao && filters.edificacao !== "Todas") {
+        conditions.push(eq(apontamentos.edificacao, filters.edificacao));
+    }
+    if (filters?.disciplina && filters.disciplina !== "Todas") {
+        conditions.push(eq(apontamentos.disciplina, filters.disciplina));
+    }
+
+    const records = await query.where(and(...conditions));
+
+    // Capa simples
+    doc.rect(0, 0, doc.page.width, doc.page.height).fill('#ffffff');
+    if (hasLogo) {
+        doc.image(logoPath, doc.page.width - 160, 30, { width: 120 });
+    }
+    doc.fillColor('#940707').fontSize(24).font('Helvetica-Bold').text('Relatório de Verificação de Ajustes As-Built', 50, 200, { align: 'center', width: doc.page.width - 100 });
+    doc.fillColor('#334155').fontSize(14).font('Helvetica').text(`Disciplina: ${filters?.disciplina || 'Todas'}`, 50, 250, { align: 'center', width: doc.page.width - 100 });
+    if (filters?.edificacao && filters.edificacao !== "Todas") {
+        doc.text(`Edificação: ${filters.edificacao}`, 50, 280, { align: 'center', width: doc.page.width - 100 });
+    }
+    doc.text(`Ajustes Necessários: ${records.length} apontamentos`, 50, 310, { align: 'center', width: doc.page.width - 100 });
+
+    // Páginas dos Apontamentos
+    for (const record of records) {
+        doc.addPage({ margin: 40, size: 'A4', layout: 'landscape' });
+        const ap = record.apontamento;
+
+        if (hasLogo) {
+            doc.image(logoPath, doc.page.width - 160, 20, { width: 120 });
+        }
+
+        // Cabeçalho da Issue
+        doc.rect(40, 40, doc.page.width - 220, 80).fill('#f8fafc').stroke('#e2e8f0');
+        
+        doc.fillColor('#940707').fontSize(14).font('Helvetica-Bold').text(`Apontamento #${ap.numeroApontamento}`, 50, 50);
+        doc.fillColor('#64748b').fontSize(10).font('Helvetica').text(`Sala: ${record.numeroSala} - ${record.salaNome} | Pavimento: ${ap.pavimento}`, 50, 70);
+        
+        let bcfText = ` | Nº Issue BCF/Navisworks: ${ap.bcfIssueId || 'Não Registrado'}`;
+        doc.fillColor('#0f172a').font('Helvetica-Bold').text(`Disciplina: ${getDisciplineFullName(ap.disciplina || 'OUTROS')}${bcfText}`, 50, 90);
+
+        // Descrição e Nota Técnica
+        doc.fillColor('#334155').fontSize(10).font('Helvetica-Bold').text('Descrição da Divergência:', 50, 130);
+        doc.font('Helvetica').text(ap.divergencia || 'Sem descrição', 50, 145, { width: 350, height: 40 });
+
+        doc.font('Helvetica-Bold').text('Nota Técnica (Verificação As-Built):', 420, 130);
+        doc.font('Helvetica').text(ap.asBuiltNota || 'Nenhuma nota registrada.', 420, 142, { width: 350, height: 30 });
+
+        // Legenda do Modelo (Vermelho: modelo de projeto | Verde: modelo as built)
+        const legendY = 176;
+        doc.rect(420, legendY, 8, 8).fill('#FF0000');
+        doc.fillColor('#334155').fontSize(8).font('Helvetica-Bold').text('Modelo de Projeto', 432, legendY - 1);
+        doc.rect(535, legendY, 8, 8).fill('#00FF00');
+        doc.fillColor('#334155').fontSize(8).font('Helvetica-Bold').text('Modelo As-Built', 547, legendY - 1);
+
+        // Imagens
+        const imgWidth = 240;
+        const imgHeight = 350;
+        const imgY = 190;
+
+        const drawImage = async (url: string | null, x: number, y: number, label: string) => {
+            doc.fillColor('#64748b').fontSize(10).font('Helvetica-Bold').text(label, x, y);
+            if (!url) {
+                doc.rect(x, y + 15, imgWidth, imgHeight).stroke('#e2e8f0');
+                doc.fillColor('#94a3b8').font('Helvetica').text('Sem imagem', x, y + 15 + (imgHeight/2) - 5, { width: imgWidth, align: 'center' });
+                return;
+            }
+            try {
+                let imgBuffer;
+                if (url.startsWith('data:image')) {
+                    const base64Data = url.split(',')[1];
+                    imgBuffer = Buffer.from(base64Data, 'base64');
+                } else if (url.startsWith('http')) {
+                    const response = await axios.get(url, { responseType: 'arraybuffer' });
+                    imgBuffer = Buffer.from(response.data);
+                } else {
+                    const fullPath = path.join(process.cwd(), url.replace(/^\//, ''));
+                    if (fs.existsSync(fullPath)) imgBuffer = fs.readFileSync(fullPath);
+                }
+                
+                if (imgBuffer) {
+                    // Centraliza imagem dentro do box
+                    doc.image(imgBuffer, x, y + 15, { width: imgWidth, height: imgHeight, fit: [imgWidth, imgHeight], align: 'center', valign: 'center' });
+                    doc.rect(x, y + 15, imgWidth, imgHeight).stroke('#e2e8f0'); // Borda opcional para ficar alinhado
+                }
+            } catch (e) {
+                console.error(`Erro ao carregar imagem para relatório de verificação: ${url}`, e);
+                doc.fillColor('#ef4444').font('Helvetica').text(`[Erro ao carregar]`, x, y + 30);
+            }
+        };
+
+        let asBuiltUrl = null;
+        if (ap.asBuiltPrintUrl) {
+            try {
+                const parsed = JSON.parse(ap.asBuiltPrintUrl);
+                if (Array.isArray(parsed) && parsed.length > 0) asBuiltUrl = parsed[0];
+            } catch {
+                asBuiltUrl = ap.asBuiltPrintUrl;
+            }
+        }
+
+        await drawImage(ap.fotoUrl, 40, imgY, "Foto de Campo (Problema):");
+        await drawImage(ap.fotoReferenciaUrl, 300, imgY, "Projeto (Referência):");
+        await drawImage(asBuiltUrl, 560, imgY, "Print As-Built (Verificação):");
+    }
+
+    doc.end();
+    return new Promise((resolve, reject) => {
+        doc.on('end', () => resolve(Buffer.concat(chunks)));
+        doc.on('error', reject);
+    });
+}
