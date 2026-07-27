@@ -295,6 +295,25 @@ export default function FieldReportTab({ projectId }: { projectId: string }) {
         }
     };
 
+    const handlePhotoDrop = (type: 'RA' | 'Real', e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const file = e.dataTransfer.files?.[0];
+        if (file && file.type.startsWith('image/')) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                if (type === 'RA') {
+                    setFotoRA(file);
+                    setFotoRAPreview(reader.result as string);
+                } else {
+                    setFotoReal(file);
+                    setFotoRealPreview(reader.result as string);
+                }
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
     const compressImage = (file: File, maxWidth = 900): Promise<string> => {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -527,14 +546,13 @@ export default function FieldReportTab({ projectId }: { projectId: string }) {
 
     return (
         <div className="space-y-6 max-w-6xl mx-auto pb-20">
-            {/* Status Bar */}
-            <div className={`flex items-center justify-between p-3 rounded-xl border ${isOnline ? "bg-emerald-50 border-emerald-100 text-emerald-700" : "bg-orange-50 border-orange-100 text-orange-700"
-                }`}>
-                <div className="flex items-center gap-2 font-medium">
-                    {isOnline ? <Smartphone className="w-5 h-5" /> : <CloudOff className="w-5 h-5" />}
-                    {isOnline ? "Online - Conectado ao PC" : "Modo Offline - Dados Salvos Local"}
-                </div>
-                {offlineQueue.length > 0 && (
+            {/* Offline sync button — only shown when there are pending items in the queue */}
+            {offlineQueue.length > 0 && (
+                <div className="flex items-center justify-between p-3 rounded-xl border bg-orange-50 border-orange-100 text-orange-700">
+                    <div className="flex items-center gap-2 font-medium">
+                        <CloudOff className="w-5 h-5" />
+                        Itens pendentes de sincronização
+                    </div>
                     <Button
                         size="sm"
                         variant="ghost"
@@ -544,8 +562,8 @@ export default function FieldReportTab({ projectId }: { projectId: string }) {
                         <RefreshCcw className="w-4 h-4" />
                         Sync ({offlineQueue.length})
                     </Button>
-                )}
-            </div>
+                </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
                 {/* Left Column: Room Selection (Column Span 5) */}
@@ -699,7 +717,12 @@ export default function FieldReportTab({ projectId }: { projectId: string }) {
 
                                     <div className="grid grid-cols-2 gap-4 pt-2">
                                         {/* Foto Referência */}
-                                        <div className="border-2 border-dashed rounded-xl p-3 bg-muted/30 hover:bg-muted/50 transition-colors">
+                                        <div
+                                            className="border-2 border-dashed rounded-xl p-3 bg-muted/30 hover:bg-muted/50 transition-colors"
+                                            onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-primary', 'bg-primary/5'); }}
+                                            onDragLeave={(e) => { e.currentTarget.classList.remove('border-primary', 'bg-primary/5'); }}
+                                            onDrop={(e) => { e.currentTarget.classList.remove('border-primary', 'bg-primary/5'); handlePhotoDrop('RA', e); }}
+                                        >
                                             <div className="text-[10px] font-black text-center uppercase tracking-widest text-primary mb-2">Referência</div>
                                             {fotoRAPreview ? (
                                                 <div className="relative aspect-square rounded-lg overflow-hidden bg-black flex items-center justify-center group">
@@ -720,19 +743,24 @@ export default function FieldReportTab({ projectId }: { projectId: string }) {
                                                     <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-2">
                                                         <Camera className="w-6 h-6 text-primary" />
                                                     </div>
-                                                    <div className="text-[10px] font-bold">Capturar RA</div>
+                                                    <div className="text-[10px] font-bold">Selecionar / Arrastar</div>
+                                                    <div className="text-[9px] text-muted-foreground mt-0.5">Clique ou arraste uma imagem</div>
                                                     <input
                                                         type="file"
                                                         className="hidden"
                                                         accept="image/*"
-                                                        capture="environment"
                                                         onChange={(e) => handlePhotoChange('RA', e)}
                                                     />
                                                 </label>
                                             )}
                                         </div>
                                         {/* Foto Real */}
-                                        <div className="border-2 border-dashed rounded-xl p-3 bg-muted/30 hover:bg-muted/50 transition-colors">
+                                        <div
+                                            className="border-2 border-dashed rounded-xl p-3 bg-muted/30 hover:bg-muted/50 transition-colors"
+                                            onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-emerald-500', 'bg-emerald-50/50'); }}
+                                            onDragLeave={(e) => { e.currentTarget.classList.remove('border-emerald-500', 'bg-emerald-50/50'); }}
+                                            onDrop={(e) => { e.currentTarget.classList.remove('border-emerald-500', 'bg-emerald-50/50'); handlePhotoDrop('Real', e); }}
+                                        >
                                             <div className="text-[10px] font-black text-center uppercase tracking-widest text-emerald-600 mb-2">Foto Obra</div>
                                             {fotoRealPreview ? (
                                                 <div className="relative aspect-square rounded-lg overflow-hidden bg-black flex items-center justify-center group">
@@ -753,12 +781,12 @@ export default function FieldReportTab({ projectId }: { projectId: string }) {
                                                     <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center mb-2">
                                                         <Camera className="w-6 h-6 text-emerald-600" />
                                                     </div>
-                                                    <div className="text-[10px] font-bold">Foto Real</div>
+                                                    <div className="text-[10px] font-bold">Selecionar / Arrastar</div>
+                                                    <div className="text-[9px] text-muted-foreground mt-0.5">Clique ou arraste uma imagem</div>
                                                     <input
                                                         type="file"
                                                         className="hidden"
                                                         accept="image/*"
-                                                        capture="environment"
                                                         onChange={(e) => handlePhotoChange('Real', e)}
                                                     />
                                                 </label>

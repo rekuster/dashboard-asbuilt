@@ -17,7 +17,8 @@ import {
     listProjectMembers,
     inviteProjectMember,
     updateProjectMemberRole,
-    removeProjectMember
+    removeProjectMember,
+    searchRegisteredUsers
 } from './membersService';
 import {
     getKPIs,
@@ -982,6 +983,15 @@ export const appRouter = router({
             }))
             .mutation(async ({ input }) => {
                 return await removeProjectMember(input.projectId, input.memberId);
+            }),
+
+        searchUsers: adminProcedure
+            .input(z.object({
+                projectId: z.string(),
+                query: z.string().optional()
+            }))
+            .query(async ({ input }) => {
+                return await searchRegisteredUsers(input.query || '');
             }),
     }),
 });

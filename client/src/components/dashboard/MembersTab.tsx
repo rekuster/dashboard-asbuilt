@@ -11,7 +11,8 @@ import {
     Shield, 
     User,
     Loader2,
-    ShieldAlert
+    ShieldAlert,
+    UserCheck
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -40,7 +41,7 @@ const ROLE_LABELS = {
 };
 
 const ROLE_COLORS = {
-    owner: 'bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 border-rose-500/20',
+    owner: 'bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 border-rose-500/20 font-bold',
     admin: 'bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border-amber-500/20',
     editor: 'bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 border-blue-500/20',
     viewer: 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 border-emerald-500/20',
@@ -51,7 +52,7 @@ export default function MembersTab({ projectId }: MembersTabProps) {
     const utils = trpc.useUtils();
     
     // User role check
-    const { isAdmin, role: currentRole } = useProjectRole(projectId);
+    const { isAdmin } = useProjectRole(projectId);
 
     // Invite form state
     const [inviteEmail, setInviteEmail] = useState('');
@@ -62,6 +63,12 @@ export default function MembersTab({ projectId }: MembersTabProps) {
     const { data: members, isLoading, error } = trpc.members.list.useQuery(
         { projectId },
         { enabled: !!projectId }
+    );
+
+    // Fetch registered platform users for quick selection
+    const { data: availableUsers } = trpc.members.searchUsers.useQuery(
+        { projectId, query: '' },
+        { enabled: isAdmin }
     );
 
     // Mutations
@@ -120,7 +127,7 @@ export default function MembersTab({ projectId }: MembersTabProps) {
                 role,
             });
         } catch (err) {
-            // Already handled in onError
+            // Already handled
         }
     };
 
@@ -133,7 +140,7 @@ export default function MembersTab({ projectId }: MembersTabProps) {
                 memberId,
             });
         } catch (err) {
-            // Already handled in onError
+            // Already handled
         }
     };
 
@@ -156,11 +163,15 @@ export default function MembersTab({ projectId }: MembersTabProps) {
         );
     }
 
+    // Filtrar sugestões de usuários cadastrados na plataforma que ainda NÃO são membros do projeto
+    const currentMemberEmails = new Set(members?.map(m => m.email.toLowerCase()) || []);
+    const registeredNonMembers = availableUsers?.filter(u => !currentMemberEmails.has(u.email.toLowerCase())) || [];
+
     return (
         <div className="space-y-6">
             {/* Seção de Convite (Apenas para Admins) */}
             {isAdmin && (
-                <Card className="border-border/40 bg-card/30 backdrop-blur-md relative overflow-hidden transition-all duration-300 hover:shadow-lg hover:shadow-primary/5">
+                <Card className="border-border/40 bg-card/30 backdrop-blur-md relative transition-all duration-300 hover:shadow-lg hover:shadow-primary/5">
                     <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-primary/50 via-indigo-500/50 to-purple-500/50 opacity-70"></div>
                     <CardHeader className="pb-4">
                         <CardTitle className="flex items-center gap-2 text-lg font-bold tracking-tight">
@@ -168,10 +179,10 @@ export default function MembersTab({ projectId }: MembersTabProps) {
                             Adicionar Membro ao Projeto
                         </CardTitle>
                         <CardDescription>
-                            Convide novos usuários por e-mail e atribua um papel específico no projeto. Se eles já estiverem cadastrados, terão acesso imediato.
+                            Convide novos usuários por e-mail ou escolha um dos usuários já cadastrados na plataforma abaixo.
                         </CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="space-y-4">
                         <form onSubmit={handleInvite} className="flex flex-col md:flex-row gap-4 items-end">
                             <div className="flex-1 space-y-1 w-full">
                                 <Label htmlFor="email" className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">E-mail do Usuário</Label>
@@ -188,6 +199,7 @@ export default function MembersTab({ projectId }: MembersTabProps) {
                                     />
                                 </div>
                             </div>
+
                             <div className="w-full md:w-[220px] space-y-1">
                                 <Label htmlFor="role" className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Papel / Nível de Acesso</Label>
                                 <Select
@@ -205,6 +217,7 @@ export default function MembersTab({ projectId }: MembersTabProps) {
                                     </SelectContent>
                                 </Select>
                             </div>
+
                             <Button 
                                 type="submit" 
                                 disabled={isInviting} 
@@ -220,6 +233,33 @@ export default function MembersTab({ projectId }: MembersTabProps) {
                                 )}
                             </Button>
                         </form>
+
+                        {/* Usuários cadastrados na plataforma disponíveis para adicionar */}
+                        {registeredNonMembers.length > 0 && (
+                            <div className="pt-3 border-t border-border/20">
+                                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                    <UserCheck className="h-3.5 w-3.5 text-primary" />
+                                    Usuários cadastrados na plataforma (clique para preencher):
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    {registeredNonMembers.map(u => (
+                                        <button
+                                            key={u.id}
+                                            type="button"
+                                            onClick={() => setInviteEmail(u.email)}
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all duration-200 flex items-center gap-2 ${
+                                                inviteEmail.toLowerCase() === u.email.toLowerCase()
+                                                    ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                                                    : 'bg-background/40 hover:bg-primary/10 border-border/40 text-foreground hover:border-primary/30'
+                                            }`}
+                                        >
+                                            <span className="font-semibold">{u.name}</span>
+                                            <span className="opacity-70 text-[11px]">({u.email})</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
             )}
@@ -255,12 +295,16 @@ export default function MembersTab({ projectId }: MembersTabProps) {
                                     >
                                         <td className="px-4 py-3.5">
                                             <div className="flex items-center gap-3">
-                                                <div className="h-9 w-9 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                                                <div className={`h-9 w-9 rounded-full flex items-center justify-center font-bold text-xs ${
+                                                    member.role === 'owner' 
+                                                        ? 'bg-rose-500/20 text-rose-500 border border-rose-500/30' 
+                                                        : 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
+                                                }`}>
                                                     <User className="h-4 w-4" />
                                                 </div>
                                                 <div>
-                                                    <div className="font-semibold text-foreground">
-                                                        {member.name || 'Convidado Pendente'}
+                                                    <div className="font-semibold text-foreground flex items-center gap-1.5">
+                                                        {member.name || (member.acceptedAt ? member.email.split('@')[0] : 'Convidado Pendente')}
                                                     </div>
                                                     <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                                                         <Mail className="h-3.5 w-3.5" />
@@ -294,7 +338,7 @@ export default function MembersTab({ projectId }: MembersTabProps) {
                                             )}
                                         </td>
                                         <td className="px-4 py-3.5">
-                                            {member.acceptedAt ? (
+                                            {member.acceptedAt || member.role === 'owner' ? (
                                                 <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 font-medium px-2 py-0.5 rounded-full text-[11px] flex items-center gap-1 w-fit">
                                                     <Check className="h-3.5 w-3.5" />
                                                     Ativo
