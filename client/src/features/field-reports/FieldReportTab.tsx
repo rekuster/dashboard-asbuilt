@@ -363,7 +363,7 @@ export default function FieldReportTab({ projectId }: { projectId: string }) {
     if (roleLoading) {
         return (
             <div className="flex items-center justify-center p-20">
-                <Loader2 className="w-6 h-6 animate-spin text-[#940707]" />
+                <Loader2 className="w-6 h-6 animate-spin text-[#9C1915]" />
             </div>
         );
     }
@@ -371,11 +371,11 @@ export default function FieldReportTab({ projectId }: { projectId: string }) {
     if (!isEditor) {
         return (
             <div className="flex flex-col items-center justify-center py-16 text-center max-w-md mx-auto">
-                <div className="h-16 w-16 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 mb-4 border border-slate-200">
-                    <Lock className="h-7 w-7 text-rose-500" />
+                <div className="h-14 w-14 rounded-2xl bg-red-50 text-[#9C1915] flex items-center justify-center mb-3 border border-red-100">
+                    <Lock className="h-6 w-6" />
                 </div>
-                <h3 className="text-base font-bold text-slate-800">Acesso Restrito</h3>
-                <p className="text-slate-500 text-xs mt-2 leading-relaxed max-w-xs">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800">Acesso Restrito</h3>
+                <p className="text-slate-500 text-xs mt-1 leading-relaxed max-w-xs">
                     Esta aba é restrita a <strong>Editores</strong> e{" "}
                     <strong>Administradores</strong> do projeto.
                 </p>
@@ -384,7 +384,7 @@ export default function FieldReportTab({ projectId }: { projectId: string }) {
     }
 
     return (
-        <div className="space-y-6 max-w-6xl mx-auto pb-20">
+        <div className="space-y-4 max-w-6xl mx-auto pb-20">
             {/* Header com Seleção de Localização */}
             <FieldReportHeader
                 edificacoes={edificacoes}
@@ -415,20 +415,19 @@ export default function FieldReportTab({ projectId }: { projectId: string }) {
             />
 
             {!selectedSala ? (
-                <Card className="h-64 border-dashed border-slate-200 rounded-3xl flex flex-col items-center justify-center p-12 text-center bg-slate-50/50">
-                    <div className="w-14 h-14 rounded-2xl bg-[#940707]/10 flex items-center justify-center mb-3">
-                        <MapPin className="w-7 h-7 text-[#940707]" />
+                <div className="h-56 border border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center p-8 text-center bg-white shadow-xs">
+                    <div className="w-10 h-10 rounded-xl bg-red-50 text-[#9C1915] flex items-center justify-center mb-2.5">
+                        <MapPin className="w-5 h-5" />
                     </div>
-                    <CardTitle className="text-base font-bold text-slate-700">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
                         Nenhuma Sala Selecionada
-                    </CardTitle>
-                    <CardDescription className="max-w-xs mx-auto mt-1 text-xs text-slate-400">
-                        Selecione a edificação, pavimento e sala acima para iniciar o
-                        preenchimento do relatório de campo.
-                    </CardDescription>
-                </Card>
+                    </h3>
+                    <p className="max-w-xs mx-auto mt-1 text-[11px] text-slate-500">
+                        Selecione a edificação, pavimento e sala nos filtros acima para iniciar o preenchimento da inspeção.
+                    </p>
+                </div>
             ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
                     {/* Formulário de Novo Apontamento (Col 7) */}
                     <div className="lg:col-span-7 space-y-6">
                         <InspectionForm

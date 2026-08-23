@@ -1,9 +1,8 @@
 import React from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { PlusCircle, Camera, Trash2, X, Plus } from "lucide-react";
+import { PlusCircle, Camera, Trash2, X, Plus, AlertCircle } from "lucide-react";
 import { DISCIPLINA_LABELS } from "../constants";
 
 interface InspectionFormProps {
@@ -36,36 +35,39 @@ export function InspectionForm({
     onCancelSala,
 }: InspectionFormProps) {
     return (
-        <Card className="shadow-md border-t-4 border-t-[#940707] rounded-3xl overflow-hidden bg-white">
-            <CardHeader className="bg-slate-50/60 pb-4 border-b border-slate-100">
-                <div className="flex justify-between items-start">
-                    <div>
-                        <CardTitle className="text-base font-black uppercase text-slate-800 flex items-center gap-2">
-                            <PlusCircle className="w-5 h-5 text-[#940707]" />
-                            Adicionar Apontamento
-                        </CardTitle>
-                        <CardDescription className="text-xs text-slate-500 mt-0.5 font-medium">
-                            Registrando em:{" "}
-                            <strong className="text-slate-800">{selectedSala.nome}</strong> (
-                            {selectedSala.edificacao} • {selectedSala.pavimento})
-                        </CardDescription>
+        <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden flex flex-col">
+            {/* Header Padronizado Stecla */}
+            <div className="px-5 py-3.5 border-b border-slate-200 flex justify-between items-center bg-slate-50/50">
+                <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-red-50 text-[#9C1915] flex items-center justify-center">
+                        <PlusCircle className="w-4 h-4" />
                     </div>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="rounded-full h-8 w-8 text-slate-400 hover:text-slate-600"
-                        onClick={onCancelSala}
-                    >
-                        <X className="w-4 h-4" />
-                    </Button>
+                    <div>
+                        <h2 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                            Adicionar Apontamento
+                        </h2>
+                        <p className="text-[11px] text-slate-500">
+                            Registrando em: <strong className="text-slate-800">{selectedSala.nome}</strong> ({selectedSala.edificacao} • {selectedSala.pavimento})
+                        </p>
+                    </div>
                 </div>
-            </CardHeader>
+                <button
+                    type="button"
+                    onClick={onCancelSala}
+                    className="text-slate-400 hover:text-slate-600 rounded-lg p-1 transition-colors"
+                >
+                    <X className="w-4 h-4" />
+                </button>
+            </div>
 
-            <CardContent className="p-6 space-y-4">
-                <div className="space-y-1.5">
-                    <Label className="text-xs font-bold text-slate-600">Disciplina</Label>
+            <div className="p-5 space-y-3.5 text-xs">
+                {/* Disciplina */}
+                <div className="space-y-1">
+                    <Label className="text-[10px] font-bold uppercase text-slate-600">
+                        Disciplina *
+                    </Label>
                     <select
-                        className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 focus:ring-2 focus:ring-[#940707]/20 outline-none"
+                        className="w-full h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-800 focus:ring-1 focus:ring-[#9C1915] outline-none"
                         value={disciplina}
                         onChange={(e) => onDisciplinaChange(e.target.value)}
                     >
@@ -78,31 +80,32 @@ export function InspectionForm({
                     </select>
                 </div>
 
-                <div className="space-y-1.5">
-                    <Label className="text-xs font-bold text-slate-600">
-                        Divergência / Apontamento
+                {/* Divergência / Apontamento */}
+                <div className="space-y-1">
+                    <Label className="text-[10px] font-bold uppercase text-slate-600">
+                        Divergência / Apontamento *
                     </Label>
                     <Textarea
                         placeholder="Descreva o problema encontrado em campo..."
-                        className="min-h-[100px] rounded-xl border-slate-200 resize-none text-xs leading-relaxed"
+                        className="min-h-[80px] rounded-lg border-slate-200 resize-none text-xs leading-relaxed"
                         value={divergencia}
                         onChange={(e) => onDivergenciaChange(e.target.value)}
                     />
                 </div>
 
                 {/* Upload de Fotos (Referência e Real) */}
-                <div className="grid grid-cols-2 gap-4 pt-2">
+                <div className="grid grid-cols-2 gap-3 pt-1">
                     {/* Foto Referência (RA) */}
                     <div
-                        className="border-2 border-dashed border-slate-200 rounded-2xl p-4 bg-slate-50/50 hover:bg-slate-50 transition-colors"
+                        className="border border-dashed border-slate-200 rounded-xl p-3 bg-slate-50/60 hover:bg-slate-50 transition-colors"
                         onDragOver={(e) => e.preventDefault()}
                         onDrop={(e) => onPhotoDrop("RA", e)}
                     >
-                        <div className="text-[10px] font-black text-center uppercase tracking-widest text-slate-500 mb-2">
+                        <div className="text-[10px] font-bold text-center uppercase tracking-wider text-slate-600 mb-1.5">
                             Foto RA / Referência
                         </div>
                         {fotoRAPreview ? (
-                            <div className="relative aspect-video rounded-xl overflow-hidden bg-black flex items-center justify-center group">
+                            <div className="relative aspect-video rounded-lg overflow-hidden bg-black flex items-center justify-center group">
                                 <img
                                     src={fotoRAPreview}
                                     className="max-w-full max-h-full object-contain"
@@ -112,19 +115,19 @@ export function InspectionForm({
                                     <Button
                                         size="icon"
                                         variant="destructive"
-                                        className="h-8 w-8 rounded-full"
+                                        className="h-7 w-7 rounded-md"
                                         onClick={() => onClearPhoto("RA")}
                                     >
-                                        <Trash2 className="w-4 h-4" />
+                                        <Trash2 className="w-3.5 h-3.5" />
                                     </Button>
                                 </div>
                             </div>
                         ) : (
-                            <label className="flex flex-col items-center cursor-pointer py-3">
-                                <div className="w-10 h-10 rounded-full bg-slate-200/60 flex items-center justify-center mb-1.5 text-slate-600">
-                                    <Camera className="w-5 h-5" />
+                            <label className="flex flex-col items-center cursor-pointer py-2">
+                                <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center mb-1 text-slate-600">
+                                    <Camera className="w-4 h-4" />
                                 </div>
-                                <span className="text-[10px] font-bold text-slate-600">
+                                <span className="text-[10px] font-semibold text-slate-600">
                                     Adicionar Foto
                                 </span>
                                 <input
@@ -140,15 +143,15 @@ export function InspectionForm({
 
                     {/* Foto Real (Obra) */}
                     <div
-                        className="border-2 border-dashed border-slate-200 rounded-2xl p-4 bg-slate-50/50 hover:bg-slate-50 transition-colors"
+                        className="border border-dashed border-slate-200 rounded-xl p-3 bg-slate-50/60 hover:bg-slate-50 transition-colors"
                         onDragOver={(e) => e.preventDefault()}
                         onDrop={(e) => onPhotoDrop("Real", e)}
                     >
-                        <div className="text-[10px] font-black text-center uppercase tracking-widest text-[#940707] mb-2">
+                        <div className="text-[10px] font-bold text-center uppercase tracking-wider text-[#9C1915] mb-1.5">
                             Foto Real / Obra
                         </div>
                         {fotoRealPreview ? (
-                            <div className="relative aspect-video rounded-xl overflow-hidden bg-black flex items-center justify-center group">
+                            <div className="relative aspect-video rounded-lg overflow-hidden bg-black flex items-center justify-center group">
                                 <img
                                     src={fotoRealPreview}
                                     className="max-w-full max-h-full object-contain"
@@ -158,19 +161,19 @@ export function InspectionForm({
                                     <Button
                                         size="icon"
                                         variant="destructive"
-                                        className="h-8 w-8 rounded-full"
+                                        className="h-7 w-7 rounded-md"
                                         onClick={() => onClearPhoto("Real")}
                                     >
-                                        <Trash2 className="w-4 h-4" />
+                                        <Trash2 className="w-3.5 h-3.5" />
                                     </Button>
                                 </div>
                             </div>
                         ) : (
-                            <label className="flex flex-col items-center cursor-pointer py-3">
-                                <div className="w-10 h-10 rounded-full bg-[#940707]/10 flex items-center justify-center mb-1.5 text-[#940707]">
-                                    <Camera className="w-5 h-5" />
+                            <label className="flex flex-col items-center cursor-pointer py-2">
+                                <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center mb-1 text-[#9C1915]">
+                                    <Camera className="w-4 h-4" />
                                 </div>
-                                <span className="text-[10px] font-bold text-slate-600">
+                                <span className="text-[10px] font-semibold text-slate-600">
                                     Adicionar Foto
                                 </span>
                                 <input
@@ -188,12 +191,13 @@ export function InspectionForm({
                 <div className="pt-2">
                     <Button
                         onClick={onAddToList}
-                        className="w-full h-11 rounded-full bg-[#940707] hover:bg-[#7a0606] text-white text-xs font-bold gap-2 shadow-lg shadow-[#940707]/20"
+                        disabled={!disciplina || !divergencia.trim()}
+                        className="w-full h-8 rounded-lg bg-[#9C1915] hover:bg-[#7D1411] text-white text-xs font-bold gap-1.5 shadow-xs"
                     >
-                        <Plus className="w-4 h-4" /> Incluir na Lista da Sala
+                        <Plus className="w-3.5 h-3.5" /> Incluir na Lista da Sala
                     </Button>
                 </div>
-            </CardContent>
-        </Card>
+            </div>
+        </div>
     );
 }
