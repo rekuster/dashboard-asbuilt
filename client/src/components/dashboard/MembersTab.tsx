@@ -12,7 +12,9 @@ import {
     User,
     Loader2,
     ShieldAlert,
-    UserCheck
+    UserCheck,
+    Building2,
+    Briefcase
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -34,19 +36,21 @@ interface MembersTabProps {
 
 const ROLE_LABELS = {
     owner: 'Proprietário',
-    admin: 'Administrador',
+    admin: 'Administrador (Stecla)',
     editor: 'Editor',
     viewer: 'Visualizador',
-    parceiro: 'Parceiro',
+    parceiro: 'Projetista / Parceiro',
 };
 
 const ROLE_COLORS = {
-    owner: 'bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 border-rose-500/20 font-bold',
-    admin: 'bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border-amber-500/20',
-    editor: 'bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 border-blue-500/20',
-    viewer: 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 border-emerald-500/20',
-    parceiro: 'bg-purple-500/10 text-purple-500 hover:bg-purple-500/20 border-purple-500/20',
+    owner: 'bg-rose-500/10 text-[#9C1915] border-red-200 font-bold',
+    admin: 'bg-amber-500/10 text-amber-800 border-amber-200 font-bold',
+    editor: 'bg-blue-500/10 text-blue-800 border-blue-200',
+    viewer: 'bg-slate-100 text-slate-700 border-slate-200',
+    parceiro: 'bg-purple-50 text-purple-800 border-purple-200 font-bold',
 };
+
+const EMPRESAS_SUGESTOES = ['Stecla', 'Ocle', 'Thá', 'Neo', 'Cliente / Diretoria'];
 
 export default function MembersTab({ projectId }: MembersTabProps) {
     const utils = trpc.useUtils();
@@ -57,6 +61,7 @@ export default function MembersTab({ projectId }: MembersTabProps) {
     // Invite form state
     const [inviteEmail, setInviteEmail] = useState('');
     const [inviteRole, setInviteRole] = useState<'admin' | 'editor' | 'viewer' | 'parceiro'>('viewer');
+    const [inviteEmpresa, setInviteEmpresa] = useState('Stecla');
     const [isInviting, setIsInviting] = useState(false);
 
     // Fetch members
@@ -83,13 +88,13 @@ export default function MembersTab({ projectId }: MembersTabProps) {
         }
     });
 
-    const updateRoleMutation = trpc.members.updateRole.useMutation({
+    const updateMemberMutation = trpc.members.updateMember.useMutation({
         onSuccess: () => {
-            toast.success("Função do membro atualizada com sucesso!");
+            toast.success("Dados do membro atualizados!");
             utils.members.list.invalidate({ projectId });
         },
         onError: (err) => {
-            toast.error(err.message || "Erro ao atualizar função.");
+            toast.error(err.message || "Erro ao atualizar membro.");
         }
     });
 
@@ -113,6 +118,7 @@ export default function MembersTab({ projectId }: MembersTabProps) {
                 projectId,
                 email: inviteEmail.trim().toLowerCase(),
                 role: inviteRole,
+                empresa: inviteEmpresa,
             });
         } finally {
             setIsInviting(false);
@@ -121,13 +127,25 @@ export default function MembersTab({ projectId }: MembersTabProps) {
 
     const handleRoleChange = async (memberId: string, role: 'admin' | 'editor' | 'viewer' | 'parceiro') => {
         try {
-            await updateRoleMutation.mutateAsync({
+            await updateMemberMutation.mutateAsync({
                 projectId,
                 memberId,
                 role,
             });
         } catch (err) {
-            // Already handled
+            // Handled in mutation
+        }
+    };
+
+    const handleEmpresaChange = async (memberId: string, empresa: string) => {
+        try {
+            await updateMemberMutation.mutateAsync({
+                projectId,
+                memberId,
+                empresa,
+            });
+        } catch (err) {
+            // Handled in mutation
         }
     };
 
@@ -140,25 +158,25 @@ export default function MembersTab({ projectId }: MembersTabProps) {
                 memberId,
             });
         } catch (err) {
-            // Already handled
+            // Handled in mutation
         }
     };
 
     if (isLoading) {
         return (
-            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
-                <p className="text-sm font-medium">Carregando lista de membros...</p>
+            <div className="flex flex-col items-center justify-center py-12 text-slate-500 gap-3">
+                <Loader2 className="h-7 w-7 animate-spin text-[#9C1915]" />
+                <p className="text-xs font-semibold animate-pulse">Carregando membros do projeto...</p>
             </div>
         );
     }
 
     if (error) {
         return (
-            <div className="flex flex-col items-center justify-center py-12 text-destructive">
-                <ShieldAlert className="h-10 w-10 mb-4" />
-                <p className="text-sm font-medium">Erro ao carregar membros do projeto.</p>
-                <p className="text-xs text-muted-foreground mt-1">{error.message}</p>
+            <div className="flex flex-col items-center justify-center py-12 text-red-600">
+                <ShieldAlert className="h-10 w-10 mb-2" />
+                <p className="text-sm font-bold">Erro ao carregar membros do projeto.</p>
+                <p className="text-xs text-slate-500 mt-1">{error.message}</p>
             </div>
         );
     }
@@ -171,90 +189,111 @@ export default function MembersTab({ projectId }: MembersTabProps) {
         <div className="space-y-6">
             {/* Seção de Convite (Apenas para Admins) */}
             {isAdmin && (
-                <Card className="border-border/40 bg-card/30 backdrop-blur-md relative transition-all duration-300 hover:shadow-lg hover:shadow-primary/5">
-                    <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-primary/50 via-indigo-500/50 to-purple-500/50 opacity-70"></div>
-                    <CardHeader className="pb-4">
-                        <CardTitle className="flex items-center gap-2 text-lg font-bold tracking-tight">
-                            <UserPlus className="h-5 w-5 text-primary" />
-                            Adicionar Membro ao Projeto
+                <Card className="border border-slate-200 bg-white rounded-xl shadow-xs overflow-hidden">
+                    <div className="h-1 w-full bg-[#9C1915]"></div>
+                    <CardHeader className="p-4 pb-2">
+                        <CardTitle className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-slate-800">
+                            <UserPlus className="h-4 w-4 text-[#9C1915]" />
+                            Convidar Membro para o Projeto
                         </CardTitle>
-                        <CardDescription>
-                            Convide novos usuários por e-mail ou escolha um dos usuários já cadastrados na plataforma abaixo.
+                        <CardDescription className="text-xs text-slate-500">
+                            Adicione projetistas parceiros ou auditores internos atribuindo o papel e a empresa correspondente.
                         </CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-4">
-                        <form onSubmit={handleInvite} className="flex flex-col md:flex-row gap-4 items-end">
-                            <div className="flex-1 space-y-1 w-full">
-                                <Label htmlFor="email" className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">E-mail do Usuário</Label>
-                                <div className="relative">
-                                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                    <Input
-                                        id="email"
-                                        type="email"
-                                        placeholder="exemplo@stecla.com.br"
-                                        value={inviteEmail}
-                                        onChange={(e) => setInviteEmail(e.target.value)}
-                                        className="pl-9 bg-background/50 border-border/40 focus:border-primary/50 transition-all duration-300 focus:ring-1 focus:ring-primary/30"
-                                        required
-                                    />
+                    <CardContent className="p-4 pt-2">
+                        <form onSubmit={handleInvite} className="space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+                                {/* Email */}
+                                <div className="md:col-span-5 space-y-1">
+                                    <Label className="text-[10px] font-bold uppercase text-slate-600">E-mail do Usuário</Label>
+                                    <div className="relative">
+                                        <Mail className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                                        <Input
+                                            type="email"
+                                            placeholder="ex: celso.cruz@ocle.com.br"
+                                            value={inviteEmail}
+                                            onChange={(e) => setInviteEmail(e.target.value)}
+                                            className="pl-8 text-xs h-8.5 rounded-lg border-slate-200"
+                                            required
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Empresa */}
+                                <div className="md:col-span-3 space-y-1">
+                                    <Label className="text-[10px] font-bold uppercase text-slate-600">Empresa / Parceiro</Label>
+                                    <Select value={inviteEmpresa} onValueChange={setInviteEmpresa}>
+                                        <SelectTrigger className="text-xs h-8.5 rounded-lg border-slate-200">
+                                            <SelectValue placeholder="Selecione a empresa" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {EMPRESAS_SUGESTOES.map((emp) => (
+                                                <SelectItem key={emp} value={emp} className="text-xs">
+                                                    {emp}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                {/* Papel */}
+                                <div className="md:col-span-4 space-y-1">
+                                    <Label className="text-[10px] font-bold uppercase text-slate-600">Papel / Função</Label>
+                                    <div className="flex gap-2">
+                                        <Select value={inviteRole} onValueChange={(val: any) => setInviteRole(val)}>
+                                            <SelectTrigger className="text-xs h-8.5 rounded-lg border-slate-200 flex-1">
+                                                <SelectValue placeholder="Selecione o papel" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="admin" className="text-xs">
+                                                    Administrador (Stecla)
+                                                </SelectItem>
+                                                <SelectItem value="editor" className="text-xs">
+                                                    Editor
+                                                </SelectItem>
+                                                <SelectItem value="parceiro" className="text-xs">
+                                                    Projetista / Parceiro (Acesso Portal As-Built)
+                                                </SelectItem>
+                                                <SelectItem value="viewer" className="text-xs">
+                                                    Visualizador
+                                                </SelectItem>
+                                            </SelectContent>
+                                        </Select>
+
+                                        <Button 
+                                            type="submit" 
+                                            disabled={isInviting || !inviteEmail.trim()}
+                                            size="sm"
+                                            className="h-8.5 px-4 text-xs font-bold bg-[#9C1915] hover:bg-[#7D1411] text-white shrink-0 shadow-xs"
+                                        >
+                                            {isInviting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Convidar"}
+                                        </Button>
+                                    </div>
                                 </div>
                             </div>
-
-                            <div className="w-full md:w-[220px] space-y-1">
-                                <Label htmlFor="role" className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Papel / Nível de Acesso</Label>
-                                <Select
-                                    value={inviteRole}
-                                    onValueChange={(val: any) => setInviteRole(val)}
-                                >
-                                    <SelectTrigger id="role" className="bg-background/50 border-border/40 focus:border-primary/50">
-                                        <SelectValue placeholder="Selecione o papel" />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-popover/90 backdrop-blur-md border-border/40">
-                                        <SelectItem value="admin">Administrador (Total)</SelectItem>
-                                        <SelectItem value="editor">Editor (Edita dados)</SelectItem>
-                                        <SelectItem value="viewer">Visualizador (Somente leitura)</SelectItem>
-                                        <SelectItem value="parceiro">Parceiro (Terceiro / BIMcollab)</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <Button 
-                                type="submit" 
-                                disabled={isInviting} 
-                                className="w-full md:w-auto bg-primary hover:bg-primary/95 text-primary-foreground font-semibold flex items-center justify-center gap-2 group transition-all duration-300 shadow-md shadow-primary/20"
-                            >
-                                {isInviting ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                    <>
-                                        <UserPlus className="h-4 w-4 group-hover:scale-110 transition-transform" />
-                                        Convidar
-                                    </>
-                                )}
-                            </Button>
                         </form>
 
-                        {/* Usuários cadastrados na plataforma disponíveis para adicionar */}
+                        {/* Atalhos de Usuários Cadastrados */}
                         {registeredNonMembers.length > 0 && (
-                            <div className="pt-3 border-t border-border/20">
-                                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                                    <UserCheck className="h-3.5 w-3.5 text-primary" />
+                            <div className="mt-3.5 pt-3 border-t border-slate-100">
+                                <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1.5">
                                     Usuários cadastrados na plataforma (clique para preencher):
-                                </div>
-                                <div className="flex flex-wrap gap-2">
-                                    {registeredNonMembers.map(u => (
+                                </span>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {registeredNonMembers.slice(0, 5).map((u) => (
                                         <button
                                             key={u.id}
                                             type="button"
-                                            onClick={() => setInviteEmail(u.email)}
-                                            className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all duration-200 flex items-center gap-2 ${
-                                                inviteEmail.toLowerCase() === u.email.toLowerCase()
-                                                    ? 'bg-primary text-primary-foreground border-primary shadow-sm'
-                                                    : 'bg-background/40 hover:bg-primary/10 border-border/40 text-foreground hover:border-primary/30'
-                                            }`}
+                                            onClick={() => {
+                                                setInviteEmail(u.email);
+                                                if (u.email.includes("ocle")) setInviteEmpresa("Ocle");
+                                                else if (u.email.includes("tha")) setInviteEmpresa("Thá");
+                                                else setInviteEmpresa("Stecla");
+                                            }}
+                                            className="text-[11px] font-medium bg-slate-50 hover:bg-red-50 text-slate-700 hover:text-[#9C1915] border border-slate-200 hover:border-red-200 px-2 py-1 rounded-md transition-colors flex items-center gap-1"
                                         >
-                                            <span className="font-semibold">{u.name}</span>
-                                            <span className="opacity-70 text-[11px]">({u.email})</span>
+                                            <UserCheck className="w-3 h-3 text-slate-400" />
+                                            {u.name} ({u.email})
                                         </button>
                                     ))}
                                 </div>
@@ -264,129 +303,110 @@ export default function MembersTab({ projectId }: MembersTabProps) {
                 </Card>
             )}
 
-            {/* Tabela de Membros Atuais */}
-            <Card className="border-border/40 bg-card/30 backdrop-blur-md relative overflow-hidden transition-all duration-300">
-                <CardHeader className="pb-2">
-                    <CardTitle className="flex items-center gap-2 text-lg font-bold tracking-tight">
-                        <Users className="h-5 w-5 text-indigo-500" />
-                        Membros do Projeto
-                    </CardTitle>
-                    <CardDescription>
-                        Lista de todos os usuários com acesso a este projeto e seus respectivos papéis de autorização.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="overflow-x-auto rounded-lg border border-border/20 bg-background/20">
-                        <table className="w-full text-sm border-collapse">
-                            <thead>
-                                <tr className="border-b border-border/30 bg-muted/30 text-muted-foreground text-xs font-semibold uppercase tracking-wider text-left">
-                                    <th className="px-4 py-3">Membro / E-mail</th>
-                                    <th className="px-4 py-3">Papel / Nível</th>
-                                    <th className="px-4 py-3">Status</th>
-                                    <th className="px-4 py-3">Adicionado em</th>
-                                    {isAdmin && <th className="px-4 py-3 text-right">Ações</th>}
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border/20">
-                                {members?.map((member: any) => (
-                                    <tr 
-                                        key={member.id} 
-                                        className="hover:bg-muted/10 transition-colors duration-200"
-                                    >
-                                        <td className="px-4 py-3.5">
-                                            <div className="flex items-center gap-3">
-                                                <div className={`h-9 w-9 rounded-full flex items-center justify-center font-bold text-xs ${
-                                                    member.role === 'owner' 
-                                                        ? 'bg-rose-500/20 text-rose-500 border border-rose-500/30' 
-                                                        : 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
-                                                }`}>
-                                                    <User className="h-4 w-4" />
-                                                </div>
-                                                <div>
-                                                    <div className="font-semibold text-foreground flex items-center gap-1.5">
-                                                        {member.name || (member.acceptedAt ? member.email.split('@')[0] : 'Convidado Pendente')}
-                                                    </div>
-                                                    <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                                                        <Mail className="h-3.5 w-3.5" />
-                                                        {member.email}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-3.5">
-                                            {isAdmin && member.role !== 'owner' ? (
-                                                <Select
-                                                    value={member.role as any}
-                                                    onValueChange={(val: any) => handleRoleChange(member.id, val)}
-                                                    disabled={updateRoleMutation.isPending}
-                                                >
-                                                    <SelectTrigger className="h-8 w-[160px] bg-background/50 border-border/40 text-xs">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent className="bg-popover/90 backdrop-blur-md border-border/40">
-                                                        <SelectItem value="admin">Administrador</SelectItem>
-                                                        <SelectItem value="editor">Editor</SelectItem>
-                                                        <SelectItem value="viewer">Visualizador</SelectItem>
-                                                        <SelectItem value="parceiro">Parceiro</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            ) : (
-                                                <Badge className={`border px-2.5 py-0.5 font-medium rounded-full text-[11px] ${ROLE_COLORS[member.role as keyof typeof ROLE_COLORS] || ''}`}>
-                                                    <Shield className="mr-1 h-3 w-3 inline-block align-text-bottom" />
-                                                    {ROLE_LABELS[member.role as keyof typeof ROLE_LABELS] || member.role}
-                                                </Badge>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-3.5">
-                                            {member.acceptedAt || member.role === 'owner' ? (
-                                                <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 font-medium px-2 py-0.5 rounded-full text-[11px] flex items-center gap-1 w-fit">
-                                                    <Check className="h-3.5 w-3.5" />
-                                                    Ativo
-                                                </Badge>
-                                            ) : (
-                                                <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/20 font-medium px-2 py-0.5 rounded-full text-[11px] flex items-center gap-1 w-fit">
-                                                    <Clock className="h-3.5 w-3.5" />
-                                                    Pendente
-                                                </Badge>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-3.5 text-xs text-muted-foreground">
-                                            {new Date(member.invitedAt).toLocaleDateString('pt-BR', {
-                                                day: '2-digit',
-                                                month: '2-digit',
-                                                year: 'numeric'
-                                            })}
-                                        </td>
-                                        {isAdmin && (
-                                            <td className="px-4 py-3.5 text-right">
-                                                {member.role !== 'owner' && (
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        onClick={() => handleRemove(member.id)}
-                                                        disabled={removeMutation.isPending}
-                                                        className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-full transition-all duration-300"
-                                                        title="Remover membro"
-                                                    >
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
-                                                )}
-                                            </td>
-                                        )}
-                                    </tr>
-                                ))}
-                                {(!members || members.length === 0) && (
-                                    <tr>
-                                        <td colSpan={5} className="text-center py-8 text-muted-foreground text-sm font-medium">
-                                            Nenhum membro associado a este projeto ainda.
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
+            {/* Listagem de Membros Atuais */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+                <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+                    <div>
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                            Membros Integrados ao Projeto ({members?.length || 0})
+                        </h3>
+                        <p className="text-[11px] text-slate-500">
+                            Usuários autorizados a visualizar ou editar este projeto.
+                        </p>
                     </div>
-                </CardContent>
-            </Card>
+                </div>
+
+                <div className="divide-y divide-slate-100">
+                    {members?.map((member) => {
+                        const isOwner = member.role === 'owner';
+                        return (
+                            <div key={member.id} className="p-3.5 px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/70 transition-colors">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-9 h-9 rounded-full bg-slate-100 text-slate-700 border border-slate-200 flex items-center justify-center font-bold text-xs shrink-0">
+                                        {member.name ? member.name.charAt(0).toUpperCase() : member.email.charAt(0).toUpperCase()}
+                                    </div>
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-bold text-slate-900">
+                                                {member.name || member.email}
+                                            </span>
+                                            {member.empresa && (
+                                                <span className="text-[10px] font-bold px-2 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                                                    {member.empresa}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p className="text-[11px] text-slate-500 flex items-center gap-2 mt-0.5">
+                                            <span>{member.email}</span>
+                                            <span className="text-slate-300">•</span>
+                                            <span className="flex items-center gap-1 text-[10px]">
+                                                <Clock className="w-2.5 h-2.5 text-slate-400" />
+                                                Desde {new Date(member.invitedAt).toLocaleDateString('pt-BR')}
+                                            </span>
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 self-end sm:self-center">
+                                    {/* Empresa selector para Admins */}
+                                    {isAdmin && !isOwner ? (
+                                        <Select
+                                            value={member.empresa || 'Stecla'}
+                                            onValueChange={(emp) => handleEmpresaChange(member.id, emp)}
+                                        >
+                                            <SelectTrigger className="text-[11px] h-7 w-28 rounded-md border-slate-200 bg-white font-medium">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {EMPRESAS_SUGESTOES.map((emp) => (
+                                                    <SelectItem key={emp} value={emp} className="text-xs">
+                                                        {emp}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    ) : null}
+
+                                    {/* Role selector para Admins */}
+                                    {isAdmin && !isOwner ? (
+                                        <Select
+                                            value={member.role}
+                                            onValueChange={(role: any) => handleRoleChange(member.id, role)}
+                                        >
+                                            <SelectTrigger className="text-[11px] h-7 w-36 rounded-md border-slate-200 bg-white font-bold text-slate-800">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="admin" className="text-xs">Administrador</SelectItem>
+                                                <SelectItem value="editor" className="text-xs">Editor</SelectItem>
+                                                <SelectItem value="parceiro" className="text-xs">Projetista / Parceiro</SelectItem>
+                                                <SelectItem value="viewer" className="text-xs">Visualizador</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    ) : (
+                                        <Badge className={`text-[10px] px-2.5 py-0.5 border ${ROLE_COLORS[member.role as keyof typeof ROLE_COLORS] || ROLE_COLORS.viewer}`}>
+                                            {ROLE_LABELS[member.role as keyof typeof ROLE_LABELS] || member.role}
+                                        </Badge>
+                                    )}
+
+                                    {/* Botão Remover */}
+                                    {isAdmin && !isOwner && (
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => handleRemove(member.id)}
+                                            className="h-7 w-7 p-0 text-slate-400 hover:text-[#9C1915] hover:bg-red-50 rounded-md"
+                                            title="Remover membro"
+                                        >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                        </Button>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
         </div>
     );
 }

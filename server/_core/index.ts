@@ -6,19 +6,12 @@ import path from 'path';
 import { appRouter } from '../routers';
 import type { Context } from './trpc';
 import { ENV } from './env';
-import multer from 'multer';
-import { handleExcelUpload } from '../uploadHandler';
-import { uploadToStorage } from '../storage';
-import fs from 'fs';
-
-const upload = multer({ storage: multer.memoryStorage() });
-const EXTERNAL_API_KEY = process.env.EXTERNAL_API_KEY || 'antigravity-sync-2024';
 
 const app = express();
 
-// Middleware
-app.use(express.json({ limit: '500mb' }));
-app.use(express.urlencoded({ extended: true, limit: '500mb' }));
+// Middleware - Optimized JSON limits
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // CORS
 app.use((req, res, next) => {
@@ -31,58 +24,8 @@ app.use((req, res, next) => {
     next();
 });
 
-// Serve uploaded files
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
-
-/* 
-// BLOQUEADO: Sincronização automática via Excel desativada a pedido do usuário.
-// O Dashboard agora é o mestre dos dados para evitar sobreposição de informações manuais.
-app.post('/api/external/upload-excel', upload.single('file'), async (req, res) => {
-    const apiKey = req.headers['x-api-key'];
-
-    if (apiKey !== EXTERNAL_API_KEY) {
-        return res.status(401).json({ error: 'Unauthorized: Invalid API Key' });
-    }
-
-    if (!req.file) {
-        return res.status(400).json({ error: 'No file uploaded' });
-    }
-
-    try {
-        console.log(`📡 Automated sync: Received file ${req.file.originalname}`);
-        const result = await handleExcelUpload(req.file.buffer, req.file.originalname, 0); // User ID 0 for system/automation
-        return res.json(result);
-    } catch (error: any) {
-        console.error('❌ External upload error:', error);
-        return res.status(500).json({ error: error.message || 'Internal Server Error' });
-    }
-});
-*/
-
-// Image Upload for Field Reports
-app.post('/api/upload-image', upload.single('image'), async (req, res) => {
-    if (!req.file) {
-        return res.status(400).json({ error: 'No image uploaded' });
-    }
-
-    try {
-        const publicUrl = await uploadToStorage(req.file.buffer, req.file.originalname);
-        
-        return res.json({
-            success: true,
-            url: publicUrl
-        });
-    } catch (error: any) {
-        console.error('❌ Image upload error:', error);
-        return res.status(500).json({ 
-            success: false,
-            error: error.message || 'Failed to save image',
-            details: error
-        });
-    }
-});
-
 // Health Check
+
 app.get('/api/health', async (_req, res) => {
     try {
         const { getDb, users, salas } = await import('../db');
@@ -103,8 +46,8 @@ app.get('/api/health', async (_req, res) => {
             dbType: process.env.DATABASE_URL ? 'Postgres' : 'SQLite',
             connectionString: maskedUrl,
             counts: {
-                users: rUsers[0]?.count || rUsers.error || 'error',
-                salas: rSalas[0]?.count || rSalas.error || 'error'
+                users: rUsers?.count ?? 'error',
+                salas: rSalas?.count ?? 'error'
             },
             env: process.env.NODE_ENV,
             postgresParams: {

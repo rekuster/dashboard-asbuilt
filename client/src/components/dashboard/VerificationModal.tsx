@@ -1,615 +1,438 @@
-import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import React, { useState } from "react";
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
-import { CheckCircle2, Info, AlertCircle, Image as ImageIcon, ExternalLink, X, Upload, Loader2 as LoaderIcon, Pencil } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { EditApontamentoModal } from "./EditApontamentoModal";
-
-/* 
- * ESTE É O MODAL DE CHECKLIST POR SALA.
- * Ele permite marcar quais disciplinas já foram verificadas "in loco".
- * Agora, ele também mostra se existem divergências (apontamentos) pendentes vindos do campo.
- * Adicionada funcionalidade de "Print de Verificação" para o modelo As-Built.
- */
+import {
+    Upload,
+    Pencil,
+    Eye,
+    Maximize2,
+    CheckCircle2,
+    AlertTriangle,
+} from "lucide-react";
+import { isSameDiscipline } from "@/features/issues/constants";
 
 interface VerificationModalProps {
     projectId: string;
     isOpen: boolean;
     onClose: () => void;
-    sala: any; // Dados da sala selecionada
-    disciplines: string[]; // Disciplinas exigidas para esta edificação
-    pendingApontamentos?: Record<string, number>; // Mapa de divergências pendentes por disciplina
+    sala: any;
+    disciplines: string[];
+    pendingApontamentos?: Record<string, number>;
 }
 
-// MAPEAMENTO DE DISCIPLINAS (REPLICADO PARA O MODAL)
-const DISCIPLINE_MAPPING: Record<string, string> = {
-    'ELE': 'Instalações Elétricas',
-    'LOG': 'CFTV e Lógica',
-    'HID': 'Instalações Hidrossanitárias',
-    'UTI': 'Utilidades',
-    'CLI': 'Climatização',
-    'EST': 'Estrutura de Concreto',
-    'MET': 'Estrutura Metálica',
-    'ARQ': 'Arquitetura',
-    'ELEMT': 'Média Tensão e Barramentos',
-    'PCI': 'PCI',
-    'SDAI': 'SDAI'
-};
-
-const isSameDiscipline = (apontamentoDisc: string, escopoDisc: string) => {
-    const a = (apontamentoDisc || "").trim().toUpperCase();
-    const e = (escopoDisc || "").trim().toUpperCase();
-    if (a === e) return true;
-    const mapped = DISCIPLINE_MAPPING[a];
-    return mapped && mapped.toUpperCase() === e;
-};
-
-export function VerificationModal({ projectId, isOpen, onClose, sala, disciplines, pendingApontamentos = {} }: VerificationModalProps) {
+export function VerificationModal({
+    projectId,
+    isOpen,
+    onClose,
+    sala,
+    disciplines,
+}: VerificationModalProps) {
     const utils = trpc.useUtils();
-    
-    // Busca o status de verificação de cada disciplina para esta sala
+    const salaNome = sala?.nome || sala?.salaNome || "";
+
     const { data: verifications = [] } = trpc.dashboard.getVerificacoes.useQuery(
-        { salaId: sala?.id },
-        { enabled: !!sala?.id }
+        { salaId: sala?.id || sala?.salaId },
+        { enabled: !!(sala?.id || sala?.salaId) }
     );
 
-    // BUSCA DETALHADA DE APONTAMENTOS PARA MOSTRAR FOTOS
-    const { data: allApontamentos = [] } = trpc.dashboard.getApontamentos.useQuery({ projectId });
+    // Busca detalhada dos apontamentos DESTA SALA com as fotos completas
+    const { data: roomApontamentos = [] } = trpc.dashboard.getApontamentosBySala.useQuery(
+        { projectId, sala: salaNome },
+        { enabled: !!salaNome && !!projectId && isOpen }
+    );
 
-    // Mutação para salvar/atualizar o status da checklist
     const upsertMutation = trpc.dashboard.upsertVerificacao.useMutation({
-        onMutate: async (newVer) => {
-            await utils.dashboard.getVerificacoes.cancel({ salaId: sala?.id });
-            const previous = utils.dashboard.getVerificacoes.getData({ salaId: sala?.id });
-            utils.dashboard.getVerificacoes.setData({ salaId: sala?.id }, (old: any) => {
-                if (!old) return [{ ...newVer, id: Date.now() }];
-                const exists = old.find((v: any) => v.disciplina === newVer.disciplina);
-                if (exists) {
-                    return old.map((v: any) => v.disciplina === newVer.disciplina ? { ...v, status: newVer.status } : v);
-                }
-                return [...old, { ...newVer, id: Date.now() }];
-            });
-            return { previous };
-        },
-        onError: (err, newVer, context) => {
-            if (context?.previous) {
-                utils.dashboard.getVerificacoes.setData({ salaId: sala?.id }, context.previous);
-            }
-        },
-        onSettled: () => {
-            utils.dashboard.getVerificacoes.invalidate({ salaId: sala?.id });
+        onSuccess: () => {
+            utils.dashboard.getVerificacoes.invalidate({ salaId: sala?.id || sala?.salaId });
+            utils.dashboard.getSalas.invalidate({ projectId });
+            utils.dashboard.getKPIs.invalidate({ projectId });
+            toast.success("Status de verificação atualizado!");
         },
     });
 
     const [editingApontamentoId, setEditingApontamentoId] = useState<number | null>(null);
     const [asBuiltNota, setAsBuiltNota] = useState("");
     const [asBuiltPrintUrls, setAsBuiltPrintUrls] = useState<string[]>([]);
-    const [asBuiltPrintUrlInput, setAsBuiltPrintUrlInput] = useState("");
     const [bcfIssueId, setBcfIssueId] = useState("");
     const [isUploading, setIsUploading] = useState(false);
+    const [previewImage, setPreviewImage] = useState<string | null>(null);
 
-    // Mutação para salvar detalhes As-Built no apontamento
     const updateAsBuiltMutation = trpc.dashboard.updateApontamentoAsBuilt.useMutation({
-        onMutate: async (newApont) => {
-            await utils.dashboard.getApontamentos.cancel({ projectId });
-            const previous = utils.dashboard.getApontamentos.getData({ projectId });
-            utils.dashboard.getApontamentos.setData({ projectId }, (old: any) => {
-                if (!old) return old;
-                return old.map((a: any) => a.id === newApont.id ? { ...a, asBuiltNota: newApont.asBuiltNota, asBuiltPrintUrl: newApont.asBuiltPrintUrl, bcfIssueId: newApont.bcfIssueId, status: newApont.status || a.status } : a);
-            });
-            return { previous };
-        },
-        onError: (err, newApont, context) => {
-            if (context?.previous) {
-                utils.dashboard.getApontamentos.setData({ projectId }, context.previous);
-            }
-            toast.error("Erro ao salvar detalhes.");
-        },
         onSuccess: () => {
-            toast.success("Detalhes As-Built salvos!");
+            toast.success("Ajustes As-Built salvos com sucesso!");
             setEditingApontamentoId(null);
             setAsBuiltNota("");
             setAsBuiltPrintUrls([]);
-            setAsBuiltPrintUrlInput("");
             setBcfIssueId("");
-        },
-        onSettled: () => {
+            utils.dashboard.getApontamentosBySala.invalidate({ projectId, sala: salaNome });
             utils.dashboard.getApontamentos.invalidate({ projectId });
-        }
+        },
+        onError: () => {
+            toast.error("Erro ao salvar detalhes As-Built.");
+        },
     });
 
-    // Mutação otimista para atualização de status de apontamentos
-    const updateApontamentoMutation = trpc.dashboard.updateApontamento.useMutation({
-        onMutate: async (newApont) => {
-            await utils.dashboard.getApontamentos.cancel({ projectId });
-            const previous = utils.dashboard.getApontamentos.getData({ projectId });
-            utils.dashboard.getApontamentos.setData({ projectId }, (old: any) => {
-                if (!old) return old;
-                return old.map((a: any) => a.id === newApont.id ? { ...a, status: newApont.status, dataResolvido: newApont.dataResolvido } : a);
-            });
-            return { previous };
-        },
-        onError: (err, newApont, context) => {
-            if (context?.previous) {
-                utils.dashboard.getApontamentos.setData({ projectId }, context.previous);
-            }
-            toast.error("Erro ao atualizar divergência.");
-        },
-        onSettled: () => {
-            utils.dashboard.getApontamentos.invalidate({ projectId });
-        }
-    });
-
-    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-    const [selectedApontamento, setSelectedApontamento] = useState<any>(null);
-
-    const handleEditClick = (apont: any) => {
-        setSelectedApontamento(apont);
-        setIsEditModalOpen(true);
-    };
-
-
-    // Função para upload de imagem
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
         setIsUploading(true);
-
         try {
-            // Sanitize filename and path
-            const sanitize = (str: string) => str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9\/\._-]/g, '_');
-            const fileExt = file.name.split('.').pop();
+            const sanitize = (str: string) =>
+                str
+                    .normalize("NFD")
+                    .replace(/[\u0300-\u036f]/g, "")
+                    .replace(/[^a-zA-Z0-9/._-]/g, "_");
+            const fileExt = file.name.split(".").pop();
             const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
             const filePath = sanitize(`apontamentos/real/${fileName}`);
 
             const { error: uploadError } = await supabase.storage
-                .from('project-assets')
+                .from("project-assets")
                 .upload(filePath, file);
 
-            if (uploadError) {
-                throw uploadError;
-            }
+            if (uploadError) throw uploadError;
 
-            // Get public URL
-            const { data: { publicUrl } } = supabase.storage
-                .from('project-assets')
-                .getPublicUrl(filePath);
+            const {
+                data: { publicUrl },
+            } = supabase.storage.from("project-assets").getPublicUrl(filePath);
 
-            setAsBuiltPrintUrls(prev => [...prev, publicUrl]);
-            toast.success("Imagem carregada com sucesso!");
+            setAsBuiltPrintUrls((prev) => [...prev, publicUrl]);
+            toast.success("Print do Navisworks anexado!");
         } catch (error: any) {
-            console.error("Upload error:", error);
             toast.error(error.message || "Erro ao carregar imagem.");
         } finally {
             setIsUploading(false);
         }
     };
 
-    // Alterna entre OK e PENDENTE na checklist
     const handleToggle = (disc: string, currentStatus: string) => {
         const newStatus = currentStatus === "OK" ? "ATIVA" : "OK";
-        const currentVer = verifications.find((v: any) => v.disciplina === disc);
+        const currentVer = verifications.find((v: any) => isSameDiscipline(v.disciplina, disc));
         upsertMutation.mutate({
-            salaId: sala.id,
+            salaId: sala?.id || sala?.salaId,
             disciplina: disc,
             status: newStatus,
             observacao: currentVer?.observacao || "",
-            printUrl: currentVer?.printUrl || ""
-        }, {
-            onSuccess: () => toast.success(`${disc} atualizado!`)
+            printUrl: currentVer?.printUrl || "",
         });
     };
 
-    // Salva uma observação técnica para o apontamento
     const handleSaveAsBuilt = (id: number, currentStatus?: string) => {
         updateAsBuiltMutation.mutate({
             id,
             asBuiltNota: asBuiltNota,
             asBuiltPrintUrl: JSON.stringify(asBuiltPrintUrls),
             bcfIssueId: bcfIssueId,
-            status: (asBuiltNota || asBuiltPrintUrls.length > 0 || bcfIssueId) ? 'EM_REVISAO' : currentStatus
+            status:
+                asBuiltNota || asBuiltPrintUrls.length > 0 || bcfIssueId
+                    ? "EM_REVISAO"
+                    : currentStatus,
         });
     };
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-[95vw] md:max-w-[1200px] xl:max-w-[1500px] font-sans rounded-3xl overflow-hidden flex flex-col max-h-[96vh] h-[96vh] p-0">
-                <DialogHeader className="px-6 py-3 border-b border-slate-100 bg-white">
-                    <DialogTitle className="flex items-center gap-2 text-xl font-bold text-slate-800">
-                        <CheckCircle2 className="w-6 h-6 text-[#940707]" />
-                        Checklist As-Built: {sala?.nome}
-                    </DialogTitle>
-                    <DialogDescription className="text-slate-500 font-medium">
-                        Verifique a conformidade para a sala {sala?.numeroSala} ({sala?.edificacao}).
-                    </DialogDescription>
+            <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 rounded-xl border border-slate-200 bg-white shadow-xl overflow-hidden font-sans">
+                {/* Header Stecla */}
+                <DialogHeader className="p-4 border-b border-slate-200 bg-white">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                            <div className="w-1.5 h-6 bg-[#9C1915] rounded-xs" />
+                            <div>
+                                <DialogTitle className="text-sm font-bold uppercase tracking-wide text-slate-800">
+                                    Verificação As-Built • {salaNome}
+                                </DialogTitle>
+                                <DialogDescription className="text-xs text-[#575756]">
+                                    {sala?.edificacao} • Pavimento: {sala?.pavimento || "—"} • Código:{" "}
+                                    {sala?.numeroSala || "—"}
+                                </DialogDescription>
+                            </div>
+                        </div>
+                    </div>
                 </DialogHeader>
 
-                <div className="flex-1 overflow-y-auto px-4 py-2 space-y-3 custom-scrollbar bg-slate-50">
+                {/* Content */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar bg-[#F8FAFC]">
                     {disciplines.length === 0 && (
-                        <div className="flex flex-col items-center justify-center py-10 text-center space-y-2">
-                            <Info className="w-8 h-8 text-slate-300" />
-                            <p className="text-sm text-slate-400 italic">Nenhuma disciplina mapeada para esta edificação.</p>
+                        <div className="py-12 text-center text-xs text-slate-400 italic">
+                            Nenhuma disciplina associada a esta edificação.
                         </div>
                     )}
-                    
+
                     {disciplines.map((disc) => {
-                        const ver = verifications.find((v: any) => v.disciplina === disc);
+                        const ver = verifications.find((v: any) => isSameDiscipline(v.disciplina, disc));
                         const isOk = ver?.status === "OK";
-                        
-                        const roomApontamentos = allApontamentos.filter((a: any) => 
-                            a.sala === sala?.nome && 
-                            isSameDiscipline(a.disciplina, disc)
+
+                        const discApontamentos = roomApontamentos.filter(
+                            (a: any) => isSameDiscipline(a.disciplina, disc)
                         );
-                        
-                        const pendingCount = roomApontamentos.filter((a: any) => a.status === 'ATIVA' || a.status === 'EM_REVISAO').length;
-                        
+
                         return (
-                            <div 
-                                key={disc} 
-                                className={`border rounded-2xl overflow-hidden transition-all duration-300 ${
-                                    pendingCount > 0 
-                                        ? 'border-amber-200 bg-amber-50/20' 
-                                        : isOk 
-                                            ? 'border-emerald-100 bg-emerald-50/10' 
-                                            : 'border-slate-100 bg-slate-50/50'
-                                }`}
+                            <div
+                                key={disc}
+                                className="bg-white border border-slate-200 rounded-lg p-3.5 shadow-xs space-y-3"
                             >
-                                <div className="p-3 bg-white/40">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <Checkbox 
-                                                id={`check-${disc}`} 
-                                                checked={isOk}
-                                                onCheckedChange={() => handleToggle(disc, ver?.status || "ATIVA")}
-                                                className="w-5 h-5 rounded-md border-slate-300 data-[state=checked]:bg-[#940707] data-[state=checked]:border-[#940707]"
-                                            />
-                                            <div className="flex flex-col">
-                                                <label htmlFor={`check-${disc}`} className="text-sm font-bold cursor-pointer text-slate-700">
-                                                    {disc}
-                                                </label>
-                                                {pendingCount > 0 && (
-                                                    <span className="text-[10px] font-bold text-amber-600 flex items-center gap-1">
-                                                        <AlertCircle className="w-3.5 h-3.5" />
-                                                        {pendingCount} DIVERGÊNCIA(S) ENCONTRADA(S)
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </div>
-                                        <div className="flex flex-col items-end gap-1">
-                                            <Badge 
-                                                variant={isOk ? "secondary" : "outline"} 
-                                                className={`rounded-full px-3 py-0.5 text-[10px] uppercase tracking-wider font-bold ${
-                                                    isOk ? "bg-emerald-100 text-emerald-700 border-none" : "text-amber-600 bg-amber-50 border-amber-200"
-                                                }`}
-                                            >
-                                                {isOk ? "Verificado" : "Ativa"}
-                                            </Badge>
-                                        </div>
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2.5">
+                                        <Checkbox
+                                            id={`chk-${disc}`}
+                                            checked={isOk}
+                                            onCheckedChange={() =>
+                                                handleToggle(disc, ver?.status || "PENDENTE")
+                                            }
+                                            className="h-4 w-4 rounded data-[state=checked]:bg-[#9C1915] data-[state=checked]:border-[#9C1915]"
+                                        />
+                                        <label
+                                            htmlFor={`chk-${disc}`}
+                                            className="text-xs font-bold text-slate-800 uppercase cursor-pointer"
+                                        >
+                                            {disc}
+                                        </label>
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                        <span
+                                            className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded border ${
+                                                isOk
+                                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                                    : discApontamentos.length > 0
+                                                    ? "bg-red-50 text-[#9C1915] border-red-200"
+                                                    : "bg-slate-100 text-slate-600 border-slate-200"
+                                            }`}
+                                        >
+                                            {isOk
+                                                ? "Conforme (OK)"
+                                                : discApontamentos.length > 0
+                                                ? `${discApontamentos.length} Divergência(s)`
+                                                : "Pendente"}
+                                        </span>
                                     </div>
                                 </div>
 
-                                {pendingCount > 0 && (
-                                    <div className="border-t border-amber-100 bg-white/60 p-3 space-y-4">
-                                        <p className="text-[10px] uppercase font-black text-amber-500 tracking-widest mb-1">Detalhes das Divergências (Layout de Relatório):</p>
-                                        <div className="flex flex-col gap-4">
-                                            {roomApontamentos.map((apont: any, idx: number) => (
-                                                <div key={apont.id} className="space-y-3 bg-white p-3 rounded-2xl border border-amber-100 shadow-md">
-                                                    <div className="flex gap-3 items-start">
-                                                        <Badge className={`${apont.status === 'RESOLVIDA' ? 'bg-emerald-500' : 'bg-amber-500'} h-8 w-8 rounded-full flex items-center justify-center p-0 shrink-0 text-white text-lg font-black shadow-lg`}>{idx + 1}</Badge>
-                                                        <div className="flex-1 space-y-1">
-                                                            <p className={`text-sm font-bold leading-relaxed italic ${apont.status === 'RESOLVIDA' ? 'text-slate-400 line-through' : 'text-slate-800'}`}>
-                                                                "{apont.divergencia}"
-                                                            </p>
-                                                            <div className="flex items-center gap-3">
-                                                                <Badge variant="outline" className={`text-[10px] font-black uppercase px-2 py-0.5 ${
-                                                                    apont.status === 'RESOLVIDA' ? 'text-emerald-600 bg-emerald-50 border-emerald-200' : 
-                                                                    apont.status === 'EM_REVISAO' ? 'text-blue-600 bg-blue-50 border-blue-200' :
-                                                                    'text-amber-600 bg-amber-50 border-amber-200'
-                                                                }`}>
-                                                                    {apont.status || 'ATIVA'}
-                                                                </Badge>
-                                                                <div className="flex items-center gap-2">
-                                                                    <span className="text-[10px] font-bold text-slate-400 uppercase">Responsável:</span>
-                                                                    <span className="text-[10px] font-black text-slate-600 uppercase">
-                                                                        {apont.responsavel || 'Não Definido'}
-                                                                    </span>
-                                                                </div>
-                                                                <Button 
-                                                                    variant="ghost" 
-                                                                    size="icon" 
-                                                                    className="h-6 w-6 text-slate-400 hover:text-[#940707] transition-colors"
-                                                                    onClick={() => handleEditClick(apont)}
-                                                                >
-                                                                    <Pencil size={12} />
-                                                                </Button>
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex flex-wrap gap-2">
-                                                            <Button 
-                                                                size="sm" 
-                                                                variant="outline" 
-                                                                className={`h-8 px-3 text-[10px] font-black uppercase rounded-full transition-all border ${
-                                                                    apont.status === 'ATIVA' 
-                                                                        ? 'bg-amber-500 text-white border-amber-600 shadow-sm' 
-                                                                        : 'text-amber-600 border-amber-100 hover:bg-amber-50'
-                                                                }`}
-                                                                onClick={() => {
-                                                                    updateApontamentoMutation.mutate({
-                                                                        id: apont.id,
-                                                                        status: 'ATIVA',
-                                                                        dataResolvido: null
-                                                                    }, {
-                                                                        onSuccess: () => toast.success("Divergência marcada como ATIVA")
-                                                                    });
-                                                                }}
-                                                            >
-                                                                Ativa
-                                                            </Button>
-                                                            <Button 
-                                                                size="sm" 
-                                                                variant="outline" 
-                                                                className={`h-8 px-3 text-[10px] font-black uppercase rounded-full transition-all border ${
-                                                                    apont.status === 'EM_REVISAO' 
-                                                                        ? 'bg-blue-500 text-white border-blue-600 shadow-sm' 
-                                                                        : 'text-blue-600 border-blue-100 hover:bg-blue-50'
-                                                                }`}
-                                                                onClick={() => {
-                                                                    updateApontamentoMutation.mutate({
-                                                                        id: apont.id,
-                                                                        status: 'EM_REVISAO',
-                                                                        dataResolvido: null
-                                                                    }, {
-                                                                        onSuccess: () => toast.success("Divergência enviada para REVISÃO")
-                                                                    });
-                                                                }}
-                                                            >
-                                                                Em Revisão
-                                                            </Button>
-                                                            <Button 
-                                                                size="sm" 
-                                                                variant="outline" 
-                                                                className={`h-8 px-3 text-[10px] font-black uppercase rounded-full transition-all border ${
-                                                                    apont.status === 'RESOLVIDA' 
-                                                                        ? 'bg-emerald-500 text-white border-emerald-600 shadow-sm' 
-                                                                        : 'text-emerald-600 border-emerald-100 hover:bg-emerald-50'
-                                                                }`}
-                                                                onClick={() => {
-                                                                    updateApontamentoMutation.mutate({
-                                                                        id: apont.id,
-                                                                        status: 'RESOLVIDA',
-                                                                        dataResolvido: new Date()
-                                                                    }, {
-                                                                        onSuccess: () => toast.success("Divergência marcada como RESOLVIDA")
-                                                                    });
-                                                                }}
-                                                            >
-                                                                Resolvida
-                                                            </Button>
-                                                        </div>
-                                                    </div>
+                                {/* Lista de Apontamentos da Sala com fotos reais da obra e do modelo */}
+                                {discApontamentos.length > 0 && (
+                                    <div className="space-y-3 pt-2 border-t border-slate-100">
+                                        {discApontamentos.map((apont: any) => {
+                                            const isEditing = editingApontamentoId === apont.id;
 
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
-                                                        <div className="space-y-1">
-                                                            <div className="flex items-center justify-between">
-                                                                <div className="text-[10px] font-black text-slate-500 uppercase tracking-tight flex items-center gap-2">
-                                                                    <div className="w-1.5 h-1.5 bg-[#940707] rounded-full"></div>
-                                                                    Projeto / Referência RA
-                                                                </div>
-                                                            </div>
-                                                            <div className="h-[50vh] min-h-[350px] max-h-[600px] bg-slate-100 rounded-xl overflow-hidden border-2 border-slate-200 shadow-inner group">
-                                                                {apont.fotoReferenciaUrl ? (
-                                                                    <img src={apont.fotoReferenciaUrl} alt="Referência" className="w-full h-full object-contain bg-slate-200 hover:scale-[1.02] transition-all duration-500 cursor-zoom-in" 
-                                                                        onClick={() => window.open(apont.fotoReferenciaUrl, '_blank')}/>
-                                                                ) : (
-                                                                    <div className="w-full h-full flex flex-col items-center justify-center text-[10px] text-slate-400 italic gap-2">
-                                                                        <ImageIcon className="w-8 h-8 opacity-20" />
-                                                                        Sem imagem de referência
-                                                                    </div>
-                                                                )}
-                                                            </div>
+                                            return (
+                                                <div
+                                                    key={apont.id}
+                                                    className="bg-slate-50 border border-slate-200/80 rounded-md p-3 text-xs space-y-2.5"
+                                                >
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="font-bold text-[#9C1915]">
+                                                                #{apont.numeroApontamento || apont.id}
+                                                            </span>
+                                                            <span className="text-[11px] font-semibold text-slate-800">
+                                                                {apont.divergencia || "Sem descrição de divergência"}
+                                                            </span>
                                                         </div>
-                                                        <div className="space-y-1">
-                                                            <div className="flex items-center justify-between">
-                                                                <div className="text-[10px] font-black text-slate-500 uppercase tracking-tight flex items-center gap-2">
-                                                                    <div className="w-1.5 h-1.5 bg-amber-500 rounded-full"></div>
-                                                                    Execução Real / Obra
-                                                                </div>
-                                                            </div>
-                                                            <div className="h-[50vh] min-h-[350px] max-h-[600px] bg-slate-100 rounded-xl overflow-hidden border-2 border-slate-200 shadow-inner group">
-                                                                {apont.fotoUrl ? (
-                                                                    <img src={apont.fotoUrl} alt="Campo" className="w-full h-full object-contain bg-slate-200 hover:scale-[1.02] transition-all duration-500 cursor-zoom-in" 
-                                                                        onClick={() => window.open(apont.fotoUrl, '_blank')}/>
-                                                                ) : (
-                                                                    <div className="w-full h-full flex flex-col items-center justify-center text-[10px] text-slate-400 italic gap-2">
-                                                                        <ImageIcon className="w-8 h-8 opacity-20" />
-                                                                        Sem foto de campo
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    </div>
 
-                                                    {/* SEÇÃO AS-BUILT POR APONTAMENTO */}
-                                                    <div className="mt-4 pt-4 border-t border-slate-100">
-                                                        {editingApontamentoId === apont.id ? (
-                                                            <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
-                                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                                    <div className="space-y-4">
-                                                                        <div className="space-y-2">
-                                                                            <label className="text-[10px] font-bold text-slate-500 uppercase">Nº Issue BCF / Navisworks</label>
-                                                                            <Input 
-                                                                                placeholder="Ex: #105, Issue 12..."
-                                                                                value={bcfIssueId}
-                                                                                onChange={(e) => setBcfIssueId(e.target.value)}
-                                                                                className="text-xs h-9 rounded-lg border-slate-200 focus:ring-[#940707] focus:border-[#940707] bg-white"
-                                                                            />
-                                                                        </div>
-                                                                        <div className="space-y-2">
-                                                                            <label className="text-[10px] font-bold text-slate-500 uppercase">Nota Técnica As-Built</label>
-                                                                        <Textarea 
-                                                                            placeholder="Descreva a solução aplicada no As-Built..."
-                                                                            value={asBuiltNota}
-                                                                            onChange={(e) => setAsBuiltNota(e.target.value)}
-                                                                            className="text-xs min-h-[80px] rounded-xl border-slate-200 focus:ring-[#940707] focus:border-[#940707] bg-white"
-                                                                        />
-                                                                    </div>
-                                                                </div>
-                                                                <div className="space-y-2">
-                                                                    <label className="text-[10px] font-bold text-slate-500 uppercase">Prints de Verificação (Modelo)</label>
-                                                                        <div className="space-y-3">
-                                                                            <div className="flex gap-2">
-                                                                                <Input 
-                                                                                    placeholder="Adicionar URL manualmente..."
-                                                                                    value={asBuiltPrintUrlInput}
-                                                                                    onChange={(e) => setAsBuiltPrintUrlInput(e.target.value)}
-                                                                                    className="text-xs h-9 rounded-lg border-slate-200 bg-white"
-                                                                                />
-                                                                                <Button 
-                                                                                    variant="outline" 
-                                                                                    size="sm" 
-                                                                                    className="h-9"
-                                                                                    onClick={() => {
-                                                                                        if (asBuiltPrintUrlInput) {
-                                                                                            setAsBuiltPrintUrls(prev => [...prev, asBuiltPrintUrlInput]);
-                                                                                            setAsBuiltPrintUrlInput("");
-                                                                                        }
-                                                                                    }}
-                                                                                >
-                                                                                    Adicionar
-                                                                                </Button>
-                                                                                <div className="relative">
-                                                                                    <input 
-                                                                                        type="file" 
-                                                                                        id={`file-${apont.id}`} 
-                                                                                        className="hidden" 
-                                                                                        onChange={handleFileUpload}
-                                                                                    />
-                                                                                    <Button variant="outline" size="icon" className="h-9 w-9" asChild>
-                                                                                        <label htmlFor={`file-${apont.id}`}>
-                                                                                            {isUploading ? <LoaderIcon className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                                                                                        </label>
-                                                                                    </Button>
-                                                                                </div>
-                                                                            </div>
-                                                                            {asBuiltPrintUrls.length > 0 && (
-                                                                                <div className="flex flex-wrap gap-2">
-                                                                                    {asBuiltPrintUrls.map((url, i) => (
-                                                                                        <div key={i} className="relative aspect-video w-32 rounded-xl overflow-hidden border border-slate-200 group">
-                                                                                            <img src={url} className="w-full h-full object-cover" />
-                                                                                            <button 
-                                                                                                className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                                                                onClick={() => setAsBuiltPrintUrls(prev => prev.filter((_, idx) => idx !== i))}
-                                                                                            >
-                                                                                                <X className="w-3 h-3" />
-                                                                                            </button>
-                                                                                        </div>
-                                                                                    ))}
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                                <div className="flex justify-end gap-2">
-                                                                    <Button size="sm" variant="ghost" onClick={() => setEditingApontamentoId(null)}>Cancelar</Button>
-                                                                    <Button size="sm" onClick={() => handleSaveAsBuilt(apont.id, apont.status)} className="bg-[#940707] text-white">Salvar Verificação</Button>
-                                                                </div>
-                                                            </div>
-                                                        ) : (
-                                                            <div className="space-y-3">
-                                                                {(apont.asBuiltNota || apont.asBuiltPrintUrl || apont.bcfIssueId) && (() => {
-                                                                    let urls: string[] = [];
-                                                                    try {
-                                                                        const parsed = JSON.parse(apont.asBuiltPrintUrl || "[]");
-                                                                        urls = Array.isArray(parsed) ? parsed : (apont.asBuiltPrintUrl ? [apont.asBuiltPrintUrl] : []);
-                                                                    } catch (e) {
-                                                                        urls = apont.asBuiltPrintUrl ? [apont.asBuiltPrintUrl] : [];
-                                                                    }
-                                                                    
-                                                                    return (
-                                                                    <div className="bg-emerald-50/30 p-3 rounded-2xl border border-emerald-100/50 space-y-2">
-                                                                        {apont.bcfIssueId && (
-                                                                            <p className="text-xs font-bold text-slate-700">BCF: {apont.bcfIssueId}</p>
-                                                                        )}
-                                                                        {apont.asBuiltNota && (
-                                                                            <p className="text-xs text-slate-600 italic mb-2 flex gap-2">
-                                                                                <Info className="w-4 h-4 text-emerald-500 shrink-0" />
-                                                                                {apont.asBuiltNota}
-                                                                            </p>
-                                                                        )}
-                                                                        {urls.length > 0 && (
-                                                                            <div className="flex gap-2 flex-wrap mt-2">
-                                                                                {urls.map((url, i) => (
-                                                                                    <div key={i} className="max-w-[300px] aspect-video rounded-lg overflow-hidden border border-emerald-200 shadow-sm cursor-zoom-in" onClick={() => window.open(url, '_blank')}>
-                                                                                        <img src={url} className="w-full h-full object-cover" />
-                                                                                    </div>
-                                                                                ))}
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-                                                                );})()}
-                                                                <button 
-                                                                    className="text-[10px] font-bold text-[#940707] hover:underline flex items-center gap-1.5"
-                                                                    onClick={() => {
+                                                        <div className="flex items-center gap-2">
+                                                            <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                                                                apont.status === "RESOLVIDA" || apont.status === "SANADA"
+                                                                    ? "bg-emerald-50 text-emerald-700"
+                                                                    : apont.status === "EM_REVISAO"
+                                                                    ? "bg-amber-50 text-amber-700"
+                                                                    : "bg-red-50 text-[#9C1915]"
+                                                            }`}>
+                                                                {apont.status}
+                                                            </span>
+
+                                                            <Button
+                                                                size="sm"
+                                                                variant="ghost"
+                                                                className="h-6 px-2 text-[10px] font-bold text-slate-600 hover:text-[#9C1915]"
+                                                                onClick={() => {
+                                                                    if (isEditing) {
+                                                                        setEditingApontamentoId(null);
+                                                                    } else {
                                                                         setEditingApontamentoId(apont.id);
                                                                         setAsBuiltNota(apont.asBuiltNota || "");
                                                                         setBcfIssueId(apont.bcfIssueId || "");
                                                                         try {
-                                                                            const parsed = JSON.parse(apont.asBuiltPrintUrl || "[]");
-                                                                            setAsBuiltPrintUrls(Array.isArray(parsed) ? parsed : (apont.asBuiltPrintUrl ? [apont.asBuiltPrintUrl] : []));
-                                                                        } catch (e) {
-                                                                            setAsBuiltPrintUrls(apont.asBuiltPrintUrl ? [apont.asBuiltPrintUrl] : []);
+                                                                            const parsed = JSON.parse(
+                                                                                apont.asBuiltPrintUrl || "[]"
+                                                                            );
+                                                                            setAsBuiltPrintUrls(
+                                                                                Array.isArray(parsed)
+                                                                                    ? parsed
+                                                                                    : [apont.asBuiltPrintUrl].filter(Boolean)
+                                                                            );
+                                                                        } catch {
+                                                                            setAsBuiltPrintUrls(
+                                                                                [apont.asBuiltPrintUrl].filter(Boolean)
+                                                                            );
                                                                         }
-                                                                        setAsBuiltPrintUrlInput("");
-                                                                    }}
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <Pencil className="w-3 h-3 mr-1" />
+                                                                {isEditing ? "Fechar" : "Ajustes As-Built"}
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Fotos da Obra (Relato de Campo) e Snapshot do Modelo Navisworks */}
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                                                        {apont.fotoUrl ? (
+                                                            <div className="bg-white p-2 rounded border border-slate-200 space-y-1">
+                                                                <div className="flex items-center justify-between">
+                                                                    <span className="text-[10px] font-bold uppercase text-[#575756]">
+                                                                        Foto da Obra (Executado)
+                                                                    </span>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setPreviewImage(apont.fotoUrl)}
+                                                                        className="text-slate-400 hover:text-[#9C1915]"
+                                                                        title="Ampliar foto"
+                                                                    >
+                                                                        <Maximize2 className="w-3 h-3" />
+                                                                    </button>
+                                                                </div>
+                                                                <div
+                                                                    className="h-28 bg-slate-100 rounded overflow-hidden cursor-pointer relative group"
+                                                                    onClick={() => setPreviewImage(apont.fotoUrl)}
                                                                 >
-                                                                    <ImageIcon className="w-3.5 h-3.5" />
-                                                                    {apont.asBuiltNota || apont.asBuiltPrintUrl || apont.bcfIssueId ? "✎ Editar Verificação As-Built" : "+ Adicionar Nota Técnica, Print e BCF"}
-                                                                </button>
+                                                                    <img
+                                                                        src={apont.fotoUrl}
+                                                                        alt="Foto da Obra"
+                                                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="bg-white p-3 rounded border border-dashed border-slate-200 text-center flex flex-col items-center justify-center h-28">
+                                                                <span className="text-[10px] text-slate-400">
+                                                                    Sem foto da obra cadastrada
+                                                                </span>
+                                                            </div>
+                                                        )}
+
+                                                        {apont.fotoReferenciaUrl ? (
+                                                            <div className="bg-white p-2 rounded border border-slate-200 space-y-1">
+                                                                <div className="flex items-center justify-between">
+                                                                    <span className="text-[10px] font-bold uppercase text-[#575756]">
+                                                                        Snapshot Modelo (Navisworks)
+                                                                    </span>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setPreviewImage(apont.fotoReferenciaUrl)}
+                                                                        className="text-slate-400 hover:text-[#9C1915]"
+                                                                        title="Ampliar snapshot"
+                                                                    >
+                                                                        <Maximize2 className="w-3 h-3" />
+                                                                    </button>
+                                                                </div>
+                                                                <div
+                                                                    className="h-28 bg-slate-100 rounded overflow-hidden cursor-pointer relative group"
+                                                                    onClick={() => setPreviewImage(apont.fotoReferenciaUrl)}
+                                                                >
+                                                                    <img
+                                                                        src={apont.fotoReferenciaUrl}
+                                                                        alt="Snapshot Navisworks"
+                                                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="bg-white p-3 rounded border border-dashed border-slate-200 text-center flex flex-col items-center justify-center h-28">
+                                                                <span className="text-[10px] text-slate-400">
+                                                                    Sem snapshot do modelo anexado
+                                                                </span>
                                                             </div>
                                                         )}
                                                     </div>
+
+                                                    {/* Painel de Edição As-Built */}
+                                                    {isEditing && (
+                                                        <div className="p-3 bg-white border border-slate-200 rounded-md space-y-2 mt-2">
+                                                            <div className="space-y-1">
+                                                                <label className="text-[10px] font-bold uppercase text-[#575756]">
+                                                                    Nota Técnica de Validação As-Built
+                                                                </label>
+                                                                <Textarea
+                                                                    value={asBuiltNota}
+                                                                    onChange={(e) =>
+                                                                        setAsBuiltNota(e.target.value)
+                                                                    }
+                                                                    placeholder="Descreva o que foi corrigido no modelo..."
+                                                                    className="text-xs min-h-[60px] rounded-md border-slate-200"
+                                                                />
+                                                            </div>
+
+                                                            <div className="flex items-center justify-between pt-1">
+                                                                <label className="cursor-pointer inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-md transition-colors">
+                                                                    <Upload className="w-3.5 h-3.5" />
+                                                                    {isUploading
+                                                                        ? "Carregando..."
+                                                                        : "Subir Print do Modelo"}
+                                                                    <input
+                                                                        type="file"
+                                                                        accept="image/*"
+                                                                        className="hidden"
+                                                                        onChange={handleFileUpload}
+                                                                        disabled={isUploading}
+                                                                    />
+                                                                </label>
+
+                                                                <Button
+                                                                    size="sm"
+                                                                    className="h-7 px-3 text-xs font-bold rounded-md bg-[#9C1915] hover:bg-[#7D1411] text-white"
+                                                                    onClick={() =>
+                                                                        handleSaveAsBuilt(
+                                                                            apont.id,
+                                                                            apont.status
+                                                                        )
+                                                                    }
+                                                                    disabled={
+                                                                        updateAsBuiltMutation.isPending
+                                                                    }
+                                                                >
+                                                                    Salvar Ajustes
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
-                                            ))}
-                                        </div>
+                                            );
+                                        })}
                                     </div>
                                 )}
-                                
-                                <div className="p-4 bg-slate-50/30 border-t border-slate-100">
-                                    {/* Nota de verificação da disciplina removida conforme solicitação do usuário para ser individual por apontamento */}
-                                    <div className="text-[10px] text-slate-400 italic">
-                                        As notas técnicas agora são vinculadas individualmente a cada divergência acima.
-                                    </div>
-                                </div>
                             </div>
                         );
                     })}
                 </div>
-
-                <DialogFooter className="px-6 py-4 border-t border-slate-100 bg-slate-50/50">
-                    <Button onClick={onClose} className="bg-[#940707] hover:bg-[#7a0606] text-white rounded-full px-10 h-10 shadow-lg shadow-[#940707]/20 font-bold">
-                        Concluir Verificação
-                    </Button>
-                </DialogFooter>
-
-                {selectedApontamento && (
-                    <EditApontamentoModal 
-                        projectId={projectId}
-                        isOpen={isEditModalOpen}
-                        onClose={() => {
-                            setIsEditModalOpen(false);
-                            setSelectedApontamento(null);
-                        }}
-                        apontamento={selectedApontamento}
-                    />
-                )}
             </DialogContent>
+
+            {/* Modal de Zoom da Imagem */}
+            {previewImage && (
+                <Dialog open={!!previewImage} onOpenChange={() => setPreviewImage(null)}>
+                    <DialogContent className="max-w-4xl p-2 bg-black/95 border-none rounded-xl">
+                        <div className="relative flex items-center justify-center p-2">
+                            <img
+                                src={previewImage}
+                                alt="Visualização Ampliada"
+                                className="max-h-[85vh] max-w-full object-contain rounded"
+                            />
+                        </div>
+                    </DialogContent>
+                </Dialog>
+            )}
         </Dialog>
     );
 }

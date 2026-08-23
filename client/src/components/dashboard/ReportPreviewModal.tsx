@@ -61,6 +61,8 @@ export function ReportPreviewModal({ projectId, edificacoes, disciplinas, respon
         { enabled: isOpen && !!projectId }
     );
     const markAsSentMutation = trpc.dashboard.markApontamentosAsSentByFilters.useMutation();
+    const getPDFReportMutation = trpc.dashboard.getPDFReport.useMutation();
+    const getAsBuiltReportMutation = trpc.dashboard.getAsBuiltReport.useMutation();
 
     // Converte base64 para Blob URL para o preview ser mais estável
     useEffect(() => {
@@ -104,7 +106,7 @@ export function ReportPreviewModal({ projectId, edificacoes, disciplinas, respon
             };
 
             if (reportType === "CQ") {
-                base64 = await utils.dashboard.getPDFReport.fetch({
+                base64 = await getPDFReportMutation.mutateAsync({
                     projectId,
                     ...filters,
                     startDate: startDate || undefined,
@@ -112,7 +114,7 @@ export function ReportPreviewModal({ projectId, edificacoes, disciplinas, respon
                     apenasNaoEnviados
                 });
             } else {
-                base64 = await utils.dashboard.getAsBuiltReport.fetch({ 
+                base64 = await getAsBuiltReportMutation.mutateAsync({ 
                     projectId,
                     edificacao: filters.edificacao,
                     pavimento: filters.pavimento,
@@ -151,7 +153,7 @@ export function ReportPreviewModal({ projectId, edificacoes, disciplinas, respon
                 };
 
                 if (reportType === "CQ") {
-                    dataToDownload = await utils.dashboard.getPDFReport.fetch({
+                    dataToDownload = await getPDFReportMutation.mutateAsync({
                         projectId,
                         ...filters,
                         startDate: startDate || undefined,
@@ -159,7 +161,7 @@ export function ReportPreviewModal({ projectId, edificacoes, disciplinas, respon
                         apenasNaoEnviados
                     });
                 } else {
-                    dataToDownload = await utils.dashboard.getAsBuiltReport.fetch({ 
+                    dataToDownload = await getAsBuiltReportMutation.mutateAsync({ 
                         projectId,
                         edificacao: filters.edificacao,
                         pavimento: filters.pavimento,

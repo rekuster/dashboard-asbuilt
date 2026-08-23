@@ -1,3 +1,4 @@
+import React from "react";
 import {
     BarChart,
     Bar,
@@ -9,40 +10,54 @@ import {
     Cell,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Layers } from "lucide-react";
 
 interface ApontamentosPorSalaChartProps {
     data: { sala: string; count: number }[];
 }
 
-const COLORS = ["#0ea5e9", "#22c55e", "#eab308", "#f97316", "#ef4444", "#8b5cf6", "#ec4899"];
+const COLORS = [
+    "#940707",
+    "#6C6A6A",
+    "#940707",
+    "#6C6A6A",
+    "#A78F8F",
+    "#6C6A6A",
+    "#940707",
+    "#CCCBCB",
+];
 
 export default function ApontamentosPorSalaChart({ data }: ApontamentosPorSalaChartProps) {
     return (
-        <Card className="h-[400px]">
-            <CardHeader>
-                <CardTitle className="text-lg">Apontamentos por Sala (Top 10)</CardTitle>
+        <Card className="border border-slate-200 bg-white rounded-xl shadow-xs overflow-hidden">
+            <CardHeader className="p-4 pb-2 border-b border-slate-100 flex flex-row items-center gap-2">
+                <Layers className="w-4 h-4 text-[#940707]" />
+                <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                    Apontamentos por Sala (Top 10)
+                </CardTitle>
             </CardHeader>
-            <CardContent className="h-[300px]">
+            <CardContent className="p-4 h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
                     <BarChart
                         data={data}
                         layout="vertical"
-                        margin={{ top: 5, right: 30, left: 40, bottom: 5 }}
+                        margin={{ top: 5, right: 30, left: 30, bottom: 5 }}
                     >
-                        <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
+                        <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#E2E8F0" />
                         <XAxis type="number" hide />
                         <YAxis
                             dataKey="sala"
                             type="category"
-                            width={100}
-                            tick={{ fontSize: 12 }}
+                            width={110}
+                            tick={{ fontSize: 11, fill: "#475569", fontWeight: 600 }}
                             interval={0}
                         />
                         <Tooltip
                             contentStyle={{
-                                backgroundColor: "hsl(var(--card))",
-                                borderColor: "hsl(var(--border))",
+                                backgroundColor: "#FFFFFF",
+                                borderColor: "#E2E8F0",
                                 borderRadius: "8px",
+                                fontSize: "12px",
                             }}
                         />
                         <Bar dataKey="count" radius={[0, 4, 4, 0]}>

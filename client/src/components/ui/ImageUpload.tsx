@@ -11,6 +11,39 @@ interface ImageUploadProps {
     label?: string;
 }
 
+function compressImageToBlob(file: File, maxWidth = 1600, quality = 0.8): Promise<Blob> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target?.result as string;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+
+                if (width > maxWidth) {
+                    height = Math.round((maxWidth / width) * height);
+                    width = maxWidth;
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx?.drawImage(img, 0, 0, width, height);
+
+                canvas.toBlob((blob) => {
+                    if (blob) resolve(blob);
+                    else reject(new Error('Canvas toBlob failed'));
+                }, 'image/jpeg', quality);
+            };
+            img.onerror = reject;
+        };
+        reader.onerror = reject;
+    });
+}
+
 export function ImageUpload({ bucketName, folderPath, onUploadComplete, currentImageUrl, label = "Upload Image" }: ImageUploadProps) {
     const [uploading, setUploading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -23,15 +56,20 @@ export function ImageUpload({ bucketName, folderPath, onUploadComplete, currentI
 
             setUploading(true);
 
+            // Compress image client-side to reduce storage egress & upload time
+            const compressedBlob = await compressImageToBlob(file);
+
             // Sanitize filename and path
             const sanitize = (str: string) => str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-0\/\._-]/g, '_');
-            const fileExt = file.name.split('.').pop();
-            const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
+            const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.jpg`;
             const filePath = sanitize(`${folderPath}/${fileName}`);
 
             const { error: uploadError } = await supabase.storage
                 .from(bucketName)
-                .upload(filePath, file);
+                .upload(filePath, compressedBlob, {
+                    contentType: 'image/jpeg',
+                    cacheControl: '31536000'
+                });
 
             if (uploadError) {
                 throw uploadError;

@@ -1,37 +1,28 @@
 import { Toaster } from "sonner";
 import { Route, Switch, useLocation } from "wouter";
 import { useEffect } from "react";
-import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { AuthProvider } from "./contexts/AuthContext";
+import { LayoutProvider } from "./contexts/LayoutContext";
 import ProtectedRoute from "./components/ProtectedRoute";
-import TopBar from "./components/TopBar";
+import { AppLayout } from "./components/layout/AppLayout";
 import Dashboard from "./pages/Dashboard";
 import Projects from "./pages/Projects";
 import ProjectSettings from "./pages/ProjectSettings";
+import ProfilePage from "./pages/ProfilePage";
+import PlatformSettingsPage from "./pages/PlatformSettingsPage";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 
-function AppLayout({ children }: { children: React.ReactNode }) {
-    const { user } = useAuth();
-    return (
-        <>
-            {user && <TopBar />}
-            {children}
-        </>
-    );
-}
-
-// Detecta token de recovery do Supabase na URL (hash #access_token=...&type=recovery)
-// e redireciona para a página de redefinição de senha
 function RecoveryRedirect() {
     const [, setLocation] = useLocation();
 
     useEffect(() => {
         const hash = window.location.hash;
-        if (hash && hash.includes('type=recovery')) {
-            setLocation('/reset-password');
+        if (hash && hash.includes("type=recovery")) {
+            setLocation("/reset-password");
         }
     }, [setLocation]);
 
@@ -47,6 +38,16 @@ function Router() {
                 <Route path="/register" component={Register} />
                 <Route path="/forgot-password" component={ForgotPassword} />
                 <Route path="/reset-password" component={ResetPassword} />
+                <Route path="/profile">
+                    <ProtectedRoute>
+                        <ProfilePage />
+                    </ProtectedRoute>
+                </Route>
+                <Route path="/platform-settings">
+                    <ProtectedRoute>
+                        <PlatformSettingsPage />
+                    </ProtectedRoute>
+                </Route>
                 <Route path="/">
                     <ProtectedRoute>
                         <Projects />
@@ -71,8 +72,10 @@ function Router() {
 function App() {
     return (
         <AuthProvider>
-            <Toaster position="top-right" />
-            <Router />
+            <LayoutProvider>
+                <Toaster position="top-right" />
+                <Router />
+            </LayoutProvider>
         </AuthProvider>
     );
 }
