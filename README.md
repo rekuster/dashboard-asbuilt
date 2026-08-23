@@ -1,145 +1,131 @@
-# Dashboard As Built - Custom
+# 🏗️ STECLA AS-BUILT — Plataforma de Gestão e Auditoria As-Built
 
-## 🎉 Projeto Criado com Sucesso!
-
-Este é o seu novo dashboard editável baseado no projeto original do Manus, com integração de visualizador IFC 3D.
-
-## 📁 Estrutura do Projeto
-
-```
-Dashboard-AsBuilt-Custom/
-├── client/                 # Frontend React + TypeScript
-│   ├── src/
-│   │   ├── components/    # Componentes reutilizáveis
-│   │   ├── pages/         # Páginas (Dashboard, NotFound)
-│   │   ├── lib/           # Utilitários e tRPC client
-│   │   ├── App.tsx        # Componente principal
-│   │   └── main.tsx       # Entry point
-│   └── index.html
-├── server/                 # Backend Express + tRPC
-│   ├── _core/             # Configurações (Express, tRPC, env)
-│   ├── db.ts              # Funções de banco de dados
-│   ├── routers.ts         # Rotas tRPC
-│   ├── excelProcessor.ts  # Processamento de Excel
-│   ├── uploadHandler.ts   # Upload de Excel
-│   └── ifcHandler.ts      # Upload e gestão de IFC
-├── drizzle/               # Database schema
-│   └── schema.ts          # 5 tabelas (users, salas, apontamentos, uploads, ifcFiles)
-├── shared/                # Código compartilhado
-└── uploads/ifc/           # Arquivos IFC uploadados
-```
-
-## 🚀 Como Rodar o Projeto
-
-### 1. Instalar Dependências
-
-```bash
-cd "c:\Users\RenataViannaKüster\Downloads\01.Neodent\8. As built\Antigravity\Dashboard-AsBuilt-Custom"
-pnpm install
-```
-
-### 2. Configurar Banco de Dados
-
-Crie um arquivo `.env` baseado no `.env.example`:
-
-```env
-DATABASE_URL=mysql://user:password@localhost:3306/dashboard_asbuilt
-NODE_ENV=development
-PORT=3000
-```
-
-### 3. Rodar Migrations
-
-```bash
-pnpm db:push
-```
-
-### 4. Iniciar o Servidor de Desenvolvimento
-
-```bash
-pnpm dev
-```
-
-O dashboard estará disponível em: **http://localhost:5173**
-
-## 🎨 Funcionalidades Implementadas
-
-### ✅ Backend Completo
-- ✅ Schema do banco com 5 tabelas
-- ✅ Funções de acesso ao banco (db.ts)
-- ✅ Rotas tRPC para dashboard e IFC
-- ✅ Processamento de Excel
-- ✅ Upload e gestão de arquivos IFC
-- ✅ Sistema de cores para visualização 3D
-- ✅ Servidor Express configurado
-
-### ✅ Frontend & Dashboard
-- ✅ React 19 + TypeScript + Vite
-- ✅ Integração tRPC v11 (Client + Server)
-- ✅ Design System Premium com Lucide Icons e TailwindCSS
-- ✅ Dashboard com KPIs em tempo real
-- ✅ Filtros dinâmicos por edificação
-- ✅ Tabela de apontamentos interativa
-- ✅ Upload e processamento inteligente de Excel (Status da Coluna N)
-
-### ✅ Visualizador IFC 3D (BIM)
-- ✅ Integração robusta com `web-ifc-three`
-- ✅ Carregamento de elementos individualizados (IfcSlab, IfcSpace, etc.)
-- ✅ Sistema de Raycasting preciso para seleção de objetos
-- ✅ **Modo Raio-X (X-Ray)** para visualização interna
-- ✅ **Destaque Azul (Highlight)** inteligente com limpeza automática
-- ✅ **Modo de Mapeamento Interativo** para vincular objetos 3D a registros do banco
-- ✅ **Volumes Fantasmadas (Ghost Volumes)** para representação de ambientes (IfcSpace)
-
-## 🚧 Próximas Implementações
-- [ ] Gráficos estatísticos com Recharts (Evolução de apontamentos, Pizza por status)
-- [ ] Geração de relatórios automatizados em PDF/Excel
-- [ ] Exportação do IFC modificado com metadados de status
-- [ ] Dashboard Mobile (Responsividade aprimorada)
-
-## 🎨 Sistema de Cores e Status
-
-O visualizador 3D coloriza as salas automaticamente de acordo com as regras de negócio:
-
-- 🟢 **Verde (#22C55E)** - Status "Verificada" na planilha
-- 🟡 **Amarelo (#EAB308)** - Status "Em Revisão" ou "Revisar"
-- 🔴 **Vermelho (#EF4444)** - Crítico (Regra: Mais de 10 apontamentos na sala)
-- ⚪ **Cinza (#9CA3AF)** - Status "Pendente" ou não encontrado
-- 🔵 **Azul (#3B82F6)** - Destaque de seleção (Highlight interativo)
-
-## 📡 API Endpoints (tRPC)
-
-### Dashboard
-- `dashboard.getKPIs` - Métricas principais de edificação/setor
-- `dashboard.getSalas` - Lista de salas e seus atributos
-- `dashboard.getApontamentos` - Detalhes das divergências encontradas
-- `dashboard.uploadExcel` - Processador de planilha com mapeamento de colunas
-
-### IFC
-- `ifc.getAllFiles` - Gerenciador de modelos 3D
-- `ifc.getRoomsWithColors` - Backend de cores baseado em status e apontamentos
-- `ifc.linkIfcToRoom` - Vinculação manual ExpressID <-> Sala
-- `ifc.uploadFile` / `ifc.deleteFile` - Gestão de arquivos .ifc no servidor
-
-## 🛠️ Scripts Disponíveis
-
-```bash
-pnpm dev          # Desenvolvimento (frontend + backend)
-pnpm build        # Build para produção
-pnpm db:push      # Sincronizar schema do banco (SQLite)
-pnpm format       # Formatar código com Prettier
-```
-
-## 📝 Próximos Passos para o Usuário
-
-1. **Modelagem no Revit**: Dividir pisos grandes por ambiente para garantir 100% de visibilidade no visualizador.
-2. **Ciclo de Verificação**: Carregar Excel atualizado para refletir mudanças de status na obra.
-3. **Mapeamento**: Usar a ferramenta "Lápis" no visualizador para terminar de vincular as salas restantes.
-
-## 🎯 Visão de Futuro
-
-O objetivo é transformar este dashboard em uma central de comando As Built, onde cada elemento físico da obra tem um "Gêmeo Digital" (Digital Twin) com histórico completo de verificações e apontamentos.
+Plataforma corporativa especializada em gestão, auditoria e controle de conformidade de modelos e entregas **As-Built BIM** para grandes empreendimentos da construção civil.
 
 ---
 
-**Desenvolvido com ❤️ para otimizar o workflow de mapeamento As Built na Neodent**
+## 🌟 Principais Funcionalidades
+
+### 1. 📊 Visão Geral & Resumo Executivo
+- **KPIs Executivos de As-Built**: Total de modelos contratados, modelos validados, modelos entregues com pendências, modelos entregues iguais ao projeto e modelos não entregues.
+- **Progresso Visual por Edificação**: Gráficos de barras empilhadas com percentuais reais de validação por setor da obra.
+- **Principais Constatações Técnicas Dinâmicas**: Pareceres técnicos e pontos de atenção críticos (destaque em vermelho) editáveis e independentes por construtora/parceiro (**Thá Engenharia**, **Ocle Engenharia**, etc.).
+
+### 2. 📦 Gestão de Entregas & Escopo As-Built
+- **Matriz de Escopo Contratual**: Controle dos 110 modelos esperados contratualmente por empresa, disciplina, edificação e status de disponibilidade do RVT original.
+- **Histórico & Log de Remessas (SM)**: Rastreamento completo de remessas e pacotes de arquivos recebidos com auditoria técnica individualizada.
+- **Cadastro de Pacotes em Lote**:
+  - Cadastro agrupado por SM / Pacote com identificação, empresa, data e status inicial.
+  - Tabela interativa com adição de múltiplos documentos de uma só vez.
+  - Seleção rápida através de checkboxes da Lista Mestra de Escopo Contratual.
+  - Colar lista de nomes de arquivos em lote.
+
+### 3. 🔍 Apontamentos & Matriz de Qualidade
+- **Matriz de Conformidade por Disciplina**: Auditoria por ambiente (Salas) cruzando status de Realidade Aumentada (RA) com modelos 3D.
+- **Registro de Divergências**: Histórico de não conformidades com severidade, fotos/prints e anotações técnicas.
+- **Importação de Pacotes BCF**: Leitura de tópicos e viewpoints de arquivos `.bcf` / `.bcfzip`.
+
+### 4. 👷 Portal do Projetista & Relatórios de Campo
+- **Portal do Projetista**: Interface dedicada para que projetistas visualizem e respondam a apontamentos de suas respectivas disciplinas.
+- **Relatório de Campo**: Formulário ágil de inspeção em obra com suporte a sincronização offline de lotes.
+
+### 5. 👥 Central de Membros & Permissões
+- **Controle de Acesso Baseado em Perfis (RBAC)**:
+  - `Admin`: Acesso total a todos os projetos e configurações globais.
+  - `Editor`: Edição de dados e registros nos projetos autorizados.
+  - `Viewer`: Visualização e acompanhamento de relatórios.
+  - `Parceiro`: Acesso restrito aos modelos e apontamentos de sua empresa.
+- **Configurações da Plataforma**: Painel centralizado para vincular usuários cadastrados aos projetos e gerenciar níveis de acesso.
+
+---
+
+## 🛠️ Stack Tecnológica
+
+- **Frontend**: React 19, TypeScript, Vite, Tailwind CSS v4, Radix UI, Lucide Icons, Recharts.
+- **Backend**: Node.js, Express, tRPC v11, Zod, Date-fns.
+- **Banco de Dados**: PostgreSQL (Supabase) gerenciado via **Drizzle ORM**.
+- **Autenticação**: Supabase Auth integrado com controle de permissões em banco.
+- **Design System**: Identidade visual oficial Stecla (`#9C1915`, `#575756`, bordas suaves, tipografia técnica).
+
+---
+
+## 📁 Estrutura do Repositório
+
+```
+Dashboard-AsBuilt-Custom/
+├── client/                     # Frontend React + TypeScript
+│   ├── src/
+│   │   ├── components/        # Componentes globais (Layout, UI, Modais)
+│   │   │   ├── layout/        # Sidebar (STECLA AS-BUILT.), Header, AppLayout
+│   │   │   └── dashboard/     # Resumo Executivo, Constatações, BCF
+│   │   ├── features/          # Módulos de domínio
+│   │   │   ├── data-hub/      # Central de dados e tabelas mestras
+│   │   │   ├── deliveries/    # Entregas As-Built, Escopo, Modais em Lote
+│   │   │   ├── designer-portal/# Portal de resolução para projetistas
+│   │   │   ├── field-reports/ # Inspeções de campo offline/online
+│   │   │   └── issues/        # Gestão de apontamentos e matriz de qualidade
+│   │   ├── pages/             # Páginas principais (Dashboard, Projetos, Configurações)
+│   │   └── lib/               # Clientes tRPC e Supabase
+├── server/                     # Backend Node.js + tRPC
+│   ├── _core/                 # Servidor Express e roteador principal
+│   ├── common/                # Conexão de banco (db.ts) e middleware tRPC
+│   ├── modules/               # Módulos de serviço e roteadores desacoplados
+│   │   ├── analytics/         # KPIs, Resumo Executivo e Constatações Técnicas
+│   │   ├── deliveries/        # Escopo As-Built, Entregas e Histórico
+│   │   ├── issues/            # Apontamentos e Verificações
+│   │   ├── members/           # Gestão de membros e permissões globais
+│   │   ├── projects/          # CRUD de Projetos
+│   │   ├── reports/           # Geração de relatórios
+│   │   └── rooms/             # Gestão de Salas e Ambientes
+│   └── scripts/               # Scripts de migração e sincronização
+└── drizzle/                   # Schemas Drizzle ORM (PostgreSQL)
+```
+
+---
+
+## 🚀 Como Executar o Projeto
+
+### 1. Pré-requisitos
+- **Node.js**: v20+ recomendado
+- **Gerenciador de Pacotes**: `npm` ou `pnpm`
+
+### 2. Configurar Variáveis de Ambiente
+Crie um arquivo `.env` na raiz do projeto:
+
+```env
+DATABASE_URL=postgresql://postgres:[SENHA]@[HOST]:5432/postgres
+VITE_SUPABASE_URL=https://[PROJETO].supabase.co
+VITE_SUPABASE_ANON_KEY=[SUA_ANON_KEY]
+PORT=3000
+```
+
+### 3. Instalação e Execução
+
+```bash
+# 1. Instalar dependências
+npm install
+
+# 2. Executar migrações do banco (se necessário)
+npx tsx server/scripts/migrate-constatacoes.ts
+
+# 3. Iniciar em modo de desenvolvimento (Frontend + Backend)
+npm run dev
+```
+
+Acesse no navegador: **`http://localhost:5188`** *(ou a porta informada pelo Vite)*.
+
+---
+
+## 🧪 Verificação & Build
+
+```bash
+# Verificação de tipos TypeScript
+npm run check
+
+# Build de produção (Vite + esbuild)
+npm run build
+```
+
+---
+
+**Desenvolvido com excelência técnica para o fluxo de engenharia e auditoria As-Built.**
