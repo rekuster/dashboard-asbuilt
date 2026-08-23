@@ -7,9 +7,8 @@ export async function listProjects(ownerId: string, email?: string) {
 
     const emailNorm = (email || "").toLowerCase();
     const isSteclaOrAdmin =
-        emailNorm.includes("stecla") ||
-        emailNorm.includes("renata") ||
-        emailNorm.includes("admin");
+        emailNorm === "renata.vianna@stecla.com.br" ||
+        emailNorm.endsWith("@stecla.com.br");
 
     // Stecla Admins have universal access to all projects
     if (isSteclaOrAdmin) {

@@ -14,9 +14,8 @@ export default function Projects() {
 
     const userEmail = (user?.email || "").toLowerCase();
     const isSteclaAdmin =
-        userEmail.includes("stecla") ||
-        userEmail.includes("renata") ||
-        userEmail.includes("admin");
+        userEmail === "renata.vianna@stecla.com.br" ||
+        userEmail.endsWith("@stecla.com.br");
 
     return (
         <div className="space-y-4 max-w-7xl mx-auto pb-8 animate-in fade-in duration-200">

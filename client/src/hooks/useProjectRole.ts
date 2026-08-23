@@ -18,9 +18,9 @@ export function useProjectRole(projectId?: string): UseProjectRoleResult {
     const { user } = useAuth();
     const userEmail = (user?.email || "").toLowerCase();
     const isSteclaAdmin =
-        userEmail.includes("stecla") ||
-        userEmail.includes("renata") ||
-        userEmail.includes("admin");
+        userEmail === "renata.vianna@stecla.com.br" ||
+        userEmail.endsWith("@stecla.com.br") ||
+        userEmail.startsWith("admin@");
 
     const { data, isLoading, error } = trpc.projects.getUserRole.useQuery(
         { projectId: projectId! },

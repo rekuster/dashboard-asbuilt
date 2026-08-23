@@ -20,9 +20,9 @@ async function main() {
         const email = (au.email || "").toLowerCase();
         const meta = au.raw_user_meta_data || {};
         const name = meta.name || email.split("@")[0];
-        const isStecla = email.includes("stecla") || email.includes("renata");
+        const isStecla = email.endsWith("@stecla.com.br") || email === "renata.vianna@stecla.com.br";
         const role = isStecla ? "admin" : "parceiro";
-        const empresa = isStecla ? "Stecla" : "Ocle";
+        const empresa = isStecla ? "Stecla" : "Outra";
 
         console.log(`Syncing user ${email} as ${role} (${empresa})...`);
 

@@ -50,7 +50,7 @@ const ROLE_COLORS = {
     parceiro: 'bg-purple-50 text-purple-800 border-purple-200 font-bold',
 };
 
-const EMPRESAS_SUGESTOES = ['Stecla', 'Ocle', 'Thá', 'Neo', 'Cliente / Diretoria'];
+const EMPRESAS_SUGESTOES = ['Stecla', 'Ocle', 'Thá', 'Neo', 'Cliente / Diretoria', 'Outra'];
 
 export default function MembersTab({ projectId }: MembersTabProps) {
     const utils = trpc.useUtils();

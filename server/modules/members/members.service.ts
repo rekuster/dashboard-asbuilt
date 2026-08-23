@@ -321,14 +321,14 @@ export async function listAllPlatformUsers() {
     // 1. Inicia com auth.users
     for (const au of authUsers) {
         const email = (au.email || "").toLowerCase();
-        const isRenata = email.includes("renata");
+        const isStecla = email.endsWith("@stecla.com.br") || email === "renata.vianna@stecla.com.br";
         userMap.set(email, {
             id: au.id,
             openId: au.id,
             email: email,
             name: au.name || nameFromEmail(email),
-            role: isRenata ? "admin" : "parceiro",
-            empresa: isRenata || email.includes("stecla") ? "Stecla" : "Ocle",
+            role: isStecla ? "admin" : "parceiro",
+            empresa: isStecla ? "Stecla" : "Outra",
             avatarUrl: null,
             projects: [] as any[],
         });
@@ -338,19 +338,19 @@ export async function listAllPlatformUsers() {
     for (const du of dbUsers) {
         const email = (du.email || "").toLowerCase();
         if (email) {
-            const isRenata = email.includes("renata");
+            const isStecla = email.endsWith("@stecla.com.br") || email === "renata.vianna@stecla.com.br";
             const existing = userMap.get(email) || {
                 id: String(du.id),
                 openId: du.openId,
                 email: email,
                 name: du.name || nameFromEmail(email),
-                role: isRenata ? "admin" : (du.role || "parceiro"),
-                empresa: isRenata || email.includes("stecla") ? "Stecla" : "Ocle",
+                role: du.role || (isStecla ? "admin" : "parceiro"),
+                empresa: isStecla ? "Stecla" : "Outra",
                 avatarUrl: du.avatarUrl || null,
                 projects: [] as any[],
             };
             if (du.name) existing.name = du.name;
-            if (du.role) existing.role = isRenata ? "admin" : du.role;
+            if (du.role) existing.role = du.role;
             if (du.avatarUrl) existing.avatarUrl = du.avatarUrl;
             userMap.set(email, existing);
         }
@@ -377,11 +377,11 @@ export async function listAllPlatformUsers() {
         }
     }
 
-    // Também verifica owners dos projetos (apenas Renata ou owners específicos)
+    // Também verifica owners dos projetos
     for (const p of allProjects) {
         for (const u of userMap.values()) {
-            const isRenata = (u.email || "").toLowerCase().includes("renata");
-            if (p.ownerId === u.openId || p.ownerId === u.id || isRenata) {
+            const isMasterOwner = (u.email || "").toLowerCase() === "renata.vianna@stecla.com.br";
+            if (p.ownerId === u.openId || p.ownerId === u.id || isMasterOwner) {
                 if (!u.projects.some((pr: any) => pr.projectId === p.id)) {
                     u.projects.push({
                         projectId: p.id,
@@ -409,8 +409,8 @@ export async function updateUserProjectMemberships(data: {
     if (!db) return null;
 
     const emailNorm = data.email.trim().toLowerCase();
-    const isRenata = emailNorm.includes("renata");
-    const roleToSave = isRenata ? "admin" : data.role;
+    const isMasterOwner = emailNorm === "renata.vianna@stecla.com.br";
+    const roleToSave = isMasterOwner ? "admin" : data.role;
 
     // 1. Atualiza ou cria na tabela users
     const existingUser = await db.select().from(users).where(eq(users.email, emailNorm)).limit(1);
@@ -475,7 +475,7 @@ export async function updateUserProjectMemberships(data: {
     }
 
     // Projetos a remover
-    if (!isRenata) {
+    if (!isMasterOwner) {
         for (const m of currentMembers) {
             if (!targetProjectIds.has(m.projectId)) {
                 await db.delete(projectMembers).where(eq(projectMembers.id, m.id));

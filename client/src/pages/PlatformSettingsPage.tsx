@@ -403,7 +403,7 @@ export default function PlatformSettingsPage() {
                     <div className="divide-y divide-slate-100">
                         {filteredUsers.map((u: any) => {
                             const userProjectIds = (u.projects || []).map((p: any) => p.projectId);
-                            const isMasterAdmin = (u.email || "").toLowerCase().includes("renata");
+                            const isMasterAdmin = (u.email || "").toLowerCase() === "renata.vianna@stecla.com.br";
 
                             return (
                                 <div

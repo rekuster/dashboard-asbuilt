@@ -96,9 +96,8 @@ export function createProjectProcedure(minRole: 'viewer' | 'parceiro' | 'editor'
 
         const emailNorm = (ctx.userEmail || "").toLowerCase();
         const isSteclaOrAdmin =
-            emailNorm.includes("stecla") ||
-            emailNorm.includes("renata") ||
-            emailNorm.includes("admin");
+            emailNorm === "renata.vianna@stecla.com.br" ||
+            emailNorm.endsWith("@stecla.com.br");
 
         if (isSteclaOrAdmin) {
             userRole = 'owner';
