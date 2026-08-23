@@ -15,10 +15,21 @@ export async function listProjects(ownerId: string, email?: string) {
         return db.select().from(projects).orderBy(desc(projects.createdAt));
     }
 
-    const conditions = [eq(projects.ownerId, ownerId)];
+    const userFilters: any[] = [];
+    if (ownerId) {
+        userFilters.push(eq(projects.ownerId, ownerId));
+    }
 
-    if (email) {
-        conditions.push(
+    const memberFilters: any[] = [];
+    if (ownerId) {
+        memberFilters.push(eq(projectMembers.userId, ownerId));
+    }
+    if (emailNorm) {
+        memberFilters.push(sql`LOWER(${projectMembers.email}) = ${emailNorm}`);
+    }
+
+    if (memberFilters.length > 0) {
+        userFilters.push(
             exists(
                 db
                     .select()
@@ -26,17 +37,21 @@ export async function listProjects(ownerId: string, email?: string) {
                     .where(
                         and(
                             eq(projectMembers.projectId, projects.id),
-                            sql`LOWER(${projectMembers.email}) = LOWER(${email})`
+                            or(...memberFilters)
                         )
                     )
             )
         );
     }
 
+    if (userFilters.length === 0) {
+        return [];
+    }
+
     return db
         .select()
         .from(projects)
-        .where(or(...conditions))
+        .where(or(...userFilters))
         .orderBy(desc(projects.createdAt));
 }
 

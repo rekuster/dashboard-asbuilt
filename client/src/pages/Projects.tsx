@@ -32,22 +32,24 @@ export default function Projects() {
 
                 <div className="flex items-center gap-2 flex-wrap">
                     {isSteclaAdmin && (
-                        <Button
-                            variant="outline"
-                            onClick={() => setLocation("/platform-settings")}
-                            className="h-8 px-3.5 rounded-md border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold gap-1.5 shadow-xs"
-                        >
-                            <SlidersHorizontal className="w-3.5 h-3.5 text-[#9C1915]" />
-                            Configurações da Plataforma
-                        </Button>
-                    )}
+                        <>
+                            <Button
+                                variant="outline"
+                                onClick={() => setLocation("/platform-settings")}
+                                className="h-8 px-3.5 rounded-md border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold gap-1.5 shadow-xs"
+                            >
+                                <SlidersHorizontal className="w-3.5 h-3.5 text-[#9C1915]" />
+                                Configurações da Plataforma
+                            </Button>
 
-                    <CreateProjectDialog>
-                        <Button className="h-8 px-3.5 rounded-md bg-[#9C1915] hover:bg-[#7D1411] text-white text-xs font-bold gap-1.5 shadow-xs">
-                            <Plus className="w-3.5 h-3.5" />
-                            Novo Projeto
-                        </Button>
-                    </CreateProjectDialog>
+                            <CreateProjectDialog>
+                                <Button className="h-8 px-3.5 rounded-md bg-[#9C1915] hover:bg-[#7D1411] text-white text-xs font-bold gap-1.5 shadow-xs">
+                                    <Plus className="w-3.5 h-3.5" />
+                                    Novo Projeto
+                                </Button>
+                            </CreateProjectDialog>
+                        </>
+                    )}
                 </div>
             </div>
 
@@ -72,18 +74,21 @@ export default function Projects() {
                         <Building2 className="w-6 h-6 text-[#940707]" />
                     </div>
                     <h3 className="text-sm font-bold text-slate-900 mb-1">
-                        Nenhum projeto cadastrado
+                        {isSteclaAdmin ? "Nenhum projeto cadastrado" : "Nenhum projeto vinculado"}
                     </h3>
                     <p className="text-[#6C6A6A] text-xs max-w-sm mb-4 leading-relaxed">
-                        Crie seu primeiro projeto para começar a acompanhar as verificações
-                        As-Built e modelos BIM.
+                        {isSteclaAdmin
+                            ? "Crie seu primeiro projeto para começar a acompanhar as verificações As-Built e modelos BIM."
+                            : "Você ainda não possui projetos atribuídos. Solicite à coordenação da Stecla a liberação de acesso ao seu projeto."}
                     </p>
-                    <CreateProjectDialog>
-                        <Button className="h-8 px-3.5 rounded-md bg-[#940707] hover:bg-[#7a0606] text-white text-xs font-bold gap-1.5 shadow-xs">
-                            <Plus className="w-3.5 h-3.5" />
-                            Criar Primeiro Projeto
-                        </Button>
-                    </CreateProjectDialog>
+                    {isSteclaAdmin && (
+                        <CreateProjectDialog>
+                            <Button className="h-8 px-3.5 rounded-md bg-[#940707] hover:bg-[#7a0606] text-white text-xs font-bold gap-1.5 shadow-xs">
+                                <Plus className="w-3.5 h-3.5" />
+                                Criar Primeiro Projeto
+                            </Button>
+                        </CreateProjectDialog>
+                    )}
                 </div>
             )}
         </div>

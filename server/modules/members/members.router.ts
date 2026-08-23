@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { router, authedProcedure, viewerProcedure, adminProcedure } from "../../common/trpc";
 import {
     listProjectMembers,
@@ -117,7 +118,17 @@ export const membersRouter = router({
             return await updateUserProfile(ctx.userId, input);
         }),
 
-    listAllUsers: authedProcedure.query(async () => {
+    listAllUsers: authedProcedure.query(async ({ ctx }) => {
+        const emailNorm = (ctx.userEmail || "").toLowerCase();
+        const isSteclaOrAdmin =
+            emailNorm === "renata.vianna@stecla.com.br" ||
+            emailNorm.endsWith("@stecla.com.br");
+        if (!isSteclaOrAdmin) {
+            throw new TRPCError({
+                code: "FORBIDDEN",
+                message: "Apenas administradores Stecla podem visualizar todos os usuários.",
+            });
+        }
         return await listAllPlatformUsers();
     }),
 
@@ -131,7 +142,17 @@ export const membersRouter = router({
                 projectIds: z.array(z.string()),
             })
         )
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
+            const emailNorm = (ctx.userEmail || "").toLowerCase();
+            const isSteclaOrAdmin =
+                emailNorm === "renata.vianna@stecla.com.br" ||
+                emailNorm.endsWith("@stecla.com.br");
+            if (!isSteclaOrAdmin) {
+                throw new TRPCError({
+                    code: "FORBIDDEN",
+                    message: "Apenas administradores Stecla podem alterar acessos da plataforma.",
+                });
+            }
             return await updateUserProjectMemberships(input);
         }),
 });

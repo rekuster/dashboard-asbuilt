@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
+import { queryClient } from '@/lib/queryClient';
 import type { User, Session } from '@supabase/supabase-js';
 
 interface AuthContextType {
@@ -29,6 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Listen for auth state changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
             (_event, session) => {
+                queryClient.clear();
                 setSession(session);
                 setUser(session?.user ?? null);
                 setIsLoading(false);
@@ -39,6 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const signIn = async (email: string, password: string) => {
+        queryClient.clear();
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         return { error: error as Error | null };
     };
@@ -55,6 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const signOut = async () => {
+        queryClient.clear();
         await supabase.auth.signOut();
     };
 

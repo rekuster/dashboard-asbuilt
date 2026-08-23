@@ -57,6 +57,19 @@ export default function PlatformSettingsPage() {
     const { user } = useAuth();
     const utils = trpc.useUtils();
 
+    const userEmail = (user?.email || "").toLowerCase();
+    const isSteclaAdmin =
+        userEmail === "renata.vianna@stecla.com.br" ||
+        userEmail.endsWith("@stecla.com.br") ||
+        userEmail.startsWith("admin@");
+
+    React.useEffect(() => {
+        if (user && !isSteclaAdmin) {
+            toast.error("Acesso restrito a administradores da plataforma.");
+            setLocation("/");
+        }
+    }, [user, isSteclaAdmin]);
+
     const [search, setSearch] = useState("");
     const [isInviteOpen, setIsInviteOpen] = useState(false);
 
@@ -70,7 +83,9 @@ export default function PlatformSettingsPage() {
 
     // Queries
     const { data: platformUsers = [], isLoading: loadingUsers } =
-        trpc.members.listAllUsers.useQuery();
+        trpc.members.listAllUsers.useQuery(undefined, {
+            enabled: isSteclaAdmin,
+        });
     const { data: allProjects = [], isLoading: loadingProjects } =
         trpc.projects.list.useQuery();
 

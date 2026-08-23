@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { router, authedProcedure, viewerProcedure, adminProcedure } from "../../common/trpc";
 import {
     listProjects,
@@ -27,6 +28,16 @@ export const projectsRouter = router({
             })
         )
         .mutation(async ({ input, ctx }) => {
+            const emailNorm = (ctx.userEmail || "").toLowerCase();
+            const isSteclaOrAdmin =
+                emailNorm === "renata.vianna@stecla.com.br" ||
+                emailNorm.endsWith("@stecla.com.br");
+            if (!isSteclaOrAdmin) {
+                throw new TRPCError({
+                    code: "FORBIDDEN",
+                    message: "Apenas administradores Stecla podem criar novos projetos.",
+                });
+            }
             return await createProject({
                 ...input,
                 ownerId: ctx.userId!,

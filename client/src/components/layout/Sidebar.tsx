@@ -45,7 +45,13 @@ export function Sidebar({
 }: SidebarProps) {
     const [location, setLocation] = useLocation();
     const { user, signOut } = useAuth();
-    const { role, isParceiro } = useProjectRole(projectId);
+    const { role, isParceiro, isAdmin } = useProjectRole(projectId);
+    const userEmail = (user?.email || "").toLowerCase();
+    const isSteclaAdmin =
+        userEmail === "renata.vianna@stecla.com.br" ||
+        userEmail.endsWith("@stecla.com.br") ||
+        userEmail.startsWith("admin@");
+
     const [isCollapsed, setIsCollapsed] = useState(() => {
         return localStorage.getItem("sidebar_collapsed") === "false" ? false : false;
     });
@@ -117,11 +123,7 @@ export function Sidebar({
         }
     };
 
-    const roleInfo = (role && ROLE_BADGES[role]) || {
-        label: "Visualizador",
-        bg: "bg-slate-100 border border-slate-200",
-        text: "text-slate-600",
-    };
+    const roleInfo = (role && ROLE_BADGES[role]) || (isSteclaAdmin ? ROLE_BADGES["admin"] : ROLE_BADGES["parceiro"]);
 
     return (
         <>
@@ -251,9 +253,9 @@ export function Sidebar({
                     )}
 
                     {/* Settings Link */}
-                    {!isParceiro && (
-                        <div className="pt-2 mt-2 border-t border-slate-100">
-                            {isInsideProject ? (
+                    {isInsideProject ? (
+                        isAdmin && (
+                            <div className="pt-2 mt-2 border-t border-slate-100">
                                 <button
                                     onClick={() => {
                                         setLocation(`/project/${projectId}/settings`);
@@ -269,7 +271,11 @@ export function Sidebar({
                                     <Settings className="w-4 h-4 shrink-0" />
                                     {!isCollapsed && <span>Configurações do Projeto</span>}
                                 </button>
-                            ) : (
+                            </div>
+                        )
+                    ) : (
+                        isSteclaAdmin && (
+                            <div className="pt-2 mt-2 border-t border-slate-100">
                                 <button
                                     onClick={() => {
                                         setLocation(`/platform-settings`);
@@ -285,8 +291,8 @@ export function Sidebar({
                                     <Settings className="w-4 h-4 shrink-0" />
                                     {!isCollapsed && <span>Configurações da Plataforma</span>}
                                 </button>
-                            )}
-                        </div>
+                            </div>
+                        )
                     )}
                 </div>
 
