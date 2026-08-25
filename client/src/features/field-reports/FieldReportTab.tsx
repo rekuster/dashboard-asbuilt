@@ -4,7 +4,6 @@ import { supabase } from "@/lib/supabase";
 import { useProjectRole } from "@/hooks/useProjectRole";
 import { toast } from "sonner";
 import { Lock, MapPin, Loader2 } from "lucide-react";
-import { Card, CardContent, CardTitle, CardDescription } from "@/components/ui/card";
 import { DISCIPLINA_LABELS, getTodayString, dataURLtoBlob } from "./constants";
 import { QueuedApontamento, ApontamentoItem } from "./types";
 import { FieldReportHeader } from "./components/FieldReportHeader";
@@ -14,13 +13,38 @@ import { PendingBatchList } from "./components/PendingBatchList";
 import { ExistingRoomIssuesList } from "./components/ExistingRoomIssuesList";
 
 export default function FieldReportTab({ projectId }: { projectId: string }) {
-    const { isEditor, isLoading: roleLoading } = useProjectRole(projectId);
-    const [selectedEdificacao, setSelectedEdificacao] = useState<string>("");
-    const [selectedPavimento, setSelectedPavimento] = useState<string>("");
-    const [selectedSala, setSelectedSala] = useState<any>(null);
+    const { isEditor, isAdmin, isLoading: roleLoading } = useProjectRole(projectId);
+    
+    // Persistent room selection through session storage
+    const [selectedEdificacao, setSelectedEdificacaoState] = useState<string>(() => {
+        return sessionStorage.getItem(`fr_edificacao_${projectId}`) || "";
+    });
+    const [selectedPavimento, setSelectedPavimentoState] = useState<string>(() => {
+        return sessionStorage.getItem(`fr_pavimento_${projectId}`) || "";
+    });
+    const [selectedSala, setSelectedSalaState] = useState<any>(null);
+
+    const setSelectedEdificacao = (ed: string) => {
+        setSelectedEdificacaoState(ed);
+        sessionStorage.setItem(`fr_edificacao_${projectId}`, ed);
+    };
+
+    const setSelectedPavimento = (pav: string) => {
+        setSelectedPavimentoState(pav);
+        sessionStorage.setItem(`fr_pavimento_${projectId}`, pav);
+    };
+
+    const setSelectedSala = (sala: any) => {
+        setSelectedSalaState(sala);
+        if (sala?.id) {
+            sessionStorage.setItem(`fr_sala_id_${projectId}`, String(sala.id));
+        } else {
+            sessionStorage.removeItem(`fr_sala_id_${projectId}`);
+        }
+    };
+
     const [disciplina, setDisciplina] = useState("");
     const [divergencia, setDivergencia] = useState("");
-
     const [dataVerificacao, setDataVerificacao] = useState(getTodayString());
 
     const [fotoRA, setFotoRA] = useState<File | null>(null);
@@ -30,6 +54,7 @@ export default function FieldReportTab({ projectId }: { projectId: string }) {
 
     const [apontamentosList, setApontamentosList] = useState<ApontamentoItem[]>([]);
     const [isSavingAll, setIsSavingAll] = useState(false);
+    const [isSavingDirect, setIsSavingDirect] = useState(false);
 
     const [offlineQueue, setOfflineQueue] = useState<QueuedApontamento[]>([]);
     const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -40,13 +65,14 @@ export default function FieldReportTab({ projectId }: { projectId: string }) {
         onSuccess: () => {
             utils.dashboard.getKPIs.invalidate({ projectId });
             utils.dashboard.getApontamentos.invalidate({ projectId });
+            utils.dashboard.getSalas.invalidate({ projectId });
         },
     });
 
     const { data: existingApontamentos = [], refetch: refetchExisting } =
         trpc.dashboard.getApontamentosBySala.useQuery(
             { projectId, sala: selectedSala?.nome || "" },
-            { enabled: !!selectedSala }
+            { enabled: !!selectedSala && !!projectId }
         );
 
     const deleteApontamentoMutation = trpc.dashboard.deleteApontamento.useMutation({
@@ -61,10 +87,29 @@ export default function FieldReportTab({ projectId }: { projectId: string }) {
         },
     });
 
-    const { data: edificacoes = [] } = trpc.dashboard.getEdificacoes.useQuery({
-        projectId,
-    });
-    const { data: salas = [] } = trpc.dashboard.getSalas.useQuery({ projectId });
+    const { data: edificacoes = [] } = trpc.dashboard.getEdificacoes.useQuery(
+        { projectId },
+        { enabled: !!projectId }
+    );
+    const { data: salas = [] } = trpc.dashboard.getSalas.useQuery(
+        { projectId },
+        { enabled: !!projectId }
+    );
+
+    // Auto-restore selected room once salas are loaded
+    useEffect(() => {
+        if (salas.length > 0 && !selectedSala) {
+            const savedSalaId = sessionStorage.getItem(`fr_sala_id_${projectId}`);
+            if (savedSalaId) {
+                const found = (salas as any[]).find((s) => String(s.id) === savedSalaId);
+                if (found) {
+                    setSelectedSalaState(found);
+                    if (!selectedEdificacao) setSelectedEdificacaoState(found.edificacao);
+                    if (!selectedPavimento) setSelectedPavimentoState(found.pavimento);
+                }
+            }
+        }
+    }, [salas, projectId]);
 
     const pavimentos = Array.from(
         new Set(
@@ -79,7 +124,7 @@ export default function FieldReportTab({ projectId }: { projectId: string }) {
             (s) =>
                 s.edificacao === selectedEdificacao && s.pavimento === selectedPavimento
         )
-        .sort((a, b) => a.nome.localeCompare(b.nome));
+        .sort((a, b) => (a.nome || "").localeCompare(b.nome || ""));
 
     // Offline management
     useEffect(() => {
@@ -90,7 +135,11 @@ export default function FieldReportTab({ projectId }: { projectId: string }) {
 
         const savedQueue = localStorage.getItem("field_report_queue");
         if (savedQueue) {
-            setOfflineQueue(JSON.parse(savedQueue));
+            try {
+                setOfflineQueue(JSON.parse(savedQueue));
+            } catch (e) {
+                console.error("Error reading offline queue:", e);
+            }
         }
 
         return () => {
@@ -99,10 +148,41 @@ export default function FieldReportTab({ projectId }: { projectId: string }) {
         };
     }, []);
 
+    const uploadImage = async (
+        file: File,
+        type: "real" | "referencias" = "real"
+    ): Promise<string | null> => {
+        try {
+            const fileExt = file.name.split(".").pop() || "jpg";
+            const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
+            const filePath = `apontamentos/${type}/${fileName}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from("project-assets")
+                .upload(filePath, file, { contentType: "image/jpeg", upsert: true });
+
+            if (uploadError) {
+                console.warn("Storage upload warning:", uploadError);
+                toast.warning(`Aviso ao enviar foto: ${uploadError.message}. O apontamento continuará sendo salvo.`);
+                return null;
+            }
+
+            const {
+                data: { publicUrl },
+            } = supabase.storage.from("project-assets").getPublicUrl(filePath);
+
+            return publicUrl;
+        } catch (e: any) {
+            console.error("Upload error:", e);
+            toast.warning(`Foto não pôde ser enviada (${e.message || "rede"}). O apontamento será salvo.`);
+            return null;
+        }
+    };
+
     const syncQueue = async () => {
         if (offlineQueue.length === 0) return;
 
-        toast.info(`Sincronizando ${offlineQueue.length} itens...`);
+        toast.info(`Sincronizando ${offlineQueue.length} itens da fila offline...`);
         const successIds: string[] = [];
 
         for (const item of offlineQueue) {
@@ -155,18 +235,18 @@ export default function FieldReportTab({ projectId }: { projectId: string }) {
                 await createApontamento.mutateAsync({
                     projectId: item.projectId || projectId,
                     data: item.data,
-                    edificacao: item.edificacao,
-                    pavimento: item.pavimento,
-                    setor: item.setor,
+                    edificacao: item.edificacao || "",
+                    pavimento: item.pavimento || "",
+                    setor: item.setor || "-",
                     sala: item.sala,
                     disciplina: item.disciplina,
                     divergencia: item.divergencia,
-                    fotoUrl: finalFotoUrl,
-                    fotoReferenciaUrl: finalFotoReferenciaUrl,
+                    fotoUrl: finalFotoUrl || undefined,
+                    fotoReferenciaUrl: finalFotoReferenciaUrl || undefined,
                 });
                 successIds.push(item.id);
-                await new Promise((r) => setTimeout(r, 400));
-            } catch (e) {
+                await new Promise((r) => setTimeout(r, 250));
+            } catch (e: any) {
                 console.error("Sync failed for item", item.id, e);
             }
         }
@@ -180,7 +260,7 @@ export default function FieldReportTab({ projectId }: { projectId: string }) {
             refetchExisting();
         } else {
             toast.warning(
-                `${successIds.length} sincronizados, ${remaining.length} falharam e continuam na fila.`
+                `${successIds.length} sincronizados com sucesso, ${remaining.length} pendentes na fila.`
             );
         }
     };
@@ -223,53 +303,7 @@ export default function FieldReportTab({ projectId }: { projectId: string }) {
         }
     };
 
-    const uploadImage = async (
-        file: File,
-        type: "real" | "referencias" = "real"
-    ): Promise<string | null> => {
-        try {
-            const fileExt = file.name.split(".").pop() || "jpg";
-            const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
-            const filePath = `apontamentos/${type}/${fileName}`;
-
-            const { error: uploadError } = await supabase.storage
-                .from("project-assets")
-                .upload(filePath, file, { contentType: "image/jpeg" });
-
-            if (uploadError) throw uploadError;
-
-            const {
-                data: { publicUrl },
-            } = supabase.storage.from("project-assets").getPublicUrl(filePath);
-
-            return publicUrl;
-        } catch (e: any) {
-            console.error("Upload error:", e);
-            toast.error(`Erro ao enviar foto: ${e.message}`);
-            return null;
-        }
-    };
-
-    const handleAddToList = () => {
-        if (!selectedSala || !disciplina || !divergencia) {
-            toast.error("Preencha a disciplina e a divergência.");
-            return;
-        }
-
-        const newItem: ApontamentoItem = {
-            id: crypto.randomUUID(),
-            disciplina,
-            disciplinaLabel: DISCIPLINA_LABELS[disciplina] || disciplina,
-            divergencia,
-            fotoRA,
-            fotoRAPreview,
-            fotoReal,
-            fotoRealPreview,
-        };
-
-        setApontamentosList((prev) => [...prev, newItem]);
-        toast.success("Apontamento adicionado à lista!");
-
+    const clearFormInputs = () => {
         setDisciplina("");
         setDivergencia("");
         setFotoRA(null);
@@ -278,11 +312,113 @@ export default function FieldReportTab({ projectId }: { projectId: string }) {
         setFotoRealPreview(null);
     };
 
+    // 1. DIRECT SAVE HANDLER (Single Action)
+    const handleSaveDirect = async () => {
+        if (!selectedSala) {
+            toast.error("Por favor, selecione uma sala.");
+            return;
+        }
+        if (!disciplina) {
+            toast.error("Por favor, selecione a disciplina.");
+            return;
+        }
+        if (!divergencia.trim()) {
+            toast.error("Por favor, descreva a divergência.");
+            return;
+        }
+
+        setIsSavingDirect(true);
+        const dataISO = new Date(dataVerificacao + "T12:00:00").toISOString();
+
+        try {
+            let finalFotoUrl: string | undefined = undefined;
+            let finalFotoReferenciaUrl: string | undefined = undefined;
+
+            if (isOnline) {
+                if (fotoRA) {
+                    const url = await uploadImage(fotoRA, "referencias");
+                    if (url) finalFotoReferenciaUrl = url;
+                }
+                if (fotoReal) {
+                    const url = await uploadImage(fotoReal, "real");
+                    if (url) finalFotoUrl = url;
+                }
+            }
+
+            const payload = {
+                projectId,
+                data: dataISO,
+                edificacao: selectedSala.edificacao || "",
+                pavimento: selectedSala.pavimento || "",
+                setor: selectedSala.setor || "-",
+                sala: selectedSala.nome,
+                disciplina,
+                divergencia: divergencia.trim(),
+                fotoUrl: finalFotoUrl,
+                fotoReferenciaUrl: finalFotoReferenciaUrl,
+                status: "ATIVA",
+            };
+
+            if (isOnline) {
+                await createApontamento.mutateAsync(payload);
+                toast.success("Apontamento salvo com sucesso!");
+                clearFormInputs();
+                refetchExisting();
+            } else {
+                // Save offline
+                const queued: QueuedApontamento = {
+                    id: crypto.randomUUID(),
+                    salaId: selectedSala.id,
+                    ...payload,
+                    fotoRABase64: fotoRAPreview || undefined,
+                    fotoRealBase64: fotoRealPreview || undefined,
+                };
+                const savedQueue = localStorage.getItem("field_report_queue");
+                const currentQueue = savedQueue ? JSON.parse(savedQueue) : [];
+                const updatedQueue = [...currentQueue, queued];
+                setOfflineQueue(updatedQueue);
+                localStorage.setItem("field_report_queue", JSON.stringify(updatedQueue));
+                toast.info("Apontamento salvo localmente (modo offline).");
+                clearFormInputs();
+            }
+        } catch (err: any) {
+            console.error("Direct save failed:", err);
+            toast.error("Erro ao salvar apontamento: " + (err.message || "Tente novamente"));
+        } finally {
+            setIsSavingDirect(false);
+        }
+    };
+
+    // 2. ADD TO BATCH LIST (Batch creation flow)
+    const handleAddToList = () => {
+        if (!selectedSala || !disciplina || !divergencia.trim()) {
+            toast.error("Preencha a disciplina e a divergência.");
+            return;
+        }
+
+        const newItem: ApontamentoItem = {
+            id: crypto.randomUUID(),
+            disciplina,
+            disciplinaLabel: DISCIPLINA_LABELS[disciplina] || disciplina,
+            divergencia: divergencia.trim(),
+            fotoRA,
+            fotoRAPreview,
+            fotoReal,
+            fotoRealPreview,
+        };
+
+        setApontamentosList((prev) => [...prev, newItem]);
+        toast.success("Apontamento adicionado ao lote!");
+        clearFormInputs();
+    };
+
+    // 3. SAVE ALL BATCH ITEMS
     const handleSaveAll = async () => {
         if (apontamentosList.length === 0) return;
 
         setIsSavingAll(true);
         let successCount = 0;
+        const failedIds: string[] = [];
         const dataISO = new Date(dataVerificacao + "T12:00:00").toISOString();
 
         for (const item of apontamentosList) {
@@ -301,9 +437,9 @@ export default function FieldReportTab({ projectId }: { projectId: string }) {
             const payload = {
                 projectId,
                 data: dataISO,
-                edificacao: selectedSala.edificacao,
-                pavimento: selectedSala.pavimento,
-                setor: selectedSala.setor,
+                edificacao: selectedSala.edificacao || "",
+                pavimento: selectedSala.pavimento || "",
+                setor: selectedSala.setor || "-",
                 sala: selectedSala.nome,
                 disciplina: item.disciplina,
                 divergencia: item.divergencia,
@@ -316,20 +452,10 @@ export default function FieldReportTab({ projectId }: { projectId: string }) {
                 try {
                     await createApontamento.mutateAsync(payload);
                     successCount++;
-                    await new Promise((r) => setTimeout(r, 400));
-                } catch (e) {
-                    const queued: QueuedApontamento = {
-                        id: crypto.randomUUID(),
-                        salaId: selectedSala.id,
-                        ...payload,
-                        fotoRABase64: item.fotoRAPreview || undefined,
-                        fotoRealBase64: item.fotoRealPreview || undefined,
-                    };
-                    const savedQueue = localStorage.getItem("field_report_queue");
-                    const currentQueue = savedQueue ? JSON.parse(savedQueue) : [];
-                    const updatedQueue = [...currentQueue, queued];
-                    setOfflineQueue(updatedQueue);
-                    localStorage.setItem("field_report_queue", JSON.stringify(updatedQueue));
+                    await new Promise((r) => setTimeout(r, 250));
+                } catch (e: any) {
+                    console.error("Save batch item error:", e);
+                    failedIds.push(item.id);
                 }
             } else {
                 const queued: QueuedApontamento = {
@@ -351,16 +477,23 @@ export default function FieldReportTab({ projectId }: { projectId: string }) {
         setIsSavingAll(false);
 
         if (isOnline) {
-            toast.success(`${successCount} apontamento(s) salvo(s) com sucesso!`);
-            setApontamentosList([]);
-            refetchExisting();
+            if (successCount > 0) {
+                toast.success(`${successCount} apontamento(s) salvo(s) com sucesso!`);
+                refetchExisting();
+            }
+            if (failedIds.length > 0) {
+                toast.error(`${failedIds.length} apontamento(s) falharam ao salvar.`);
+                setApontamentosList((prev) => prev.filter((i) => failedIds.includes(i.id)));
+            } else {
+                setApontamentosList([]);
+            }
         } else {
             toast.info(`${successCount} item(ns) salvos localmente (offline).`);
             setApontamentosList([]);
         }
     };
 
-    if (roleLoading) {
+    if (roleLoading && !isEditor && !isAdmin) {
         return (
             <div className="flex items-center justify-center p-20">
                 <Loader2 className="w-6 h-6 animate-spin text-[#9C1915]" />
@@ -368,7 +501,7 @@ export default function FieldReportTab({ projectId }: { projectId: string }) {
         );
     }
 
-    if (!isEditor) {
+    if (!isEditor && !isAdmin && !roleLoading) {
         return (
             <div className="flex flex-col items-center justify-center py-16 text-center max-w-md mx-auto">
                 <div className="h-14 w-14 rounded-2xl bg-red-50 text-[#9C1915] flex items-center justify-center mb-3 border border-red-100">
@@ -449,11 +582,13 @@ export default function FieldReportTab({ projectId }: { projectId: string }) {
                                     setFotoRealPreview(null);
                                 }
                             }}
+                            onSaveDirect={handleSaveDirect}
+                            isSavingDirect={isSavingDirect}
                             onAddToList={handleAddToList}
                             onCancelSala={() => setSelectedSala(null)}
                         />
 
-                        {/* Itens adicionados aguardando salvar */}
+                        {/* Itens adicionados aguardando salvar em lote */}
                         <PendingBatchList
                             items={apontamentosList}
                             onRemoveItem={(id) =>

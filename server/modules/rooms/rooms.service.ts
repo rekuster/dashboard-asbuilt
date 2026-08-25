@@ -10,7 +10,11 @@ export async function getAllSalas(projectId: string): Promise<Sala[]> {
         .select()
         .from(salas)
         .where(eq(salas.projectId, projectId))
-        .orderBy(salas.edificacao, sql`CAST(${salas.numeroSala} AS INTEGER)`);
+        .orderBy(
+            salas.edificacao,
+            sql`COALESCE(NULLIF(regexp_replace(${salas.numeroSala}, '[^0-9]', '', 'g'), '')::integer, 0)`,
+            salas.numeroSala
+        );
 }
 
 export async function getSalas(projectId: string, limit?: number, offset = 0): Promise<Sala[]> {
@@ -21,7 +25,11 @@ export async function getSalas(projectId: string, limit?: number, offset = 0): P
         .select()
         .from(salas)
         .where(eq(salas.projectId, projectId))
-        .orderBy(salas.edificacao, sql`CAST(${salas.numeroSala} AS INTEGER)`);
+        .orderBy(
+            salas.edificacao,
+            sql`COALESCE(NULLIF(regexp_replace(${salas.numeroSala}, '[^0-9]', '', 'g'), '')::integer, 0)`,
+            salas.numeroSala
+        );
 
     if (limit !== undefined) {
         return query.limit(limit).offset(offset) as any;
@@ -77,7 +85,10 @@ export async function getSalasByEdificacao(projectId: string, edificacao: string
         .select()
         .from(salas)
         .where(and(eq(salas.projectId, projectId), eq(salas.edificacao, edificacao)))
-        .orderBy(sql`CAST(${salas.numeroSala} AS INTEGER)`);
+        .orderBy(
+            sql`COALESCE(NULLIF(regexp_replace(${salas.numeroSala}, '[^0-9]', '', 'g'), '')::integer, 0)`,
+            salas.numeroSala
+        );
 }
 
 export async function getSalasByEdificacaoAndPavimento(
@@ -98,7 +109,10 @@ export async function getSalasByEdificacaoAndPavimento(
                 eq(salas.pavimento, pavimento)
             )
         )
-        .orderBy(sql`CAST(${salas.numeroSala} AS INTEGER)`);
+        .orderBy(
+            sql`COALESCE(NULLIF(regexp_replace(${salas.numeroSala}, '[^0-9]', '', 'g'), '')::integer, 0)`,
+            salas.numeroSala
+        );
 }
 
 export async function updateSala(
@@ -205,13 +219,13 @@ export async function renumberSalasInEdificacao(
             and(
                 eq(salas.projectId, projectId),
                 eq(salas.edificacao, edificacao),
-                sql`CAST(${salas.numeroSala} AS INTEGER) >= ${fromNumber}`
+                sql`COALESCE(NULLIF(regexp_replace(${salas.numeroSala}, '[^0-9]', '', 'g'), '')::integer, 0) >= ${fromNumber}`
             )
         )
-        .orderBy(sql`CAST(${salas.numeroSala} AS INTEGER) DESC`);
+        .orderBy(sql`COALESCE(NULLIF(regexp_replace(${salas.numeroSala}, '[^0-9]', '', 'g'), '')::integer, 0) DESC`);
 
     for (const room of roomsToShift) {
-        const currentNum = parseInt(room.numeroSala, 10);
+        const currentNum = parseInt(room.numeroSala, 10) || 0;
         await db
             .update(salas)
             .set({ numeroSala: String(currentNum + 1), updatedAt: new Date() })

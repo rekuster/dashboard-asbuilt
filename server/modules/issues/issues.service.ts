@@ -71,16 +71,33 @@ export async function createApontamento(data: InsertApontamento) {
 
     const dataVerificacao = typeof data.data === "string" ? new Date(data.data) : data.data;
 
-    const nextNumSubquery = data.projectId
-        ? sql`(SELECT COALESCE(MAX(${apontamentos.numeroApontamento}), 0) + 1 FROM ${apontamentos} WHERE ${apontamentos.projectId} = ${data.projectId})`
-        : sql`(SELECT COALESCE(MAX(${apontamentos.numeroApontamento}), 0) + 1 FROM ${apontamentos})`;
+    let nextNum = 1;
+    try {
+        if (data.projectId) {
+            const [maxRes] = await db
+                .select({ maxVal: sql<number>`COALESCE(MAX(${apontamentos.numeroApontamento}), 0)` })
+                .from(apontamentos)
+                .where(eq(apontamentos.projectId, data.projectId));
+            nextNum = (Number(maxRes?.maxVal) || 0) + 1;
+        } else {
+            const [maxRes] = await db
+                .select({ maxVal: sql<number>`COALESCE(MAX(${apontamentos.numeroApontamento}), 0)` })
+                .from(apontamentos);
+            nextNum = (Number(maxRes?.maxVal) || 0) + 1;
+        }
+    } catch (errNum) {
+        console.warn("[createApontamento] Warning calculating next issue number, fallback to 1:", errNum);
+        nextNum = 1;
+    }
 
     const result = await db
         .insert(apontamentos)
         .values({
             ...data,
+            numeroApontamento: nextNum,
+            setor: data.setor || "-",
+            status: data.status || "ATIVA",
             data: dataVerificacao,
-            numeroApontamento: nextNumSubquery as any,
             createdAt: new Date(),
             updatedAt: new Date(),
         })
@@ -88,16 +105,19 @@ export async function createApontamento(data: InsertApontamento) {
 
     // Auto-update room status & verification date
     try {
+        const roomFilters = [
+            eq(salas.nome, data.sala),
+            eq(salas.edificacao, data.edificacao),
+            eq(salas.pavimento, data.pavimento)
+        ];
+        if (data.projectId) {
+            roomFilters.push(eq(salas.projectId, data.projectId));
+        }
+
         const salaAlvo = await db
             .select()
             .from(salas)
-            .where(
-                and(
-                    eq(salas.nome, data.sala),
-                    eq(salas.edificacao, data.edificacao),
-                    eq(salas.pavimento, data.pavimento)
-                )
-            )
+            .where(and(...roomFilters))
             .limit(1);
 
         if (salaAlvo.length > 0) {

@@ -2,7 +2,7 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { PlusCircle, Camera, Trash2, X, Plus, AlertCircle } from "lucide-react";
+import { PlusCircle, Camera, Trash2, X, Plus, Send, Loader2 } from "lucide-react";
 import { DISCIPLINA_LABELS } from "../constants";
 
 interface InspectionFormProps {
@@ -16,6 +16,8 @@ interface InspectionFormProps {
     onPhotoDrop: (type: "RA" | "Real", e: React.DragEvent<HTMLDivElement>) => void;
     onClearPhoto: (type: "RA" | "Real") => void;
     fotoRealPreview: string | null;
+    onSaveDirect: () => void;
+    isSavingDirect: boolean;
     onAddToList: () => void;
     onCancelSala: () => void;
 }
@@ -31,9 +33,13 @@ export function InspectionForm({
     onPhotoDrop,
     onClearPhoto,
     fotoRealPreview,
+    onSaveDirect,
+    isSavingDirect,
     onAddToList,
     onCancelSala,
 }: InspectionFormProps) {
+    const isFormValid = !!disciplina && !!divergencia.trim();
+
     return (
         <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden flex flex-col">
             {/* Header Padronizado Stecla */}
@@ -55,6 +61,7 @@ export function InspectionForm({
                     type="button"
                     onClick={onCancelSala}
                     className="text-slate-400 hover:text-slate-600 rounded-lg p-1 transition-colors"
+                    title="Fechar sala selecionada"
                 >
                     <X className="w-4 h-4" />
                 </button>
@@ -113,6 +120,7 @@ export function InspectionForm({
                                 />
                                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                     <Button
+                                        type="button"
                                         size="icon"
                                         variant="destructive"
                                         className="h-7 w-7 rounded-md"
@@ -159,6 +167,7 @@ export function InspectionForm({
                                 />
                                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                     <Button
+                                        type="button"
                                         size="icon"
                                         variant="destructive"
                                         className="h-7 w-7 rounded-md"
@@ -188,13 +197,33 @@ export function InspectionForm({
                     </div>
                 </div>
 
-                <div className="pt-2">
+                {/* Botões de Ação */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
                     <Button
-                        onClick={onAddToList}
-                        disabled={!disciplina || !divergencia.trim()}
+                        type="button"
+                        onClick={onSaveDirect}
+                        disabled={!isFormValid || isSavingDirect}
                         className="w-full h-8 rounded-lg bg-[#9C1915] hover:bg-[#7D1411] text-white text-xs font-bold gap-1.5 shadow-xs"
                     >
-                        <Plus className="w-3.5 h-3.5" /> Incluir na Lista da Sala
+                        {isSavingDirect ? (
+                            <>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Salvando...
+                            </>
+                        ) : (
+                            <>
+                                <Send className="w-3.5 h-3.5" /> Salvar Apontamento
+                            </>
+                        )}
+                    </Button>
+
+                    <Button
+                        type="button"
+                        variant="outline"
+                        onClick={onAddToList}
+                        disabled={!isFormValid || isSavingDirect}
+                        className="w-full h-8 rounded-lg border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold gap-1.5 shadow-xs"
+                    >
+                        <Plus className="w-3.5 h-3.5" /> Adicionar ao Lote
                     </Button>
                 </div>
             </div>

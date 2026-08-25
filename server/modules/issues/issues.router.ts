@@ -39,18 +39,18 @@ export const issuesRouter = router({
                 projectId: z.string().optional(),
                 numeroApontamento: z.number().optional(),
                 data: z.date().or(z.string()),
-                edificacao: z.string(),
-                pavimento: z.string(),
-                setor: z.string(),
+                edificacao: z.string().optional().default(""),
+                pavimento: z.string().optional().default(""),
+                setor: z.string().nullable().optional(),
                 sala: z.string(),
                 disciplina: z.string(),
-                divergencia: z.string().nullable(),
-                fotoUrl: z.string().optional(),
-                fotoReferenciaUrl: z.string().optional(),
+                divergencia: z.string().nullable().optional(),
+                fotoUrl: z.string().nullable().optional(),
+                fotoReferenciaUrl: z.string().nullable().optional(),
                 status: z.string().optional(),
                 prioridade: z.string().optional(),
                 tipo: z.string().optional(),
-                comentario: z.string().optional(),
+                comentario: z.string().nullable().optional(),
             })
         )
         .mutation(async ({ input }) => {
@@ -82,6 +82,9 @@ export const issuesRouter = router({
 
             const data = {
                 ...input,
+                setor: input.setor || "-",
+                fotoUrl: input.fotoUrl || null,
+                fotoReferenciaUrl: input.fotoReferenciaUrl || null,
                 data: typeof input.data === "string" ? new Date(input.data) : input.data,
                 responsavel,
                 status: input.status || "ATIVA",

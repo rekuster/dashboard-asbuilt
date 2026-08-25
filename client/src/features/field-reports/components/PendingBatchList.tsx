@@ -63,6 +63,7 @@ export function PendingBatchList({
                                 </p>
                             </div>
                             <Button
+                                type="button"
                                 size="icon"
                                 variant="ghost"
                                 className="shrink-0 h-7 w-7 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md"
@@ -76,6 +77,7 @@ export function PendingBatchList({
 
                 <div className="p-3.5 bg-slate-50/50 border-t border-slate-200">
                     <Button
+                        type="button"
                         className="w-full h-8 rounded-lg bg-[#9C1915] hover:bg-[#7D1411] text-white text-xs font-bold gap-1.5 shadow-xs"
                         onClick={onSaveAll}
                         disabled={isSaving}

@@ -81,18 +81,6 @@ export default function Dashboard() {
 
     const kpis: any =
         selectedEdificacao && filteredKpis ? filteredKpis : globalKpis;
-    const isLoading = kpisLoading;
-
-    if (isLoading) {
-        return (
-            <div className="flex flex-col items-center justify-center py-16 gap-3">
-                <Loader2 className="animate-spin w-7 h-7 text-[#9C1915]" />
-                <p className="text-slate-400 text-xs font-medium animate-pulse">
-                    Carregando dados da plataforma...
-                </p>
-            </div>
-        );
-    }
 
     return (
         <div className="space-y-3.5">
@@ -141,6 +129,14 @@ export default function Dashboard() {
 
             {/* View: Visão Geral (Overview) */}
             {activeTab === "overview" && (
+                kpisLoading && !kpis ? (
+                    <div className="flex flex-col items-center justify-center py-16 gap-3">
+                        <Loader2 className="animate-spin w-7 h-7 text-[#9C1915]" />
+                        <p className="text-slate-400 text-xs font-medium animate-pulse">
+                            Carregando indicadores da plataforma...
+                        </p>
+                    </div>
+                ) : (
                 <div className="space-y-3.5 animate-in fade-in duration-150">
                     {/* KPIs Grid */}
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
