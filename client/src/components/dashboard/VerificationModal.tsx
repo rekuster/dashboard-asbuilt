@@ -69,14 +69,27 @@ export function VerificationModal({
     const [previewImage, setPreviewImage] = useState<string | null>(null);
 
     const updateAsBuiltMutation = trpc.dashboard.updateApontamentoAsBuilt.useMutation({
-        onSuccess: () => {
+        onSuccess: async (updatedData: any) => {
             toast.success("Ajustes As-Built salvos com sucesso!");
             setEditingApontamentoId(null);
             setAsBuiltNota("");
             setAsBuiltPrintUrls([]);
             setBcfIssueId("");
-            utils.dashboard.getApontamentosBySala.invalidate({ projectId, sala: salaNome });
-            utils.dashboard.getApontamentos.invalidate({ projectId });
+            if (updatedData) {
+                utils.dashboard.getApontamentosBySala.setData({ projectId, sala: salaNome }, (old: any) => {
+                    if (!old) return old;
+                    return old.map((a: any) => (a.id === updatedData.id ? { ...a, ...updatedData } : a));
+                });
+                utils.dashboard.getApontamentos.setData({ projectId }, (old: any) => {
+                    if (!old) return old;
+                    return old.map((a: any) => (a.id === updatedData.id ? { ...a, ...updatedData } : a));
+                });
+            }
+            await Promise.all([
+                utils.dashboard.getApontamentosBySala.invalidate(),
+                utils.dashboard.getApontamentos.invalidate(),
+                utils.dashboard.getKPIs.invalidate(),
+            ]);
         },
         onError: () => {
             toast.error("Erro ao salvar detalhes As-Built.");

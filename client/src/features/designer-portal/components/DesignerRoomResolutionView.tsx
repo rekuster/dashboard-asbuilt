@@ -18,10 +18,12 @@ import {
     ExternalLink,
     Maximize2,
     ZoomIn,
+    Columns2,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { isSameDiscipline } from "@/features/issues/constants";
+import { ImageComparisonModal } from "@/features/issues/components/ImageComparisonModal";
 
 interface RoomData {
     sala: string;
@@ -63,11 +65,14 @@ export function DesignerRoomResolutionView({
     const utils = trpc.useUtils();
 
     // Query para carregar os apontamentos com imagens completas da sala
-    const { data: fullApontamentos = [], isLoading: loadingIssues } =
-        trpc.dashboard.getApontamentosBySala.useQuery(
-            { projectId, sala: room.sala },
-            { enabled: !!projectId && !!room.sala }
-        );
+    const {
+        data: fullApontamentos = [],
+        isLoading: loadingIssues,
+        refetch: refetchFullApontamentos,
+    } = trpc.dashboard.getApontamentosBySala.useQuery(
+        { projectId, sala: room.sala },
+        { enabled: !!projectId && !!room.sala }
+    );
 
     // Estados para edição / resposta
     const [editingIssueId, setEditingIssueId] = useState<number | null>(null);
@@ -75,16 +80,35 @@ export function DesignerRoomResolutionView({
     const [asBuiltPrintUrl, setAsBuiltPrintUrl] = useState("");
     const [saving, setSaving] = useState(false);
 
-    // Lightbox modal para zoom de imagem em tela cheia
-    const [activeZoomImage, setActiveZoomImage] = useState<{ url: string; title: string } | null>(null);
+    // Modal comparador lado a lado
+    const [comparisonModalOpen, setComparisonModalOpen] = useState(false);
+    const [activeComparisonIssueId, setActiveComparisonIssueId] = useState<number | null>(null);
+
+    const handleOpenComparison = (issueId: number) => {
+        setActiveComparisonIssueId(issueId);
+        setComparisonModalOpen(true);
+    };
 
     // Mutação para salvar comentário/print do projetista (SEM alterar status arbitrariamente)
     const updateIssueMutation = trpc.dashboard.updateApontamento.useMutation({
-        onSuccess: () => {
+        onSuccess: async (updatedData: any) => {
+            if (updatedData) {
+                utils.dashboard.getApontamentosBySala.setData({ projectId, sala: room.sala }, (old: any) => {
+                    if (!old) return old;
+                    return old.map((a: any) => (a.id === updatedData.id ? { ...a, ...updatedData } : a));
+                });
+                utils.dashboard.getApontamentos.setData({ projectId }, (old: any) => {
+                    if (!old) return old;
+                    return old.map((a: any) => (a.id === updatedData.id ? { ...a, ...updatedData } : a));
+                });
+            }
+            await Promise.all([
+                utils.dashboard.getApontamentosBySala.invalidate(),
+                utils.dashboard.getApontamentos.invalidate(),
+                utils.dashboard.getKPIs.invalidate(),
+                refetchFullApontamentos(),
+            ]);
             toast.success("Justificativa técnica e print registrados com sucesso!");
-            utils.dashboard.getApontamentosBySala.invalidate({ projectId, sala: room.sala });
-            utils.dashboard.getApontamentos.invalidate({ projectId });
-            utils.dashboard.getKPIs.invalidate({ projectId });
             setEditingIssueId(null);
             setSaving(false);
         },
@@ -232,6 +256,17 @@ export function DesignerRoomResolutionView({
 
                                     {/* Status Badge e Botão de Ação */}
                                     <div className="flex items-center gap-2">
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            onClick={() => handleOpenComparison(issue.id)}
+                                            className="h-7 px-2.5 text-xs font-bold bg-[#9C1915] hover:bg-[#7D1411] text-white gap-1.5 shadow-2xs"
+                                            title="Abrir comparador em tela cheia com ambas as fotos lado a lado"
+                                        >
+                                            <Columns2 className="w-3.5 h-3.5" />
+                                            <span>Comparar Lado a Lado</span>
+                                        </Button>
+
                                         {isConforme ? (
                                             <span className="inline-flex items-center gap-1 font-bold text-[10px] uppercase px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
                                                 <CheckCircle2 className="w-3 h-3" />
@@ -248,8 +283,9 @@ export function DesignerRoomResolutionView({
                                             <Button
                                                 type="button"
                                                 size="sm"
+                                                variant="outline"
                                                 onClick={() => handleStartResolution(issue)}
-                                                className="h-7 px-3 text-xs font-bold bg-[#9C1915] hover:bg-[#7D1411] text-white gap-1 shadow-2xs"
+                                                className="h-7 px-3 text-xs font-bold text-slate-700 hover:text-[#9C1915] border-slate-300 gap-1 shadow-2xs"
                                             >
                                                 <span>Responder / Justificar</span>
                                             </Button>
@@ -257,106 +293,102 @@ export function DesignerRoomResolutionView({
                                     </div>
                                 </div>
 
-                                <CardContent className="p-4 space-y-4">
-                                    {/* BLOCO 1: EVIDÊNCIAS DE CAMPO (FOTO OBRA + MODELO RA) & DESCRIÇÃO DA DIVERGÊNCIA */}
-                                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-stretch">
-                                        {/* Fotos da Divergência (Esquerda - 7 colunas, tamanho e proporção padrão Apontamentos) */}
-                                        <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                                            {/* Foto da Obra (Executado) */}
-                                            <div className="bg-slate-50 p-2 rounded-lg border border-slate-200 space-y-1 flex flex-col">
-                                                <div className="flex items-center justify-between px-0.5">
-                                                    <span className="text-[10px] font-bold uppercase text-[#575756] tracking-wide">
-                                                        Foto da Obra (Executado)
-                                                    </span>
-                                                    <span className="text-[9px] text-slate-400 font-medium flex items-center gap-0.5">
-                                                        <ZoomIn className="w-2.5 h-2.5" /> Clique p/ ampliar
-                                                    </span>
-                                                </div>
-
-                                                {issue.fotoUrl ? (
-                                                    <div
-                                                        className="h-40 bg-slate-900/5 rounded-md overflow-hidden cursor-zoom-in relative group flex items-center justify-center border border-slate-200/80 hover:border-[#9C1915] transition-all"
-                                                        onClick={() =>
-                                                            setActiveZoomImage({
-                                                                url: issue.fotoUrl,
-                                                                title: `Foto da Obra (Executado) • ${bcfNum ? `BCF ${bcfNum}` : disciplineDisplayName}`,
-                                                            })
-                                                        }
-                                                        title="Clique para ampliar"
-                                                    >
-                                                        <img
-                                                            src={issue.fotoUrl}
-                                                            alt="Foto da Obra"
-                                                            className="w-full h-full object-contain group-hover:scale-105 transition-transform"
-                                                        />
-                                                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                            <div className="bg-black/70 text-white rounded-full p-1.5 shadow-md">
-                                                                <Maximize2 className="w-4 h-4" />
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    <div className="h-40 rounded-md border border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 text-xs flex-1">
-                                                        Sem foto da obra cadastrada
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            {/* Modelo de Projeto (Validação RA em Campo) */}
-                                            <div className="bg-slate-50 p-2 rounded-lg border border-slate-200 space-y-1 flex flex-col">
-                                                <div className="flex items-center justify-between px-0.5">
-                                                    <span className="text-[10px] font-bold uppercase text-[#575756] tracking-wide">
-                                                        Modelo de Projeto (Validação RA)
-                                                    </span>
-                                                    <span className="text-[9px] text-slate-400 font-medium flex items-center gap-0.5">
-                                                        <ZoomIn className="w-2.5 h-2.5" /> Clique p/ ampliar
-                                                    </span>
-                                                </div>
-
-                                                {issue.fotoReferenciaUrl ? (
-                                                    <div
-                                                        className="h-40 bg-slate-900/5 rounded-md overflow-hidden cursor-zoom-in relative group flex items-center justify-center border border-slate-200/80 hover:border-[#9C1915] transition-all"
-                                                        onClick={() =>
-                                                            setActiveZoomImage({
-                                                                url: issue.fotoReferenciaUrl,
-                                                                title: `Modelo de Projeto (Validação RA) • ${bcfNum ? `BCF ${bcfNum}` : disciplineDisplayName}`,
-                                                            })
-                                                        }
-                                                        title="Clique para ampliar"
-                                                    >
-                                                        <img
-                                                            src={issue.fotoReferenciaUrl}
-                                                            alt="Modelo de Projeto"
-                                                            className="w-full h-full object-contain group-hover:scale-105 transition-transform"
-                                                        />
-                                                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                            <div className="bg-black/70 text-white rounded-full p-1.5 shadow-md">
-                                                                <Maximize2 className="w-4 h-4" />
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    <div className="h-40 rounded-md border border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 text-xs flex-1">
-                                                        Sem snapshot do modelo cadastrado
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        {/* Descrição da Divergência de Campo (Direita - 5 colunas) */}
-                                        <div className="lg:col-span-5 bg-slate-50 p-3.5 rounded-lg border border-slate-200 flex flex-col justify-start space-y-2">
-                                            <div className="flex items-center gap-1.5">
-                                                <div className="w-1.5 h-3 bg-[#9C1915] rounded-xs" />
-                                                <span className="text-[10px] font-bold uppercase text-[#575756] tracking-wider">
-                                                    Descrição da Divergência (Campo)
-                                                </span>
-                                            </div>
+                                <CardContent className="p-4 space-y-3.5">
+                                    {/* DESCRIÇÃO DA DIVERGÊNCIA (CAMPO) - EM DESTAQUE NO TOPO DO CARD */}
+                                    <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 flex items-start gap-2.5">
+                                        <div className="w-1.5 h-4 bg-[#9C1915] rounded-xs mt-0.5 shrink-0" />
+                                        <div className="flex-1 space-y-0.5">
+                                            <span className="text-[10px] font-bold uppercase text-[#575756] tracking-wider block">
+                                                Descrição da Divergência (Campo)
+                                            </span>
                                             <p className="text-xs font-semibold text-slate-900 leading-relaxed whitespace-pre-wrap">
                                                 {issue.divergencia || issue.descricao || "Sem descrição de divergência registrada."}
                                             </p>
-                                            <span className="text-[9px] text-slate-400 font-medium pt-2">
-                                                Registrado pela equipe de vistoria Stecla
-                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* BLOCO 1: FOTOS DA DIVERGÊNCIA (OBRA + PROJETO) LADO A LADO EM TAMANHO GRANDE */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                                        {/* Foto da Obra (Executado) */}
+                                        <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 flex flex-col space-y-2">
+                                            <div className="flex items-center justify-between px-1">
+                                                <span className="text-[11px] font-black uppercase text-slate-800 tracking-wide flex items-center gap-1.5">
+                                                    <span className="w-2 h-2 rounded-full bg-red-600 inline-block" />
+                                                    Foto da Obra (Executado)
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleOpenComparison(issue.id)}
+                                                    className="text-[10px] text-slate-500 hover:text-[#9C1915] font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                                                >
+                                                    <ZoomIn className="w-3 h-3" /> Clique p/ ampliar
+                                                </button>
+                                            </div>
+
+                                            {issue.fotoUrl ? (
+                                                <div
+                                                    className="h-72 sm:h-80 lg:h-96 bg-slate-950/5 rounded-lg overflow-hidden cursor-zoom-in relative group flex items-center justify-center border border-slate-200/90 hover:border-[#9C1915] transition-all"
+                                                    onClick={() => handleOpenComparison(issue.id)}
+                                                    title="Clique para comparar lado a lado com o projeto"
+                                                >
+                                                    <img
+                                                        src={issue.fotoUrl}
+                                                        alt="Foto da Obra"
+                                                        className="w-full h-full object-contain group-hover:scale-[1.02] transition-transform duration-200"
+                                                    />
+                                                    <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                                        <span className="bg-black/85 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1.5 backdrop-blur-xs">
+                                                            <Columns2 className="w-3.5 h-3.5 text-red-400" />
+                                                            Comparar Lado a Lado
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="h-72 sm:h-80 lg:h-96 rounded-lg border border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 text-xs italic bg-white/50">
+                                                    Sem foto da obra cadastrada
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Modelo de Projeto (Validação RA em Campo) */}
+                                        <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 flex flex-col space-y-2">
+                                            <div className="flex items-center justify-between px-1">
+                                                <span className="text-[11px] font-black uppercase text-slate-800 tracking-wide flex items-center gap-1.5">
+                                                    <span className="w-2 h-2 rounded-full bg-cyan-600 inline-block" />
+                                                    Modelo de Projeto (Validação RA)
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleOpenComparison(issue.id)}
+                                                    className="text-[10px] text-slate-500 hover:text-[#9C1915] font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                                                >
+                                                    <ZoomIn className="w-3 h-3" /> Clique p/ ampliar
+                                                </button>
+                                            </div>
+
+                                            {issue.fotoReferenciaUrl ? (
+                                                <div
+                                                    className="h-72 sm:h-80 lg:h-96 bg-slate-950/5 rounded-lg overflow-hidden cursor-zoom-in relative group flex items-center justify-center border border-slate-200/90 hover:border-[#9C1915] transition-all"
+                                                    onClick={() => handleOpenComparison(issue.id)}
+                                                    title="Clique para comparar lado a lado com a obra"
+                                                >
+                                                    <img
+                                                        src={issue.fotoReferenciaUrl}
+                                                        alt="Modelo de Projeto"
+                                                        className="w-full h-full object-contain group-hover:scale-[1.02] transition-transform duration-200"
+                                                    />
+                                                    <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                                        <span className="bg-black/85 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1.5 backdrop-blur-xs">
+                                                            <Columns2 className="w-3.5 h-3.5 text-cyan-400" />
+                                                            Comparar Lado a Lado
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="h-72 sm:h-80 lg:h-96 rounded-lg border border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 text-xs italic bg-white/50">
+                                                    Sem snapshot do modelo cadastrado
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 
@@ -504,52 +536,16 @@ export function DesignerRoomResolutionView({
                 </div>
             )}
 
-            {/* LIGHTBOX DE ALTA RESOLUÇÃO / ZOOM DE FOTO EM TELA CHEIA */}
-            {activeZoomImage && (
-                <div
-                    className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 sm:p-8 animate-in fade-in duration-150"
-                    onClick={() => setActiveZoomImage(null)}
-                >
-                    <div
-                        className="relative max-w-5xl w-full bg-slate-900 rounded-2xl overflow-hidden shadow-2xl border border-slate-700 flex flex-col"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        {/* Header do Lightbox */}
-                        <div className="px-4 py-3 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between">
-                            <span className="text-xs font-bold text-slate-200">
-                                {activeZoomImage.title}
-                            </span>
-                            <div className="flex items-center gap-2">
-                                <a
-                                    href={activeZoomImage.url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-                                    title="Abrir em Nova Aba"
-                                >
-                                    <ExternalLink className="w-4 h-4" />
-                                </a>
-                                <button
-                                    onClick={() => setActiveZoomImage(null)}
-                                    className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-                                    title="Fechar"
-                                >
-                                    <X className="w-4 h-4" />
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Imagem Ampliada */}
-                        <div className="p-2 flex items-center justify-center max-h-[80vh] overflow-hidden bg-slate-950">
-                            <img
-                                src={activeZoomImage.url}
-                                alt="Visualização Ampliada"
-                                className="max-w-full max-h-[75vh] object-contain rounded-lg shadow-md"
-                            />
-                        </div>
-                    </div>
-                </div>
-            )}
+            {/* Modal de Comparação Lado a Lado em Alta Resolução */}
+            <ImageComparisonModal
+                isOpen={comparisonModalOpen}
+                onClose={() => setComparisonModalOpen(false)}
+                issues={issuesToDisplay}
+                activeIssueId={activeComparisonIssueId}
+                onSelectIssueId={(id) => setActiveComparisonIssueId(id)}
+                disciplineLabel={disciplineDisplayName}
+                roomName={room.sala}
+            />
         </div>
     );
 }

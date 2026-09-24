@@ -20,8 +20,10 @@ import {
     ExternalLink,
     Loader2,
     ZoomIn,
+    Columns2,
 } from "lucide-react";
 import { isSameDiscipline, getDisciplineDisplayName } from "../constants";
+import { ImageComparisonModal } from "./ImageComparisonModal";
 
 interface RoomVerificationViewProps {
     projectId: string;
@@ -65,11 +67,14 @@ export function RoomVerificationView({
     );
 
     // Apontamentos detalhados da sala
-    const { data: roomApontamentos = [], isLoading: loadingIssues } =
-        trpc.dashboard.getApontamentosBySala.useQuery(
-            { projectId, sala: salaNome },
-            { enabled: !!salaNome && !!projectId }
-        );
+    const {
+        data: roomApontamentos = [],
+        isLoading: loadingIssues,
+        refetch: refetchRoomApontamentos,
+    } = trpc.dashboard.getApontamentosBySala.useQuery(
+        { projectId, sala: salaNome },
+        { enabled: !!salaNome && !!projectId }
+    );
 
     const discApontamentos = roomApontamentos.filter((a: any) =>
         isSameDiscipline(a.disciplina, discipline)
@@ -85,32 +90,69 @@ export function RoomVerificationView({
             ));
 
     const upsertMutation = trpc.dashboard.upsertVerificacao.useMutation({
-        onSuccess: () => {
-            utils.dashboard.getVerificacoes.invalidate({ salaId: sala?.id || sala?.salaId });
-            utils.dashboard.getSalas.invalidate({ projectId });
-            utils.dashboard.getKPIs.invalidate({ projectId });
+        onSuccess: async () => {
+            await Promise.all([
+                utils.dashboard.getVerificacoes.invalidate(),
+                utils.dashboard.getSalas.invalidate(),
+                utils.dashboard.getKPIs.invalidate(),
+            ]);
             toast.success("Status de verificação da sala atualizado!");
         },
     });
 
     const updateApontamentoMutation = trpc.dashboard.updateApontamento.useMutation({
-        onSuccess: () => {
-            utils.dashboard.getApontamentosBySala.invalidate({ projectId, sala: salaNome });
-            utils.dashboard.getApontamentos.invalidate({ projectId });
-            utils.dashboard.getKPIs.invalidate({ projectId });
+        onSuccess: async (updatedData: any) => {
+            if (updatedData) {
+                utils.dashboard.getApontamentosBySala.setData({ projectId, sala: salaNome }, (old: any) => {
+                    if (!old) return old;
+                    return old.map((a: any) => (a.id === updatedData.id ? { ...a, ...updatedData } : a));
+                });
+                utils.dashboard.getApontamentos.setData({ projectId }, (old: any) => {
+                    if (!old) return old;
+                    return old.map((a: any) => (a.id === updatedData.id ? { ...a, ...updatedData } : a));
+                });
+            }
+            await Promise.all([
+                utils.dashboard.getApontamentosBySala.invalidate(),
+                utils.dashboard.getApontamentos.invalidate(),
+                utils.dashboard.getSalas.invalidate(),
+                utils.dashboard.getVerificacoes.invalidate(),
+                utils.dashboard.getKPIs.invalidate(),
+                refetchRoomApontamentos(),
+            ]);
             toast.success("Status do apontamento atualizado!");
+        },
+        onError: (err: any) => {
+            toast.error("Erro ao atualizar status: " + (err.message || "Tente novamente."));
+            refetchRoomApontamentos();
         },
     });
 
     const updateAsBuiltMutation = trpc.dashboard.updateApontamentoAsBuilt.useMutation({
-        onSuccess: () => {
+        onSuccess: async (updatedData: any) => {
+            if (updatedData) {
+                utils.dashboard.getApontamentosBySala.setData({ projectId, sala: salaNome }, (old: any) => {
+                    if (!old) return old;
+                    return old.map((a: any) => (a.id === updatedData.id ? { ...a, ...updatedData } : a));
+                });
+                utils.dashboard.getApontamentos.setData({ projectId }, (old: any) => {
+                    if (!old) return old;
+                    return old.map((a: any) => (a.id === updatedData.id ? { ...a, ...updatedData } : a));
+                });
+            }
+            await Promise.all([
+                utils.dashboard.getApontamentosBySala.invalidate(),
+                utils.dashboard.getApontamentos.invalidate(),
+                utils.dashboard.getSalas.invalidate(),
+                utils.dashboard.getVerificacoes.invalidate(),
+                utils.dashboard.getKPIs.invalidate(),
+                refetchRoomApontamentos(),
+            ]);
             toast.success("Ajustes As-Built salvos com sucesso!");
-            utils.dashboard.getApontamentosBySala.invalidate({ projectId, sala: salaNome });
-            utils.dashboard.getApontamentos.invalidate({ projectId });
             setEditingId(null);
         },
-        onError: () => {
-            toast.error("Erro ao salvar detalhes As-Built.");
+        onError: (err: any) => {
+            toast.error("Erro ao salvar detalhes As-Built: " + (err.message || "Tente novamente."));
         },
     });
 
@@ -120,7 +162,15 @@ export function RoomVerificationView({
     const [bcfIssueId, setBcfIssueId] = useState("");
     const [asBuiltPrintUrls, setAsBuiltPrintUrls] = useState<string[]>([]);
     const [isUploading, setIsUploading] = useState(false);
-    const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
+
+    // Modal de Comparação Lado a Lado
+    const [comparisonModalOpen, setComparisonModalOpen] = useState(false);
+    const [activeComparisonIssueId, setActiveComparisonIssueId] = useState<number | null>(null);
+
+    const handleOpenComparison = (issueId: number) => {
+        setActiveComparisonIssueId(issueId);
+        setComparisonModalOpen(true);
+    };
 
     const handleToggleConforme = () => {
         const newStatus = isSalaConforme ? "ATIVA" : "OK";
@@ -138,6 +188,17 @@ export function RoomVerificationView({
     };
 
     const handleUpdateStatus = (id: number, status: string) => {
+        const resolvedDate = status === "RESOLVIDA" || status === "SANADA" ? new Date().toISOString() : null;
+        // Atualização otimista imediata para que a UI reflita a mudança sem delay
+        utils.dashboard.getApontamentosBySala.setData({ projectId, sala: salaNome }, (old: any) => {
+            if (!old) return old;
+            return old.map((a: any) => (a.id === id ? { ...a, status, dataResolvido: resolvedDate } : a));
+        });
+        utils.dashboard.getApontamentos.setData({ projectId }, (old: any) => {
+            if (!old) return old;
+            return old.map((a: any) => (a.id === id ? { ...a, status, dataResolvido: resolvedDate } : a));
+        });
+
         updateApontamentoMutation.mutate({
             id,
             status,
@@ -321,6 +382,16 @@ export function RoomVerificationView({
                                     </div>
 
                                     <div className="flex items-center gap-2">
+                                        <Button
+                                            size="sm"
+                                            className="h-8 px-3 text-xs font-bold bg-[#9C1915] hover:bg-[#7D1411] text-white shadow-2xs gap-1.5"
+                                            onClick={() => handleOpenComparison(apont.id)}
+                                            title="Abrir comparador em tela cheia com ambas as fotos lado a lado"
+                                        >
+                                            <Columns2 className="w-3.5 h-3.5" />
+                                            Comparar Lado a Lado
+                                        </Button>
+
                                         {/* Status Selector Padronizado */}
                                         <select
                                             value={apont.status === "SANADA" ? "RESOLVIDA" : apont.status}
@@ -360,92 +431,101 @@ export function RoomVerificationView({
                                 </div>
 
                                 <div className="p-4 space-y-3.5">
-                                    {/* BLOCO 1: FOTOS DA DIVERGÊNCIA (OBRA + RA) COM O TEXTO AO LADO */}
-                                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-stretch">
-                                        {/* Fotos da Divergência (Esquerda - 7 colunas, tamanho compacto) */}
-                                        <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                                            {/* Foto da Obra (Executado) */}
-                                            <div className="bg-slate-50 p-2 rounded-lg border border-slate-200 space-y-1 flex flex-col">
-                                                <div className="flex items-center justify-between px-0.5">
-                                                    <span className="text-[10px] font-bold uppercase text-[#575756] tracking-wide">
-                                                        Foto da Obra (Executado)
-                                                    </span>
-                                                    <span className="text-[9px] text-slate-400 font-medium flex items-center gap-0.5">
-                                                        <ZoomIn className="w-2.5 h-2.5" /> Clique p/ ampliar
-                                                    </span>
-                                                </div>
-
-                                                {apont.fotoUrl ? (
-                                                    <div
-                                                        className="h-40 bg-slate-900/5 rounded-md overflow-hidden cursor-zoom-in relative group flex items-center justify-center border border-slate-200/80 hover:border-[#9C1915] transition-all"
-                                                        onClick={() => setPreviewImage({ url: apont.fotoUrl, title: `Foto da Obra (Executado) • BCF ${apont.bcfIssueId || ""}` })}
-                                                        title="Clique para ampliar"
-                                                    >
-                                                        <img
-                                                            src={apont.fotoUrl}
-                                                            alt="Foto da Obra"
-                                                            className="w-full h-full object-contain group-hover:scale-105 transition-transform"
-                                                        />
-                                                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                            <div className="bg-black/70 text-white rounded-full p-1.5 shadow-md">
-                                                                <Maximize2 className="w-4 h-4" />
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    <div className="h-40 rounded-md border border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 text-xs flex-1">
-                                                        Sem foto da obra cadastrada
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            {/* Modelo de Projeto (Validação RA em Campo) */}
-                                            <div className="bg-slate-50 p-2 rounded-lg border border-slate-200 space-y-1 flex flex-col">
-                                                <div className="flex items-center justify-between px-0.5">
-                                                    <span className="text-[10px] font-bold uppercase text-[#575756] tracking-wide">
-                                                        Modelo de Projeto (Validação RA)
-                                                    </span>
-                                                    <span className="text-[9px] text-slate-400 font-medium flex items-center gap-0.5">
-                                                        <ZoomIn className="w-2.5 h-2.5" /> Clique p/ ampliar
-                                                    </span>
-                                                </div>
-
-                                                {apont.fotoReferenciaUrl ? (
-                                                    <div
-                                                        className="h-40 bg-slate-900/5 rounded-md overflow-hidden cursor-zoom-in relative group flex items-center justify-center border border-slate-200/80 hover:border-[#9C1915] transition-all"
-                                                        onClick={() => setPreviewImage({ url: apont.fotoReferenciaUrl, title: `Modelo de Projeto (Validação RA) • BCF ${apont.bcfIssueId || ""}` })}
-                                                        title="Clique para ampliar"
-                                                    >
-                                                        <img
-                                                            src={apont.fotoReferenciaUrl}
-                                                            alt="Modelo de Projeto"
-                                                            className="w-full h-full object-contain group-hover:scale-105 transition-transform"
-                                                        />
-                                                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                            <div className="bg-black/70 text-white rounded-full p-1.5 shadow-md">
-                                                                <Maximize2 className="w-4 h-4" />
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    <div className="h-40 rounded-md border border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 text-xs flex-1">
-                                                        Sem snapshot do modelo cadastrado
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        {/* Texto da Divergência de Campo (Direita - 5 colunas) */}
-                                        <div className="lg:col-span-5 bg-slate-50 p-3.5 rounded-lg border border-slate-200 flex flex-col justify-start space-y-2">
-                                            <div className="flex items-center gap-1.5">
-                                                <div className="w-1.5 h-3 bg-[#9C1915] rounded-xs" />
-                                                <span className="text-[10px] font-bold uppercase text-[#575756] tracking-wider">
-                                                    Descrição da Divergência (Campo)
-                                                </span>
-                                            </div>
+                                    {/* DESCRIÇÃO DA DIVERGÊNCIA (CAMPO) - EM DESTAQUE NO TOPO DO CARD */}
+                                    <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 flex items-start gap-2.5">
+                                        <div className="w-1.5 h-4 bg-[#9C1915] rounded-xs mt-0.5 shrink-0" />
+                                        <div className="flex-1 space-y-0.5">
+                                            <span className="text-[10px] font-bold uppercase text-[#575756] tracking-wider block">
+                                                Descrição da Divergência (Campo)
+                                            </span>
                                             <p className="text-xs font-semibold text-slate-900 leading-relaxed whitespace-pre-wrap">
                                                 {apont.divergencia || "Sem descrição de divergência registrada."}
                                             </p>
+                                        </div>
+                                    </div>
+
+                                    {/* BLOCO 1: FOTOS DA DIVERGÊNCIA (OBRA + PROJETO) LADO A LADO EM TAMANHO GRANDE */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                                        {/* Foto da Obra (Executado) */}
+                                        <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 flex flex-col space-y-2">
+                                            <div className="flex items-center justify-between px-1">
+                                                <span className="text-[11px] font-black uppercase text-slate-800 tracking-wide flex items-center gap-1.5">
+                                                    <span className="w-2 h-2 rounded-full bg-red-600 inline-block" />
+                                                    Foto da Obra (Executado)
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleOpenComparison(apont.id)}
+                                                    className="text-[10px] text-slate-500 hover:text-[#9C1915] font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                                                >
+                                                    <ZoomIn className="w-3 h-3" /> Clique p/ ampliar
+                                                </button>
+                                            </div>
+
+                                            {apont.fotoUrl ? (
+                                                <div
+                                                    className="h-72 sm:h-80 lg:h-96 bg-slate-950/5 rounded-lg overflow-hidden cursor-zoom-in relative group flex items-center justify-center border border-slate-200/90 hover:border-[#9C1915] transition-all"
+                                                    onClick={() => handleOpenComparison(apont.id)}
+                                                    title="Clique para comparar lado a lado com o projeto"
+                                                >
+                                                    <img
+                                                        src={apont.fotoUrl}
+                                                        alt="Foto da Obra"
+                                                        className="w-full h-full object-contain group-hover:scale-[1.02] transition-transform duration-200"
+                                                    />
+                                                    <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                                        <span className="bg-black/85 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1.5 backdrop-blur-xs">
+                                                            <Columns2 className="w-3.5 h-3.5 text-red-400" />
+                                                            Comparar Lado a Lado
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="h-72 sm:h-80 lg:h-96 rounded-lg border border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 text-xs italic bg-white/50">
+                                                    Sem foto da obra cadastrada
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Modelo de Projeto (Validação RA em Campo) */}
+                                        <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 flex flex-col space-y-2">
+                                            <div className="flex items-center justify-between px-1">
+                                                <span className="text-[11px] font-black uppercase text-slate-800 tracking-wide flex items-center gap-1.5">
+                                                    <span className="w-2 h-2 rounded-full bg-cyan-600 inline-block" />
+                                                    Modelo de Projeto (Validação RA)
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleOpenComparison(apont.id)}
+                                                    className="text-[10px] text-slate-500 hover:text-[#9C1915] font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                                                >
+                                                    <ZoomIn className="w-3 h-3" /> Clique p/ ampliar
+                                                </button>
+                                            </div>
+
+                                            {apont.fotoReferenciaUrl ? (
+                                                <div
+                                                    className="h-72 sm:h-80 lg:h-96 bg-slate-950/5 rounded-lg overflow-hidden cursor-zoom-in relative group flex items-center justify-center border border-slate-200/90 hover:border-[#9C1915] transition-all"
+                                                    onClick={() => handleOpenComparison(apont.id)}
+                                                    title="Clique para comparar lado a lado com a obra"
+                                                >
+                                                    <img
+                                                        src={apont.fotoReferenciaUrl}
+                                                        alt="Modelo de Projeto"
+                                                        className="w-full h-full object-contain group-hover:scale-[1.02] transition-transform duration-200"
+                                                    />
+                                                    <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                                        <span className="bg-black/85 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1.5 backdrop-blur-xs">
+                                                            <Columns2 className="w-3.5 h-3.5 text-cyan-400" />
+                                                            Comparar Lado a Lado
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="h-72 sm:h-80 lg:h-96 rounded-lg border border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 text-xs italic bg-white/50">
+                                                    Sem snapshot do modelo cadastrado
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 
@@ -634,49 +714,16 @@ export function RoomVerificationView({
                 </div>
             )}
 
-            {/* Lightbox / Modal de Zoom em Alta Resolução */}
-            {previewImage && (
-                <Dialog open={!!previewImage} onOpenChange={() => setPreviewImage(null)}>
-                    <DialogContent className="max-w-6xl p-0 bg-black/95 backdrop-blur-md border border-white/10 rounded-2xl overflow-hidden shadow-2xl flex flex-col">
-                        {/* Header do Lightbox */}
-                        <div className="flex items-center justify-between px-4 py-3 bg-black/40 border-b border-white/10 text-white">
-                            <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
-                                {previewImage.title || "Visualização de Imagem"}
-                            </span>
-                            <div className="flex items-center gap-2">
-                                <a
-                                    href={previewImage.url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
-                                    title="Abrir imagem em nova aba"
-                                >
-                                    <ExternalLink className="w-4 h-4" />
-                                </a>
-                                <button
-                                    onClick={() => setPreviewImage(null)}
-                                    className="p-1.5 rounded-lg bg-white/10 hover:bg-red-500 text-white transition-colors"
-                                    title="Fechar (Esc)"
-                                >
-                                    <X className="w-4 h-4" />
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Imagem Ampliada */}
-                        <div
-                            className="p-4 flex items-center justify-center max-h-[82vh] overflow-auto cursor-zoom-out"
-                            onClick={() => setPreviewImage(null)}
-                        >
-                            <img
-                                src={previewImage.url}
-                                alt={previewImage.title}
-                                className="max-h-[78vh] max-w-full object-contain rounded-lg shadow-lg select-none"
-                            />
-                        </div>
-                    </DialogContent>
-                </Dialog>
-            )}
+            {/* Modal de Comparação Lado a Lado em Alta Resolução */}
+            <ImageComparisonModal
+                isOpen={comparisonModalOpen}
+                onClose={() => setComparisonModalOpen(false)}
+                issues={discApontamentos}
+                activeIssueId={activeComparisonIssueId}
+                onSelectIssueId={(id) => setActiveComparisonIssueId(id)}
+                disciplineLabel={discLabel}
+                roomName={salaNome}
+            />
         </div>
     );
 }

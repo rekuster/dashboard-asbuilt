@@ -1,4 +1,4 @@
-import { eq, and, sql, desc, like, inArray, gte, lte } from "drizzle-orm";
+import { eq, and, sql, desc, like, ilike, inArray, gte, lte } from "drizzle-orm";
 import { getDb, apontamentos, salas, bcfFiles, type Apontamento, type InsertApontamento } from "../../common/db";
 
 export async function getAllApontamentos(projectId: string): Promise<Apontamento[]> {
@@ -59,7 +59,7 @@ export async function getApontamentosBySala(projectId: string, nomeSala: string)
         .where(
             and(
                 eq(apontamentos.projectId, projectId),
-                like(apontamentos.sala, `%${nomeSala.trim()}%`)
+                ilike(apontamentos.sala, `%${nomeSala.trim()}%`)
             )
         )
         .orderBy(apontamentos.numeroApontamento);
