@@ -766,6 +766,38 @@ export async function generateVerificationReport(projectId: string, filters?: {
 
     const records = await query.where(and(...conditions));
 
+    // Ordenação estritamente numérica pela Issue BCF (e secundária por numeroApontamento)
+    records.sort((a, b) => {
+        const bcfA = a.apontamento.bcfIssueId?.trim();
+        const bcfB = b.apontamento.bcfIssueId?.trim();
+
+        const numA = bcfA ? parseInt(bcfA.replace(/\D/g, ''), 10) : NaN;
+        const numB = bcfB ? parseInt(bcfB.replace(/\D/g, ''), 10) : NaN;
+
+        const hasNumA = !isNaN(numA);
+        const hasNumB = !isNaN(numB);
+
+        if (hasNumA && hasNumB) {
+            if (numA !== numB) return numA - numB;
+            if (bcfA && bcfB && bcfA !== bcfB) {
+                return bcfA.localeCompare(bcfB, undefined, { numeric: true, sensitivity: 'base' });
+            }
+        } else if (hasNumA) {
+            return -1;
+        } else if (hasNumB) {
+            return 1;
+        } else if (bcfA && bcfB) {
+            const cmp = bcfA.localeCompare(bcfB, undefined, { numeric: true, sensitivity: 'base' });
+            if (cmp !== 0) return cmp;
+        } else if (bcfA) {
+            return -1;
+        } else if (bcfB) {
+            return 1;
+        }
+
+        return (a.apontamento.numeroApontamento || 0) - (b.apontamento.numeroApontamento || 0);
+    });
+
     // Capa simples
     doc.rect(0, 0, doc.page.width, doc.page.height).fill('#ffffff');
     if (hasLogo) {
@@ -788,13 +820,12 @@ export async function generateVerificationReport(projectId: string, filters?: {
         }
 
         // Cabeçalho da Issue
-        doc.rect(40, 40, doc.page.width - 220, 80).fill('#f8fafc').stroke('#e2e8f0');
+        doc.rect(40, 40, doc.page.width - 220, 70).fill('#f8fafc').stroke('#e2e8f0');
         
-        doc.fillColor('#940707').fontSize(14).font('Helvetica-Bold').text(`Apontamento #${ap.numeroApontamento}`, 50, 50);
-        doc.fillColor('#64748b').fontSize(10).font('Helvetica').text(`Sala: ${record.numeroSala} - ${record.salaNome} | Pavimento: ${ap.pavimento}`, 50, 70);
+        doc.fillColor('#64748b').fontSize(11).font('Helvetica').text(`Sala: ${record.numeroSala} - ${record.salaNome} | Pavimento: ${ap.pavimento}`, 50, 53);
         
-        let bcfText = ` | Nº Issue BCF/Navisworks: ${ap.bcfIssueId || 'Não Registrado'}`;
-        doc.fillColor('#0f172a').font('Helvetica-Bold').text(`Disciplina: ${getDisciplineFullName(ap.disciplina || 'OUTROS')}${bcfText}`, 50, 90);
+        let bcfText = ` | Nº Issue BCF: ${ap.bcfIssueId || 'Não Registrado'}`;
+        doc.fillColor('#0f172a').fontSize(11).font('Helvetica-Bold').text(`Disciplina: ${getDisciplineFullName(ap.disciplina || 'OUTROS')}${bcfText}`, 50, 75);
 
         // Descrição e Nota Técnica
         doc.fillColor('#334155').fontSize(10).font('Helvetica-Bold').text('Descrição da Divergência:', 50, 130);
