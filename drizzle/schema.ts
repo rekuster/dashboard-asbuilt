@@ -175,6 +175,13 @@ export const escopoAsBuilt = pgTable("escopoAsBuilt", {
     obsTha: text("obsTha"),                          // Observações da Thá
     modeloBaseTha: text("modeloBaseTha"),            // Nome do modelo base na planilha (para cross-ref)
 
+    // Novos campos: Validação direta por Modelo + Controle de Pranchas 2D (.DWG/.PDF) + Parecer Rápido
+    statusModelo: text("statusModelo"),              // 'NAO_ENTREGUE' | 'IGUAL_PROJETO' | 'COM_PENDENCIAS' | 'VALIDADO'
+    totalPranchas: integer("totalPranchas").default(0),         // Total de pranchas 2D (DWG/PDF) previstas na disciplina/edificação
+    pranchasValidadas: integer("pranchasValidadas").default(0), // Qtd de pranchas 2D validadas/entregues
+    statusPranchas: text("statusPranchas").default("NAO_ENTREGUE"), // 'NAO_ENTREGUE' | 'COM_PENDENCIAS' | 'VALIDADO' | 'NAO_APLICAVEL'
+    parecerTecnico: text("parecerTecnico"),          // Resumo rápido das pendências do modelo/documentação para retorno à instaladora
+
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 }, (table) => ({

@@ -3,6 +3,9 @@ import { router, publicProcedure } from "../../common/trpc";
 import {
     getEscopos,
     upsertEscopo,
+    quickUpdateEscopo,
+    registrarQuinzenaModulos,
+    sincronizarSteclaCloud,
     deleteEscopo,
     getEntregas,
     getEntregasByEscopo,
@@ -43,10 +46,61 @@ export const deliveriesRouter = router({
                 pendenciaRvt: z.string().nullish(),
                 acaoRvt: z.string().nullish(),
                 ativo: z.number().optional(),
+                statusModelo: z.string().nullish(),
+                totalPranchas: z.number().optional(),
+                pranchasValidadas: z.number().optional(),
+                statusPranchas: z.string().nullish(),
+                parecerTecnico: z.string().nullish(),
             })
         )
         .mutation(async ({ input }) => {
             return await upsertEscopo(input);
+        }),
+
+    quickUpdateEscopo: publicProcedure
+        .input(
+            z.object({
+                id: z.number(),
+                statusModelo: z.string().optional(),
+                temRvtOriginal: z.number().optional(),
+                totalPranchas: z.number().optional(),
+                pranchasValidadas: z.number().optional(),
+                statusPranchas: z.string().optional(),
+                parecerTecnico: z.string().nullish(),
+            })
+        )
+        .mutation(async ({ input }) => {
+            return await quickUpdateEscopo(input);
+        }),
+
+    registrarQuinzenaModulos: publicProcedure
+        .input(
+            z.object({
+                projectId: z.string(),
+                identificadorEntrega: z.string(),
+                dataRecebimento: z.date().or(z.string()),
+                itens: z.array(
+                    z.object({
+                        escopoId: z.number(),
+                        statusModelo: z.string(),
+                        entregouModelo3d: z.boolean().optional(),
+                        entregouPranchas2d: z.boolean().optional(),
+                        totalPranchas: z.number().optional(),
+                        pranchasValidadas: z.number().optional(),
+                        statusPranchas: z.string().optional(),
+                        parecerTecnico: z.string().nullish(),
+                    })
+                ),
+            })
+        )
+        .mutation(async ({ input }) => {
+            return await registrarQuinzenaModulos(input);
+        }),
+
+    sincronizarSteclaCloud: publicProcedure
+        .input(z.object({ projectId: z.string() }))
+        .mutation(async ({ input }) => {
+            return await sincronizarSteclaCloud(input.projectId);
         }),
 
     deleteEscopo: publicProcedure

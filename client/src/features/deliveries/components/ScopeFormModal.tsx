@@ -22,7 +22,9 @@ export function ScopeFormModal({
     const mutation = trpc.dashboard.upsertEscopo.useMutation({
         onSuccess: () => {
             utils.dashboard.getEscopos.invalidate({ projectId });
+            utils.dashboard.getEntregasStats.invalidate({ projectId });
             utils.dashboard.getAsBuiltStatus.invalidate({ projectId });
+            utils.analytics.getAsBuiltModelsSummary.invalidate({ projectId });
             onClose();
         },
         onError: (error) => alert("Erro ao salvar: " + error.message),
@@ -36,6 +38,11 @@ export function ScopeFormModal({
         nomeModelo: escopo?.nomeModelo || "",
         nomeModeloFinal: escopo?.nomeModeloFinal || "",
         temRvtOriginal: escopo?.temRvtOriginal ?? 1,
+        statusModelo: escopo?.statusAuditoria || escopo?.statusModelo || "NAO_ENTREGUE",
+        totalPranchas: escopo?.totalPranchas ?? 0,
+        pranchasValidadas: escopo?.pranchasValidadas ?? 0,
+        statusPranchas: escopo?.statusPranchas || "NAO_ENTREGUE",
+        parecerTecnico: escopo?.parecerTecnico || "",
         pendenciaRvt: escopo?.pendenciaRvt || "",
         acaoRvt: escopo?.acaoRvt || "",
         descricao: escopo?.descricao || "",
@@ -60,10 +67,10 @@ export function ScopeFormModal({
                         </div>
                         <div>
                             <h2 className="text-sm font-bold uppercase tracking-wider text-slate-800">
-                                {escopo ? "Editar Modelo no Escopo" : "Novo Modelo no Escopo"}
+                                {escopo ? "Editar Modelo na Lista Mestra" : "Novo Modelo na Lista Mestra"}
                             </h2>
                             <p className="text-[11px] text-slate-500">
-                                Defina o modelo contratual esperado do parceiro ou projetista
+                                Defina o modelo 3D e o escopo de pranchas 2D (.dwg/.pdf)
                             </p>
                         </div>
                     </div>
@@ -88,7 +95,7 @@ export function ScopeFormModal({
                                 onChange={(e) =>
                                     setFormData({ ...formData, empresa: e.target.value })
                                 }
-                                placeholder="Ex: Thá ou Ocle"
+                                placeholder="Ex: Thá, Ocle ou AeB"
                                 className="h-8 text-xs rounded-lg border-slate-200"
                             />
                         </div>
@@ -102,7 +109,7 @@ export function ScopeFormModal({
                                 onChange={(e) =>
                                     setFormData({ ...formData, disciplina: e.target.value })
                                 }
-                                placeholder="Ex: Climatização"
+                                placeholder="Ex: Climatização, PCI..."
                                 className="h-8 text-xs rounded-lg border-slate-200"
                             />
                         </div>
@@ -116,7 +123,7 @@ export function ScopeFormModal({
                                 onChange={(e) =>
                                     setFormData({ ...formData, edificacao: e.target.value })
                                 }
-                                placeholder="Ex: Prédio Produção"
+                                placeholder="Ex: Prédio Produção, ETE..."
                                 className="h-8 text-xs rounded-lg border-slate-200"
                             />
                         </div>
@@ -147,6 +154,41 @@ export function ScopeFormModal({
                                 className="h-8 text-xs rounded-lg border-slate-200"
                             />
                         </div>
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-bold uppercase text-slate-600">
+                                Total Pranchas 2D (DWG/PDF)
+                            </label>
+                            <Input
+                                type="number"
+                                min={0}
+                                value={formData.totalPranchas}
+                                onChange={(e) =>
+                                    setFormData({
+                                        ...formData,
+                                        totalPranchas: parseInt(e.target.value) || 0,
+                                    })
+                                }
+                                placeholder="Ex: 12"
+                                className="h-8 text-xs rounded-lg border-slate-200"
+                            />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-bold uppercase text-slate-600">
+                                Pranchas 2D Validadas
+                            </label>
+                            <Input
+                                type="number"
+                                min={0}
+                                value={formData.pranchasValidadas}
+                                onChange={(e) =>
+                                    setFormData({
+                                        ...formData,
+                                        pranchasValidadas: parseInt(e.target.value) || 0,
+                                    })
+                                }
+                                className="h-8 text-xs rounded-lg border-slate-200"
+                            />
+                        </div>
                         <div className="space-y-1 col-span-2">
                             <label className="text-[10px] font-bold uppercase text-slate-600">
                                 Possui RVT Original do Projeto? *
@@ -167,15 +209,15 @@ export function ScopeFormModal({
                         </div>
                         <div className="space-y-1 col-span-2">
                             <label className="text-[10px] font-bold uppercase text-slate-600">
-                                Descrição / Escopo
+                                Parecer Técnico / Resumo de Apontamentos
                             </label>
                             <Textarea
-                                value={formData.descricao}
+                                value={formData.parecerTecnico}
                                 onChange={(e) =>
-                                    setFormData({ ...formData, descricao: e.target.value })
+                                    setFormData({ ...formData, parecerTecnico: e.target.value })
                                 }
-                                placeholder="Detalhes contratuais ou consolidação..."
-                                className="resize-none rounded-lg border-slate-200 min-h-[50px] text-xs"
+                                placeholder="Resumo técnico das pendências para retorno à contratada..."
+                                className="resize-none rounded-lg border-slate-200 min-h-[56px] text-xs"
                             />
                         </div>
                     </div>

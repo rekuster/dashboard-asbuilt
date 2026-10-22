@@ -1,20 +1,13 @@
 import React, { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-    Layers,
-    Building2,
     Calendar,
     AlertCircle,
-    CheckCircle2,
-    Clock,
-    FileCheck2,
     Loader2,
-    Sparkles,
     Edit2,
+    FileSpreadsheet,
 } from "lucide-react";
 import { ConstatacoesModal } from "./ConstatacoesModal";
 
@@ -47,7 +40,14 @@ export default function AsBuiltModelsExecutiveSummary({
     if (!summary) return null;
 
     // Fallbacks alinhados com o escopo real caso o banco ainda não tenha cadastros de todas as edificações
-    const displayTotal = summary.totalModelos > 0 ? summary.totalModelos : (selectedEmpresa === "Thá" ? 35 : 19);
+    const displayTotal =
+        summary.totalModelos > 0
+            ? summary.totalModelos
+            : selectedEmpresa === "Thá"
+            ? 35
+            : selectedEmpresa === "AeB"
+            ? 9
+            : 19;
     const displayValidados = summary.totalModelos > 0 ? summary.validados : 3;
     const displayValidadosPct = summary.totalModelos > 0 ? summary.validadosPct : 8.57;
     const displayComPendencias = summary.totalModelos > 0 ? summary.comPendencias : 7;
@@ -56,6 +56,10 @@ export default function AsBuiltModelsExecutiveSummary({
     const displayIgualProjetoPct = summary.totalModelos > 0 ? summary.igualProjetoPct : 20.0;
     const displayNaoEntregues = summary.totalModelos > 0 ? summary.naoEntregues : 18;
     const displayNaoEntreguesPct = summary.totalModelos > 0 ? summary.naoEntreguesPct : 51.43;
+
+    const totalPranchas = (summary as any).totalPranchas ?? 0;
+    const pranchasValidadas = (summary as any).pranchasValidadas ?? 0;
+    const pranchasPct = (summary as any).pranchasPct ?? 0;
 
     const edificacoesData = summary.statusPorEdificacao.length > 0
         ? summary.statusPorEdificacao
@@ -75,35 +79,36 @@ export default function AsBuiltModelsExecutiveSummary({
                     <div className="flex items-center gap-2.5">
                         <div className="w-2.5 h-6 bg-[#9C1915] rounded-xs shrink-0" />
                         <h2 className="text-base font-black uppercase tracking-wider text-slate-900 font-sans">
-                            AS BUILT • Status dos Modelos
+                            AS BUILT • Status dos Modelos 3D & Pranchas 2D
                         </h2>
                     </div>
                     <p className="text-xs text-slate-500 font-medium pl-5">
-                        Acompanhamento executivo de recebimento e conformidade dos modelos por contratada.
+                        Acompanhamento executivo de recebimento e conformidade dos modelos e documentação 2D por contratada.
                     </p>
                 </div>
 
                 <div className="flex items-center gap-2 self-start md:self-center">
                     <span className="text-[11px] font-bold uppercase text-slate-500">Contratada:</span>
                     <Select value={selectedEmpresa} onValueChange={setSelectedEmpresa}>
-                        <SelectTrigger className="text-xs font-bold h-8.5 w-40 rounded-lg border-slate-200 bg-slate-50/70 text-slate-800">
+                        <SelectTrigger className="text-xs font-bold h-8.5 w-44 rounded-lg border-slate-200 bg-slate-50/70 text-slate-800">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="Thá" className="text-xs font-bold">Thá Engenharia</SelectItem>
                             <SelectItem value="Ocle" className="text-xs font-bold">Ocle Engenharia</SelectItem>
+                            <SelectItem value="AeB" className="text-xs font-bold">AeB</SelectItem>
                             <SelectItem value="Todas" className="text-xs">Todas as Empresas</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
             </div>
 
-            {/* 5 CARDS DE KPI EXECUTIVOS (IDÊNTICOS AO SLIDE DA STECLA) */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+            {/* 6 CARDS DE KPI EXECUTIVOS (MODELOS 3D + PRANCHAS 2D STECLACLOUD) */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
                 {/* 1. Total Modelos */}
                 <div className="bg-slate-50/70 border border-slate-200 rounded-xl p-4 flex flex-col justify-between transition-all hover:border-slate-300">
                     <span className="text-[11px] font-black uppercase tracking-wider text-slate-600">
-                        TOTAL MODELOS
+                        TOTAL MODELOS 3D
                     </span>
                     <div className="my-2">
                         <span className="text-2xl lg:text-3xl font-black text-slate-900 tracking-tight">
@@ -111,7 +116,7 @@ export default function AsBuiltModelsExecutiveSummary({
                         </span>
                     </div>
                     <span className="text-[11px] font-medium text-slate-500 truncate">
-                        Total do Escopo {selectedEmpresa === "Todas" ? "Geral" : selectedEmpresa}
+                        Escopo {selectedEmpresa === "Todas" ? "Geral" : selectedEmpresa}
                     </span>
                 </div>
 
@@ -133,7 +138,7 @@ export default function AsBuiltModelsExecutiveSummary({
                 {/* 3. Entregues com Pendências */}
                 <div className="bg-amber-50/60 border border-amber-200 rounded-xl p-4 flex flex-col justify-between transition-all hover:border-amber-300">
                     <span className="text-[11px] font-black uppercase tracking-wider text-amber-800">
-                        ENTREGUES COM PENDÊNCIAS
+                        COM PENDÊNCIAS
                     </span>
                     <div className="my-2">
                         <span className="text-2xl lg:text-3xl font-black text-amber-600 tracking-tight">
@@ -148,7 +153,7 @@ export default function AsBuiltModelsExecutiveSummary({
                 {/* 4. Entregues Igual ao Projeto */}
                 <div className="bg-red-50/60 border border-red-200 rounded-xl p-4 flex flex-col justify-between transition-all hover:border-red-300">
                     <span className="text-[11px] font-black uppercase tracking-wider text-[#9C1915]">
-                        ENTREGUES IGUAL AO PROJETO
+                        IGUAL AO PROJETO
                     </span>
                     <div className="my-2">
                         <span className="text-2xl lg:text-3xl font-black text-[#9C1915] tracking-tight">
@@ -174,11 +179,30 @@ export default function AsBuiltModelsExecutiveSummary({
                         {displayNaoEntreguesPct}%
                     </span>
                 </div>
+
+                {/* 6. Pranchas 2D (.DWG / .PDF) */}
+                <div className="bg-blue-50/50 border border-blue-200 rounded-xl p-4 flex flex-col justify-between transition-all hover:border-blue-300">
+                    <span className="text-[11px] font-black uppercase tracking-wider text-blue-900 flex items-center gap-1">
+                        <FileSpreadsheet className="w-3.5 h-3.5 text-blue-700" />
+                        PRANCHAS 2D
+                    </span>
+                    <div className="my-2 flex items-baseline gap-1">
+                        <span className="text-2xl lg:text-3xl font-black text-blue-700 tracking-tight">
+                            {pranchasValidadas}
+                        </span>
+                        <span className="text-xs font-bold text-blue-500">
+                            / {totalPranchas}
+                        </span>
+                    </div>
+                    <span className="text-[11px] font-bold text-blue-700">
+                        {pranchasPct}% DWG/PDF validado
+                    </span>
+                </div>
             </div>
 
             {/* GRID INFERIOR: STATUS POR EDIFICAÇÃO & CONSTATAÇÕES TÉCNICAS */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-2">
-                {/* COLUNA ESQUERDA (7 colunas): GRÁFICO DE BARRAS EMPILHADAS */}
+                {/* COLUNA ESQUERDA (6 colunas): GRÁFICO DE BARRAS EMPILHADAS */}
                 <div className="lg:col-span-6 space-y-4">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <h3 className="text-xs font-black uppercase tracking-wider text-slate-800">

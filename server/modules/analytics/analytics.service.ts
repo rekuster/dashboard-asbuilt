@@ -1,6 +1,7 @@
 import { eq, and, sql, desc } from "drizzle-orm";
 import { getDb, salas, apontamentos, verificacaoModelo, escopoAsBuilt, entregasAsBuilt, constatacoesTecnicas } from "../../common/db";
 import { format, startOfWeek, differenceInCalendarWeeks, addWeeks } from "date-fns";
+import { ensureEscopoColumns, resolveEscopoAuditStatus, inferSteclaPranchas } from "../deliveries/deliveries.service";
 
 export async function getKPIs(projectId: string, edificacao?: string) {
     const db = await getDb();
@@ -560,6 +561,8 @@ export async function getAsBuiltModelsSummary(projectId: string, empresa?: strin
     const db = await getDb();
     if (!db) return null;
 
+    await ensureEscopoColumns(db);
+
     const escConditions: any[] = [eq(escopoAsBuilt.projectId, projectId)];
     if (empresa && empresa !== "Todas" && empresa !== "todas") {
         escConditions.push(sql`LOWER(${escopoAsBuilt.empresa}) = LOWER(${empresa})`);
@@ -567,31 +570,20 @@ export async function getAsBuiltModelsSummary(projectId: string, empresa?: strin
 
     const escopos = await db.select().from(escopoAsBuilt).where(and(...escConditions));
 
-    // Busca todas as entregas do projeto
     const allEntregas = await db
         .select()
         .from(entregasAsBuilt)
         .where(eq(entregasAsBuilt.projectId, projectId))
         .orderBy(desc(entregasAsBuilt.dataRecebimento));
 
-    // Mapeia entregas por escopoId
-    const entregasMap = new Map<number, any[]>();
-    allEntregas.forEach((ent: any) => {
-        if (ent.escopoId) {
-            if (!entregasMap.has(ent.escopoId)) {
-                entregasMap.set(ent.escopoId, []);
-            }
-            entregasMap.get(ent.escopoId)!.push(ent);
-        }
-    });
-
     let totalModelos = escopos.length;
     let validados = 0;
     let comPendencias = 0;
     let igualProjeto = 0;
     let naoEntregues = 0;
+    let totalPranchas = 0;
+    let pranchasValidadas = 0;
 
-    // Agrupamento por Edificação
     const edificacaoMap = new Map<string, {
         edificacao: string;
         total: number;
@@ -618,44 +610,49 @@ export async function getAsBuiltModelsSummary(projectId: string, empresa?: strin
         const edifStats = edificacaoMap.get(edif)!;
         edifStats.total++;
 
-        const entregasDoEscopo = entregasMap.get(escopo.id) || [];
+        const entregasDoEscopo = allEntregas.filter(
+            (e: any) =>
+                (e.escopoId && e.escopoId === escopo.id) ||
+                (e.disciplina?.toLowerCase() === escopo.disciplina?.toLowerCase() &&
+                    e.edificacao?.toLowerCase() === escopo.edificacao?.toLowerCase() &&
+                    e.empresaResponsavel?.toLowerCase() === escopo.empresa?.toLowerCase())
+        );
 
-        if (entregasDoEscopo.length === 0) {
-            naoEntregues++;
-            edifStats.naoEntregue++;
-        } else {
-            const latest = entregasDoEscopo[0];
-            if (latest.dataRecebimento) {
-                const dt = new Date(latest.dataRecebimento);
-                if (!ultimaDataRecebida || dt > ultimaDataRecebida) {
-                    ultimaDataRecebida = dt;
-                }
-            }
-
-            const st = (latest.status || "").toUpperCase();
-            const res = (latest.resultado || "").toUpperCase();
-
-            if (st === "VALIDADO" || res === "CONFORME") {
-                validados++;
-                edifStats.validado++;
-            } else if (st === "IGUAL_PROJETO" || (escopo.obsTha && escopo.obsTha.toLowerCase().includes("igual ao projeto"))) {
-                igualProjeto++;
-                edifStats.igualProjeto++;
-            } else if (st === "COM_PENDENCIAS" || st === "EM_REVISAO" || st === "REJEITADO" || res === "NAO_CONFORME") {
-                comPendencias++;
-                edifStats.pendente++;
-            } else {
-                naoEntregues++;
-                edifStats.naoEntregue++;
+        if (entregasDoEscopo.length > 0 && entregasDoEscopo[0].dataRecebimento) {
+            const dt = new Date(entregasDoEscopo[0].dataRecebimento);
+            if (!ultimaDataRecebida || dt > ultimaDataRecebida) {
+                ultimaDataRecebida = dt;
             }
         }
+
+        const st = resolveEscopoAuditStatus(escopo, entregasDoEscopo);
+        if (st === "VALIDADO") {
+            validados++;
+            edifStats.validado++;
+        } else if (st === "IGUAL_PROJETO") {
+            igualProjeto++;
+            edifStats.igualProjeto++;
+        } else if (st === "COM_PENDENCIAS") {
+            comPendencias++;
+            edifStats.pendente++;
+        } else {
+            naoEntregues++;
+            edifStats.naoEntregue++;
+        }
+
+        const tp =
+            escopo.totalPranchas && escopo.totalPranchas > 0
+                ? escopo.totalPranchas
+                : inferSteclaPranchas(escopo.edificacao, escopo.disciplina);
+        totalPranchas += tp;
+        pranchasValidadas += escopo.pranchasValidadas ?? 0;
     });
 
     const percent = (val: number) => totalModelos > 0 ? Number(((val / totalModelos) * 100).toFixed(2)) : 0;
+    const pranchasPct = totalPranchas > 0 ? Number(((pranchasValidadas / totalPranchas) * 100).toFixed(1)) : 0;
 
     const statusPorEdificacao = Array.from(edificacaoMap.values()).sort((a, b) => b.total - a.total);
 
-    // Constatações técnicas dinâmicas do banco por empresa
     const empFilter = empresa && empresa !== "Todas" ? empresa : "Thá";
     const constatacoesDb = await db
         .select()
@@ -684,9 +681,9 @@ export async function getAsBuiltModelsSummary(projectId: string, empresa?: strin
 
     let constatacoesResult = Array.from(groupedMap.values());
 
-    // Se a empresa ainda não tiver registros no banco, gera uma estrutura padrão
     if (constatacoesResult.length === 0) {
-        if (empFilter.toLowerCase() === "thá" || empFilter.toLowerCase() === "tha") {
+        const lowerEmp = empFilter.toLowerCase();
+        if (lowerEmp === "thá" || lowerEmp === "tha") {
             constatacoesResult = [
                 {
                     edificacao: "Implantação",
@@ -723,14 +720,26 @@ export async function getAsBuiltModelsSummary(projectId: string, empresa?: strin
                     destaque: true,
                 },
             ];
+        } else if (lowerEmp === "aeb") {
+            constatacoesResult = [
+                {
+                    edificacao: "ETE",
+                    items: [
+                        "Entregas quinzenais recebidas até a SM 41 (15/10/2026) nas disciplinas de Elétrica, Hidrossanitário e Climatização.",
+                        "Necessário validar as últimas entregas dos modelos nativos (.rvt) e pranchas (.dwg/.pdf) da infraestrutura ETE.",
+                    ],
+                    destaque: true,
+                },
+            ];
         } else {
             constatacoesResult = [
                 {
                     edificacao: "Prédio Produção",
                     items: [
-                        "Modelos de Climatização e Gases entregues com pendências pontuais de modelagem em conexões.",
+                        "Muitos apontamentos de verificação As-Built para validar no modelo nativo e retornar à instaladora Ocle.",
+                        "Modelos de Climatização, PCI e Utilidades com pendências de ajuste entre projeto x obra e documentação DWG/PDF.",
                     ],
-                    destaque: false,
+                    destaque: true,
                 },
                 {
                     edificacao: "Central de Utilidades",
@@ -744,7 +753,7 @@ export async function getAsBuiltModelsSummary(projectId: string, empresa?: strin
                     items: [
                         "Rede de média tensão com pendência de validação em caixas de passagem.",
                     ],
-                    destaque: true,
+                    destaque: false,
                 },
             ];
         }
@@ -760,9 +769,12 @@ export async function getAsBuiltModelsSummary(projectId: string, empresa?: strin
         igualProjetoPct: percent(igualProjeto),
         naoEntregues,
         naoEntreguesPct: percent(naoEntregues),
+        totalPranchas,
+        pranchasValidadas,
+        pranchasPct,
         statusPorEdificacao,
         constatacoes: constatacoesResult,
-        ultimaDataRecebida: ultimaDataRecebida ? format(ultimaDataRecebida, "dd/MM/yyyy") : "16/07/2026",
+        ultimaDataRecebida: ultimaDataRecebida ? format(ultimaDataRecebida, "dd/MM/yyyy") : "15/10/2026",
     };
 }
 
