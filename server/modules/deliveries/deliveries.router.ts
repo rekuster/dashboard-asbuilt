@@ -6,6 +6,8 @@ import {
     quickUpdateEscopo,
     registrarQuinzenaModulos,
     sincronizarSteclaCloud,
+    getSteclaCloudLinks,
+    saveSteclaCloudLinks,
     deleteEscopo,
     getEntregas,
     getEntregasByEscopo,
@@ -98,9 +100,31 @@ export const deliveriesRouter = router({
         }),
 
     sincronizarSteclaCloud: publicProcedure
-        .input(z.object({ projectId: z.string() }))
+        .input(
+            z.object({
+                projectId: z.string(),
+                empresa: z.string().optional(),
+            })
+        )
         .mutation(async ({ input }) => {
-            return await sincronizarSteclaCloud(input.projectId);
+            return await sincronizarSteclaCloud(input.projectId, input.empresa, true);
+        }),
+
+    getSteclaCloudLinks: publicProcedure
+        .input(z.object({ projectId: z.string() }))
+        .query(async ({ input }) => {
+            return await getSteclaCloudLinks(input.projectId);
+        }),
+
+    saveSteclaCloudLinks: publicProcedure
+        .input(
+            z.object({
+                projectId: z.string(),
+                links: z.record(z.string(), z.string()),
+            })
+        )
+        .mutation(async ({ input }) => {
+            return await saveSteclaCloudLinks(input.projectId, input.links);
         }),
 
     deleteEscopo: publicProcedure

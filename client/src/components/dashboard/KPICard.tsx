@@ -15,9 +15,45 @@ interface KPICardProps {
         text: string;
         variant?: "default" | "success" | "warning" | "danger" | "info";
     };
-    variant?: "default" | "blue" | "green" | "red" | "orange";
+    variant?: "default" | "blue" | "green" | "red" | "orange" | "purple";
     className?: string;
 }
+
+const ICON_VARIANT_STYLES: Record<
+    NonNullable<KPICardProps["variant"]>,
+    { badge: string; icon: string; valueText: string }
+> = {
+    default: {
+        badge: "bg-slate-100 border border-slate-200/90",
+        icon: "text-slate-700",
+        valueText: "text-slate-900",
+    },
+    blue: {
+        badge: "bg-sky-50 border border-sky-200",
+        icon: "text-sky-600",
+        valueText: "text-slate-900",
+    },
+    green: {
+        badge: "bg-emerald-50 border border-emerald-200",
+        icon: "text-emerald-600",
+        valueText: "text-slate-900",
+    },
+    orange: {
+        badge: "bg-amber-50 border border-amber-200",
+        icon: "text-amber-600",
+        valueText: "text-slate-900",
+    },
+    red: {
+        badge: "bg-red-50 border border-red-200",
+        icon: "text-[#9C1915]",
+        valueText: "text-[#940707]",
+    },
+    purple: {
+        badge: "bg-indigo-50 border border-indigo-200",
+        icon: "text-indigo-600",
+        valueText: "text-slate-900",
+    },
+};
 
 export default function KPICard({
     title,
@@ -29,7 +65,7 @@ export default function KPICard({
     variant = "default",
     className,
 }: KPICardProps) {
-    const isRed = variant === "red";
+    const styles = ICON_VARIANT_STYLES[variant] || ICON_VARIANT_STYLES.default;
 
     return (
         <Card
@@ -37,24 +73,22 @@ export default function KPICard({
                 className || ""
             }`}
         >
-            <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center justify-between mb-1.5 gap-2">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-[#6C6A6A] truncate">
                     {title}
                 </p>
                 {Icon && (
-                    <Icon
-                        className={`h-3.5 w-3.5 ${
-                            isRed ? "text-[#940707]" : "text-[#6C6A6A]"
-                        } opacity-70`}
-                    />
+                    <div
+                        className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 ${styles.badge}`}
+                    >
+                        <Icon className={`h-3.5 w-3.5 ${styles.icon}`} />
+                    </div>
                 )}
             </div>
 
             <div className="flex items-baseline gap-1.5">
                 <span
-                    className={`text-xl font-extrabold tracking-tight ${
-                        isRed ? "text-[#940707]" : "text-slate-900"
-                    }`}
+                    className={`text-xl font-extrabold tracking-tight ${styles.valueText}`}
                 >
                     {value}
                 </span>

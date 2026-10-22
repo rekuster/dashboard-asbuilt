@@ -21,10 +21,233 @@ export async function ensureEscopoColumns(db: any) {
         await db.execute(sql`ALTER TABLE "escopoAsBuilt" ADD COLUMN IF NOT EXISTS "pranchasValidadas" integer DEFAULT 0`);
         await db.execute(sql`ALTER TABLE "escopoAsBuilt" ADD COLUMN IF NOT EXISTS "statusPranchas" text DEFAULT 'NAO_ENTREGUE'`);
         await db.execute(sql`ALTER TABLE "escopoAsBuilt" ADD COLUMN IF NOT EXISTS "parecerTecnico" text`);
+        await db.execute(sql`ALTER TABLE "projects" ADD COLUMN IF NOT EXISTS "steclaCloudLinks" text`);
         _escopoColumnsEnsured = true;
     } catch (e) {
         console.warn("[Deliveries] Could not auto-migrate escopoAsBuilt columns:", e);
     }
+}
+
+const DEFAULT_STECLACLOUD_LINKS: Record<string, string> = {
+    Ocle: "https://stecla.com.br/cloud/index.php/s/b6GLxAeESsGgrfw?path=%2F4.%20Projetos%2F001.%20As%20Built%2F001.%20Entreg%C3%A1veis%20As%20Built",
+    "Thá": "",
+    AeB: "",
+};
+
+export async function getSteclaCloudLinks(projectId: string): Promise<Record<string, string>> {
+    const db = await getDb();
+    if (!db) return { ...DEFAULT_STECLACLOUD_LINKS };
+    await ensureEscopoColumns(db);
+    try {
+        const res: any = await db.execute(
+            sql`SELECT "steclaCloudLinks" FROM "projects" WHERE "id" = ${projectId} LIMIT 1`
+        );
+        const rows = Array.isArray(res) ? res : res?.rows || [];
+        const raw = rows[0]?.steclaCloudLinks;
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            return { ...DEFAULT_STECLACLOUD_LINKS, ...parsed };
+        }
+    } catch (err) {
+        console.warn("[Deliveries] Failed to read steclaCloudLinks:", err);
+    }
+    return { ...DEFAULT_STECLACLOUD_LINKS };
+}
+
+export async function saveSteclaCloudLinks(
+    projectId: string,
+    links: Record<string, string>
+): Promise<Record<string, string>> {
+    const db = await getDb();
+    if (!db) return links;
+    await ensureEscopoColumns(db);
+    const serialized = JSON.stringify(links);
+    await db.execute(
+        sql`UPDATE "projects" SET "steclaCloudLinks" = ${serialized}, "updatedAt" = NOW() WHERE "id" = ${projectId}`
+    );
+    return links;
+}
+
+/**
+ * Faz leitura 100% passiva (HTTP PROPFIND Read-Only) de um link público do Nextcloud / SteclaCloud.
+ * Nunca altera, cria ou remove arquivos na nuvem.
+ */
+async function listSteclaCloudFolderReadOnly(
+    baseOrigin: string,
+    shareToken: string,
+    subPath: string
+): Promise<{ name: string; isDir: boolean }[]> {
+    try {
+        const cleanSub = subPath
+            .split("/")
+            .filter(Boolean)
+            .map((seg) => encodeURIComponent(decodeURIComponent(seg)))
+            .join("/");
+        const webdavUrl = `${baseOrigin}/cloud/public.php/webdav/${cleanSub ? cleanSub + "/" : ""}`;
+        const auth = Buffer.from(`${shareToken}:`).toString("base64");
+
+        const response = await fetch(webdavUrl, {
+            method: "PROPFIND",
+            headers: {
+                Authorization: `Basic ${auth}`,
+                Depth: "1",
+                "Content-Type": "application/xml",
+            },
+        });
+
+        if (!response.ok) return [];
+        const xml = await response.text();
+        const hrefMatches = Array.from(xml.matchAll(/<d:href>([^<]+)<\/d:href>/gi)).map(
+            (m) => m[1]
+        );
+        const items: { name: string; isDir: boolean }[] = [];
+        for (let i = 1; i < hrefMatches.length; i++) {
+            const href = hrefMatches[i];
+            const isDir = href.endsWith("/");
+            const parts = href.replace(/\/$/, "").split("/");
+            const decodedName = decodeURIComponent(parts[parts.length - 1] || "");
+            if (decodedName) {
+                items.push({ name: decodedName, isDir });
+            }
+        }
+        return items;
+    } catch {
+        return [];
+    }
+}
+
+function parseSteclaShareUrl(shareUrl: string): {
+    baseOrigin: string;
+    token: string;
+    initialPath: string;
+} | null {
+    try {
+        const u = new URL(shareUrl.trim());
+        const match = u.pathname.match(/\/s\/([A-Za-z0-9]+)/);
+        if (!match) return null;
+        const token = match[1];
+        const pathParam = u.searchParams.get("path") || "/";
+        return {
+            baseOrigin: u.origin,
+            token,
+            initialPath: pathParam,
+        };
+    } catch {
+        return null;
+    }
+}
+
+function inferDisciplinaFromFileName(fileName: string): string {
+    const up = fileName.toUpperCase();
+    if (up.includes("-ELE-") || up.includes("ELETRICA")) return "Elétrica";
+    if (up.includes("-HID-")) return "Hidrossanitário";
+    if (up.includes("-CLI-") || up.includes("-MEC-")) return "Climatização";
+    if (up.includes("-PCI-") || up.includes("-SPK-")) return "PCI";
+    if (up.includes("-LOG-") || up.includes("-CFTV-")) return "Lógica";
+    if (up.includes("-UTI-")) return "Utilidades";
+    if (up.includes("-ARQ-")) return "Arquitetura";
+    if (up.includes("-MET-")) return "Estrutura Metálica";
+    if (up.includes("-CON-") || up.includes("-EST-")) return "Estrutura de Concreto";
+    if (up.includes("-DRE-")) return "Drenagem";
+    if (up.includes("-PAV-")) return "Pavimentação";
+    if (up.includes("-SPDA-")) return "SPDA";
+    if (up.includes("-SDAI-")) return "SDAI";
+    return "Geral";
+}
+
+function inferEdificacaoFromFileName(fileName: string): string {
+    const up = fileName.toUpperCase();
+    if (up.includes("-PRD") || up.includes("PRODU")) return "Prédio Produção";
+    if (up.includes("-SUP") || up.includes("SUPORTE")) return "Prédio Suporte";
+    if (up.includes("-IMP") || up.includes("IMPLANTA")) return "Implantação";
+    if (up.includes("-CUT") || up.includes("-CUE") || up.includes("UTILIDADES")) return "Central de Utilidades";
+    if (up.includes("-POR") || up.includes("PORTARIA")) return "Portaria";
+    if (up.includes("-SED") || up.includes("SEDE") || up.includes("RECREA")) return "Sede Recreativa";
+    if (up.includes("-ETE") || up.includes("INFRA")) return "ETE";
+    return "Geral";
+}
+
+export function extractDateFromIdentifier(text?: string | null): Date | null {
+    if (!text) return null;
+    // Padrão DD.MM.YYYY ou DD/MM/YYYY (ex: "012. SM YZ - 29.09.2026")
+    const dmy = text.match(/(\d{2})[./](\d{2})[./](\d{4})/);
+    if (dmy) {
+        const dt = new Date(`${dmy[3]}-${dmy[2]}-${dmy[1]}T12:00:00`);
+        if (!isNaN(dt.getTime())) return dt;
+    }
+    // Padrão YYYY.MM.DD (ex: "2026.03.12 - SÉTIMA ENTREGA")
+    const ymd = text.match(/(\d{4})[./-](\d{2})[./-](\d{2})/);
+    if (ymd) {
+        const dt = new Date(`${ymd[1]}-${ymd[2]}-${ymd[3]}T12:00:00`);
+        if (!isNaN(dt.getTime())) return dt;
+    }
+    return null;
+}
+
+function isSmDeliveryFolderName(name: string): boolean {
+    return (
+        /\bSM\s*[A-Z0-9]+/i.test(name) ||
+        /(\d{2})\.(\d{2})\.(\d{4})/.test(name) ||
+        /(\d{4})\.(\d{2})\.(\d{2})/.test(name)
+    );
+}
+
+/**
+ * Obtém a última data de recebimento de As-Built para uma empresa, combinando:
+ * 1) Todas as entregas registradas da empresa no banco (dataRecebimento + data no nome da SM)
+ * 2) Leitura passiva (PROPFIND) da pasta configurada no SteclaCloud (caso haja link configurado)
+ */
+export async function getLatestCloudDeliveryDate(
+    projectId: string,
+    empresa?: string,
+    allEntregas: any[] = []
+): Promise<Date | null> {
+    let latest: Date | null = null;
+    const considerDate = (d?: Date | string | null) => {
+        if (!d) return;
+        const dt = d instanceof Date ? d : new Date(d);
+        if (!isNaN(dt.getTime()) && (!latest || dt > latest)) {
+            latest = dt;
+        }
+    };
+
+    const empNorm = (empresa || "").trim().toLowerCase();
+    const filterByEmp = empNorm && empNorm !== "todas";
+
+    for (const ent of allEntregas) {
+        const entEmp = (ent.empresaResponsavel || "").trim().toLowerCase();
+        if (filterByEmp && entEmp !== empNorm) continue;
+        considerDate(ent.dataRecebimento);
+        considerDate(extractDateFromIdentifier(ent.identificadorEntrega));
+    }
+
+    // Se houver link do SteclaCloud configurado para a empresa, verifica as pastas na nuvem (somente leitura)
+    try {
+        const links = await getSteclaCloudLinks(projectId);
+        const targetKeys = filterByEmp
+            ? Object.keys(links).filter((k) => k.toLowerCase() === empNorm)
+            : Object.keys(links);
+
+        for (const key of targetKeys) {
+            const url = links[key];
+            if (!url || !url.trim()) continue;
+            const parsed = parseSteclaShareUrl(url);
+            if (!parsed) continue;
+
+            const rootItems = await listSteclaCloudFolderReadOnly(
+                parsed.baseOrigin,
+                parsed.token,
+                parsed.initialPath
+            );
+            for (const item of rootItems) {
+                considerDate(extractDateFromIdentifier(item.name));
+            }
+        }
+    } catch {
+        // Ignora falhas de rede silenciosamente e usa os dados do banco
+    }
+
+    return latest;
 }
 
 /**
@@ -515,9 +738,19 @@ export async function registrarQuinzenaModulos(data: {
     return createdDeliveries;
 }
 
-export async function sincronizarSteclaCloud(projectId: string) {
+export async function sincronizarSteclaCloud(
+    projectId: string,
+    empresaFilter?: string,
+    liveCheck = false
+) {
     const db = await getDb();
-    if (!db) return { updatedModels: 0, addedAebModels: 0, addedAebDeliveries: 0 };
+    if (!db)
+        return {
+            updatedModels: 0,
+            addedAebModels: 0,
+            addedAebDeliveries: 0,
+            scannedCompanies: [] as string[],
+        };
 
     await ensureEscopoColumns(db);
 
@@ -538,7 +771,7 @@ export async function sincronizarSteclaCloud(projectId: string) {
         }
     }
 
-    // Modelos Base da AeB (ETE) encontrados na pasta 4. Projetos/001. As Built/001. Entregáveis As Built/ETE/
+    // Modelos Base da ETE (Ocle) encontrados na pasta 4. Projetos/001. As Built/001. Entregáveis As Built/ETE/
     const aebEteModels = [
         {
             disciplina: "Arquitetura",
@@ -743,7 +976,252 @@ export async function sincronizarSteclaCloud(projectId: string) {
         }
     }
 
-    return { updatedModels, addedAebModels, addedAebDeliveries };
+    // Remessas da Thá Engenharia no SteclaCloud (RFP 25 - Tha Engenharia / 7. Projetos / 007. As Built / 001. Entregas Modelos)
+    const thaSms = [
+        { sm: "008. SM 61 - 06.04.2026", date: "2026-04-06", edif: "Prédio Produção", disc: "Arquitetura", doc: "NEO-23001-AS-ARQ-MO-PRD1-SM61.rvt", fmt: "rvt" },
+        { sm: "009. SM 65 - 08.05.2026", date: "2026-05-08", edif: "Prédio Produção", disc: "Hidrossanitário", doc: "NEO-23001-AS-HID-MO-PRD1-SM65.rvt", fmt: "rvt" },
+        { sm: "010. SM XX - 16.07.2026", date: "2026-07-16", edif: "Prédio Produção", disc: "Estrutura Metálica", doc: "NEO-23001-AS-MET-MO-PRD1-SMXX.rvt", fmt: "rvt" },
+        { sm: "011. SM XY - 22.07.2026", date: "2026-07-22", edif: "Implantação", disc: "Drenagem", doc: "NEO-23001-AS-DRE-MO-IMP1-SMXY.rvt", fmt: "rvt" },
+        { sm: "012. SM YZ - 29.09.2026", date: "2026-09-29", edif: "Prédio Produção", disc: "Arquitetura", doc: "NEO-23001-AS-ARQ-MO-PRD1-SMYZ.rvt", fmt: "rvt" },
+    ];
+
+    for (const item of thaSms) {
+        const alreadyExists = existingEntregas.some(
+            (e: any) => e.identificadorEntrega === item.sm
+        );
+        if (!alreadyExists) {
+            nextNum++;
+            const dt = new Date(item.date + "T12:00:00");
+            const matchedEscopo = existingEscopos.find(
+                (esc: any) =>
+                    (esc.empresa?.toLowerCase() === "thá" || esc.empresa?.toLowerCase() === "tha") &&
+                    esc.edificacao?.toLowerCase() === item.edif.toLowerCase() &&
+                    esc.disciplina?.toLowerCase() === item.disc.toLowerCase()
+            );
+            await db.insert(entregasAsBuilt).values({
+                projectId,
+                escopoId: matchedEscopo?.id || null,
+                numeroEntrega: nextNum,
+                identificadorEntrega: item.sm,
+                nomeDocumento: item.doc,
+                tipoDocumento: item.fmt,
+                formato: item.fmt,
+                isModelo: 1,
+                edificacao: item.edif,
+                disciplina: item.disc,
+                empresaResponsavel: "Thá",
+                dataPrevista: dt,
+                dataRecebimento: dt,
+                status: "COM_PENDENCIAS",
+                descricao: "Sincronizado da pasta 001. Entregas Modelos (Thá) no SteclaCloud",
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            });
+            addedAebDeliveries++;
+        }
+    }
+
+    const scannedCompanies: string[] = [];
+
+    // Leitura ativa (100% Read-Only via PROPFIND) dos links do SteclaCloud configurados no projeto
+    if (liveCheck) {
+        const cloudLinks = await getSteclaCloudLinks(projectId);
+        const companiesToScan = empresaFilter
+            ? [empresaFilter]
+            : Object.keys(cloudLinks);
+
+        for (const comp of companiesToScan) {
+            const shareUrl = cloudLinks[comp];
+            if (!shareUrl || !shareUrl.trim()) continue;
+            const parsed = parseSteclaShareUrl(shareUrl);
+            if (!parsed) continue;
+
+            scannedCompanies.push(comp);
+            const rootItems = await listSteclaCloudFolderReadOnly(
+                parsed.baseOrigin,
+                parsed.token,
+                parsed.initialPath
+            );
+
+            for (const folder of rootItems.filter((i) => i.isDir)) {
+                const folderPath = `${parsed.initialPath.replace(/\/$/, "")}/${folder.name}`;
+
+                // Caso 1: A própria pasta raiz já é uma pasta de entrega SM (ex: Thá "012. SM YZ - 29.09.2026")
+                if (isSmDeliveryFolderName(folder.name)) {
+                    const smItems = await listSteclaCloudFolderReadOnly(
+                        parsed.baseOrigin,
+                        parsed.token,
+                        folderPath
+                    );
+                    const recDate = extractDateFromIdentifier(folder.name) || new Date();
+                    const fileCandidates = smItems.filter((f) => !f.isDir);
+
+                    if (fileCandidates.length === 0) {
+                        // Registra o pacote SM mesmo se os arquivos estiverem em subpastas internas
+                        const existsSm = existingEntregas.some(
+                            (e: any) =>
+                                e.identificadorEntrega === folder.name &&
+                                (e.empresaResponsavel || "").toLowerCase() === comp.toLowerCase()
+                        );
+                        if (!existsSm) {
+                            nextNum++;
+                            await db.insert(entregasAsBuilt).values({
+                                projectId,
+                                escopoId: null,
+                                numeroEntrega: nextNum,
+                                identificadorEntrega: folder.name,
+                                nomeDocumento: folder.name,
+                                tipoDocumento: "rvt",
+                                formato: "rvt",
+                                isModelo: 1,
+                                edificacao: "Geral",
+                                disciplina: "Geral",
+                                empresaResponsavel: comp,
+                                dataPrevista: recDate,
+                                dataRecebimento: recDate,
+                                status: "COM_PENDENCIAS",
+                                descricao: `Pacote quinzenal detectado via leitura SteclaCloud (${comp})`,
+                                createdAt: new Date(),
+                                updatedAt: new Date(),
+                            });
+                            addedAebDeliveries++;
+                        }
+                    } else {
+                        for (const file of fileCandidates) {
+                            const ext = (file.name.split(".").pop() || "").toLowerCase();
+                            if (!["rvt", "ifc", "dwg", "pdf", "nwd"].includes(ext)) continue;
+                            const existsInDb = existingEntregas.some(
+                                (e: any) =>
+                                    e.identificadorEntrega === folder.name &&
+                                    e.nomeDocumento === file.name
+                            );
+                            if (!existsInDb) {
+                                nextNum++;
+                                const disc = inferDisciplinaFromFileName(file.name);
+                                const edif = inferEdificacaoFromFileName(file.name);
+                                const matchedEscopo = existingEscopos.find(
+                                    (esc: any) =>
+                                        esc.empresa?.toLowerCase() === comp.toLowerCase() &&
+                                        esc.edificacao?.toLowerCase() === edif.toLowerCase() &&
+                                        esc.disciplina?.toLowerCase() === disc.toLowerCase()
+                                );
+                                await db.insert(entregasAsBuilt).values({
+                                    projectId,
+                                    escopoId: matchedEscopo?.id || null,
+                                    numeroEntrega: nextNum,
+                                    identificadorEntrega: folder.name,
+                                    nomeDocumento: file.name,
+                                    tipoDocumento: ext,
+                                    formato: ext,
+                                    isModelo: ext === "rvt" || ext === "ifc" ? 1 : 0,
+                                    edificacao: edif,
+                                    disciplina: disc,
+                                    empresaResponsavel: comp,
+                                    dataPrevista: recDate,
+                                    dataRecebimento: recDate,
+                                    status: "COM_PENDENCIAS",
+                                    descricao: `Detectado via leitura SteclaCloud (${comp}) — pendente validação`,
+                                    createdAt: new Date(),
+                                    updatedAt: new Date(),
+                                });
+                                addedAebDeliveries++;
+                            }
+                        }
+                    }
+                    continue;
+                }
+
+                // Caso 2: A pasta raiz é uma Edificação (ex: Ocle "ETE" -> "01. Entregas Quinzenais" -> "13. SM 41 - 15.10.2026")
+                const subItems = await listSteclaCloudFolderReadOnly(
+                    parsed.baseOrigin,
+                    parsed.token,
+                    folderPath
+                );
+
+                for (const sub of subItems.filter((s) => s.isDir)) {
+                    const isQuinzenalContainer =
+                        sub.name.toLowerCase().includes("quinzen") ||
+                        sub.name.toLowerCase().includes("entreg");
+                    const isSmFolder = isSmDeliveryFolderName(sub.name);
+
+                    const smFolders = isSmFolder
+                        ? [{ name: sub.name, path: `${folderPath}/${sub.name}` }]
+                        : isQuinzenalContainer
+                        ? (
+                              await listSteclaCloudFolderReadOnly(
+                                  parsed.baseOrigin,
+                                  parsed.token,
+                                  `${folderPath}/${sub.name}`
+                              )
+                          )
+                              .filter((f) => f.isDir && isSmDeliveryFolderName(f.name))
+                              .map((f) => ({
+                                  name: f.name,
+                                  path: `${folderPath}/${sub.name}/${f.name}`,
+                              }))
+                        : [];
+
+                    for (const smFolder of smFolders) {
+                        const files = await listSteclaCloudFolderReadOnly(
+                            parsed.baseOrigin,
+                            parsed.token,
+                            smFolder.path
+                        );
+                        const recDate = extractDateFromIdentifier(smFolder.name) || new Date();
+
+                        for (const file of files.filter((f) => !f.isDir)) {
+                            const ext = (file.name.split(".").pop() || "").toLowerCase();
+                            if (!["rvt", "ifc", "dwg", "pdf", "nwd"].includes(ext)) continue;
+
+                            const existsInDb = existingEntregas.some(
+                                (e: any) =>
+                                    e.identificadorEntrega === smFolder.name &&
+                                    e.nomeDocumento === file.name
+                            );
+                            if (!existsInDb) {
+                                nextNum++;
+                                const disc = inferDisciplinaFromFileName(file.name);
+                                const matchedEscopo = existingEscopos.find(
+                                    (esc: any) =>
+                                        esc.empresa?.toLowerCase() === comp.toLowerCase() &&
+                                        esc.edificacao?.toLowerCase() === folder.name.toLowerCase() &&
+                                        esc.disciplina?.toLowerCase() === disc.toLowerCase()
+                                );
+
+                                await db.insert(entregasAsBuilt).values({
+                                    projectId,
+                                    escopoId: matchedEscopo?.id || null,
+                                    numeroEntrega: nextNum,
+                                    identificadorEntrega: smFolder.name,
+                                    nomeDocumento: file.name,
+                                    tipoDocumento: ext,
+                                    formato: ext,
+                                    isModelo: ext === "rvt" || ext === "ifc" ? 1 : 0,
+                                    edificacao: folder.name,
+                                    disciplina: disc,
+                                    empresaResponsavel: comp,
+                                    dataPrevista: recDate,
+                                    dataRecebimento: recDate,
+                                    status: "COM_PENDENCIAS",
+                                    descricao: `Detectado via leitura SteclaCloud (${comp}) — pendente validação`,
+                                    createdAt: new Date(),
+                                    updatedAt: new Date(),
+                                });
+                                addedAebDeliveries++;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return {
+        updatedModels,
+        addedAebModels,
+        addedAebDeliveries,
+        scannedCompanies,
+    };
 }
 
 export async function deleteEscopo(id: number) {

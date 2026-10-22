@@ -677,7 +677,102 @@ function DisciplinesConfigTab({ projectId, inputClass }: { projectId: string; in
                     </div>
                 </CardContent>
             </Card>
+
+            <SteclaCloudLinksCard projectId={projectId} inputClass={inputClass} />
         </div>
+    );
+}
+
+function SteclaCloudLinksCard({ projectId, inputClass }: { projectId: string; inputClass: string }) {
+    const utils = trpc.useUtils();
+    const { data: savedLinks } = trpc.dashboard.getSteclaCloudLinks.useQuery({ projectId });
+
+    const [links, setLinks] = useState<Record<string, string>>({
+        Ocle: "https://stecla.com.br/cloud/index.php/s/b6GLxAeESsGgrfw?path=%2F4.%20Projetos%2F001.%20As%20Built%2F001.%20Entreg%C3%A1veis%20As%20Built",
+        "Thá": "",
+        AeB: "",
+    });
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        if (savedLinks) {
+            setLinks((prev) => ({ ...prev, ...savedLinks }));
+        }
+    }, [savedLinks]);
+
+    const saveMutation = trpc.dashboard.saveSteclaCloudLinks.useMutation({
+        onSuccess: () => {
+            toast.success("Links de leitura do SteclaCloud salvos com sucesso!");
+            utils.dashboard.getSteclaCloudLinks.invalidate({ projectId });
+            setSaving(false);
+        },
+        onError: (err) => {
+            toast.error("Erro ao salvar links do SteclaCloud", { description: err.message });
+            setSaving(false);
+        },
+    });
+
+    const handleSaveLinks = () => {
+        setSaving(true);
+        saveMutation.mutate({ projectId, links });
+    };
+
+    const companyRows = [
+        { key: "Ocle", label: "Ocle (Instalações & ETE)" },
+        { key: "Thá", label: "Thá (Civil, Arquitetura & Estruturas)" },
+        { key: "AeB", label: "AeB (Sede Recreativa & Especiais)" },
+    ];
+
+    return (
+        <Card className="border border-slate-200 bg-white rounded-xl shadow-xs overflow-hidden">
+            <CardHeader className="p-3.5 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                    <div className="flex items-center gap-2">
+                        <Layers className="w-4 h-4 text-[#9C1915]" />
+                        <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                            Integração SteclaCloud — Links de Leitura de Entregas As-Built
+                        </CardTitle>
+                    </div>
+                    <CardDescription className="text-[11px] text-slate-500 mt-0.5">
+                        Configure os links públicos das pastas de entregas de cada empresa no SteclaCloud. A consulta realiza <strong>apenas leitura (WebDAV Read-Only)</strong>, sem qualquer risco de alterar ou excluir arquivos na nuvem.
+                    </CardDescription>
+                </div>
+
+                <Button
+                    onClick={handleSaveLinks}
+                    disabled={saving}
+                    size="sm"
+                    className="h-7.5 px-3 text-xs font-bold bg-[#9C1915] hover:bg-[#7D1411] text-white gap-1.5 shadow-xs shrink-0"
+                >
+                    {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                    Salvar Links SteclaCloud
+                </Button>
+            </CardHeader>
+
+            <CardContent className="p-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {companyRows.map((comp) => (
+                        <div key={comp.key} className="space-y-1.5">
+                            <label className="text-[10px] font-bold uppercase text-slate-600 block">
+                                Link SteclaCloud — {comp.label}
+                            </label>
+                            <input
+                                type="url"
+                                placeholder="https://stecla.com.br/cloud/index.php/s/..."
+                                value={links[comp.key] || ""}
+                                onChange={(e) =>
+                                    setLinks((prev) => ({
+                                        ...prev,
+                                        [comp.key]: e.target.value,
+                                    }))
+                                }
+                                className={`${inputClass} h-8 text-xs`}
+                            />
+                        </div>
+                    ))}
+                </div>
+            </CardContent>
+        </Card>
     );
 }
 

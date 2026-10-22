@@ -1,7 +1,15 @@
 import { eq, and, sql, desc } from "drizzle-orm";
 import { getDb, salas, apontamentos, verificacaoModelo, escopoAsBuilt, entregasAsBuilt, constatacoesTecnicas } from "../../common/db";
 import { format, startOfWeek, differenceInCalendarWeeks, addWeeks } from "date-fns";
-import { ensureEscopoColumns, resolveEscopoAuditStatus, inferSteclaPranchas } from "../deliveries/deliveries.service";
+import {
+    ensureEscopoColumns,
+    resolveEscopoAuditStatus,
+    inferSteclaPranchas,
+    getLatestCloudDeliveryDate,
+    sincronizarSteclaCloud,
+} from "../deliveries/deliveries.service";
+
+const _summarySeededProjects = new Set<string>();
 
 export async function getKPIs(projectId: string, edificacao?: string) {
     const db = await getDb();
@@ -563,6 +571,15 @@ export async function getAsBuiltModelsSummary(projectId: string, empresa?: strin
 
     await ensureEscopoColumns(db);
 
+    if (!_summarySeededProjects.has(projectId)) {
+        _summarySeededProjects.add(projectId);
+        try {
+            await sincronizarSteclaCloud(projectId);
+        } catch (err) {
+            console.warn("[Analytics] Auto-sync SteclaCloud deliveries:", err);
+        }
+    }
+
     const escConditions: any[] = [eq(escopoAsBuilt.projectId, projectId)];
     if (empresa && empresa !== "Todas" && empresa !== "todas") {
         escConditions.push(sql`LOWER(${escopoAsBuilt.empresa}) = LOWER(${empresa})`);
@@ -648,10 +665,20 @@ export async function getAsBuiltModelsSummary(projectId: string, empresa?: strin
         pranchasValidadas += escopo.pranchasValidadas ?? 0;
     });
 
-    const percent = (val: number) => totalModelos > 0 ? Number(((val / totalModelos) * 100).toFixed(2)) : 0;
+    const entregues = validados + comPendencias + igualProjeto;
+    const percent = (val: number) => totalModelos > 0 ? Number(((val / totalModelos) * 100).toFixed(1)) : 0;
     const pranchasPct = totalPranchas > 0 ? Number(((pranchasValidadas / totalPranchas) * 100).toFixed(1)) : 0;
 
     const statusPorEdificacao = Array.from(edificacaoMap.values()).sort((a, b) => b.total - a.total);
+
+    const cloudOrDbLatestDate = await getLatestCloudDeliveryDate(
+        projectId,
+        empresa,
+        allEntregas
+    );
+    if (cloudOrDbLatestDate && (!ultimaDataRecebida || cloudOrDbLatestDate > ultimaDataRecebida)) {
+        ultimaDataRecebida = cloudOrDbLatestDate;
+    }
 
     const empFilter = empresa && empresa !== "Todas" ? empresa : "Thá";
     const constatacoesDb = await db
@@ -761,6 +788,8 @@ export async function getAsBuiltModelsSummary(projectId: string, empresa?: strin
 
     return {
         totalModelos,
+        entregues,
+        entreguesPct: percent(entregues),
         validados,
         validadosPct: percent(validados),
         comPendencias,
@@ -774,7 +803,7 @@ export async function getAsBuiltModelsSummary(projectId: string, empresa?: strin
         pranchasPct,
         statusPorEdificacao,
         constatacoes: constatacoesResult,
-        ultimaDataRecebida: ultimaDataRecebida ? format(ultimaDataRecebida, "dd/MM/yyyy") : "15/10/2026",
+        ultimaDataRecebida: ultimaDataRecebida ? format(ultimaDataRecebida, "dd/MM/yyyy") : "29/09/2026",
     };
 }
 

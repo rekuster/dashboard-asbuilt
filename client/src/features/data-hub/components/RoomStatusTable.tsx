@@ -117,7 +117,11 @@ export function RoomStatusTable({ salas, onUpdateSala }: RoomStatusTableProps) {
                                             : "bg-slate-50 text-slate-400 border-slate-200"
                                     }`}
                                 >
-                                    {sala.status || "PENDENTE"}
+                                    {sala.status === "VERIFICADA"
+                                        ? "VERIFICADA"
+                                        : sala.status === "REVISAR"
+                                        ? "REVISAR"
+                                        : "PENDENTE"}
                                 </Badge>
                             </TableCell>
                         </TableRow>

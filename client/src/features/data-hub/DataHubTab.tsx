@@ -108,7 +108,13 @@ export default function DataHubTab({ projectId }: { projectId: string }) {
                 filterEdificacao === "Todas" || s.edificacao === filterEdificacao;
             const matchesPavimento =
                 filterPavimento === "Todos" || s.pavimento === filterPavimento;
-            const currentStatus = s.status || "PENDENTE";
+            const rawStatus = (s.status || "").trim().toUpperCase();
+            const currentStatus =
+                rawStatus === "VERIFICADA"
+                    ? "VERIFICADA"
+                    : rawStatus === "REVISAR" || rawStatus === "EM REVISÃO"
+                    ? "REVISAR"
+                    : "PENDENTE";
             const matchesStatus =
                 filterStatus === "Todos" || currentStatus === filterStatus;
 
