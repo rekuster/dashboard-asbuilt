@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
     ArrowLeft,
     ChevronLeft,
@@ -79,6 +80,22 @@ export function DesignerRoomResolutionView({
     const [asBuiltNote, setAsBuiltNote] = useState("");
     const [asBuiltPrintUrl, setAsBuiltPrintUrl] = useState("");
     const [saving, setSaving] = useState(false);
+    const [activeZoomImage, setActiveZoomImage] = useState<{ url: string; title: string } | null>(null);
+
+    const getLatestAsBuiltPrint = (urlStr: string | null | undefined): string | null => {
+        if (!urlStr) return null;
+        try {
+            const parsed = JSON.parse(urlStr);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                const valid = parsed.filter((u: any) => typeof u === "string" && u.trim().length > 0);
+                return valid.length > 0 ? valid[valid.length - 1] : null;
+            }
+            if (typeof parsed === "string" && parsed.length > 0) return parsed;
+        } catch {
+            if (urlStr.length > 0) return urlStr;
+        }
+        return null;
+    };
 
     // Modal comparador lado a lado
     const [comparisonModalOpen, setComparisonModalOpen] = useState(false);
@@ -405,34 +422,40 @@ export function DesignerRoomResolutionView({
                                                 </span>
                                             </div>
 
-                                            {issue.asBuiltPrintUrl ? (
-                                                <div
-                                                    className="h-40 bg-slate-900/5 rounded-md overflow-hidden cursor-zoom-in relative group flex items-center justify-center border border-slate-200/80 hover:border-[#9C1915] transition-all"
-                                                    onClick={() =>
-                                                        setActiveZoomImage({
-                                                            url: issue.asBuiltPrintUrl,
-                                                            title: `Modelo As-Built (Navisworks) • ${bcfNum ? `BCF ${bcfNum}` : disciplineDisplayName}`,
-                                                        })
-                                                    }
-                                                    title="Clique para ampliar"
-                                                >
-                                                    <img
-                                                        src={issue.asBuiltPrintUrl}
-                                                        alt="Modelo As-Built Navisworks"
-                                                        className="w-full h-full object-contain group-hover:scale-105 transition-transform"
-                                                    />
-                                                    <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                        <div className="bg-black/70 text-white rounded-full p-1.5 shadow-md">
-                                                            <Maximize2 className="w-4 h-4" />
+                                            {(() => {
+                                                const latestPrint = getLatestAsBuiltPrint(issue.asBuiltPrintUrl);
+                                                if (!latestPrint) {
+                                                    return (
+                                                        <div className="h-40 rounded-md border border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 text-xs flex-1">
+                                                            <Camera className="w-5 h-5 mx-auto mb-1 opacity-40" />
+                                                            Aguardando anexo do print As-Built
+                                                        </div>
+                                                    );
+                                                }
+                                                return (
+                                                    <div
+                                                        className="h-40 bg-slate-900/5 rounded-md overflow-hidden cursor-zoom-in relative group flex items-center justify-center border border-slate-200/80 hover:border-[#9C1915] transition-all"
+                                                        onClick={() =>
+                                                            setActiveZoomImage({
+                                                                url: latestPrint,
+                                                                title: `Modelo As-Built (Navisworks) • ${bcfNum ? `BCF ${bcfNum}` : disciplineDisplayName}`,
+                                                            })
+                                                        }
+                                                        title="Clique para ampliar"
+                                                    >
+                                                        <img
+                                                            src={latestPrint}
+                                                            alt="Modelo As-Built Navisworks"
+                                                            className="w-full h-full object-contain group-hover:scale-105 transition-transform"
+                                                        />
+                                                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                            <div className="bg-black/70 text-white rounded-full p-1.5 shadow-md">
+                                                                <Maximize2 className="w-4 h-4" />
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                </div>
-                                            ) : (
-                                                <div className="h-40 rounded-md border border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 text-xs flex-1">
-                                                    <Camera className="w-5 h-5 mx-auto mb-1 opacity-40" />
-                                                    Aguardando anexo do print As-Built
-                                                </div>
-                                            )}
+                                                );
+                                            })()}
                                         </div>
 
                                         {/* Nota Técnica de Verificação / Resolução (Direita - 6 colunas) */}
@@ -546,6 +569,30 @@ export function DesignerRoomResolutionView({
                 disciplineLabel={disciplineDisplayName}
                 roomName={room.sala}
             />
+
+            {/* Modal de Zoom da Imagem */}
+            {activeZoomImage && (
+                <Dialog open={!!activeZoomImage} onOpenChange={() => setActiveZoomImage(null)}>
+                    <DialogContent className="max-w-4xl p-2 bg-black/95 border-none rounded-xl text-white">
+                        <div className="relative flex flex-col items-center justify-center p-2">
+                            <div className="w-full flex justify-between items-center px-2 py-1 text-white text-xs mb-2">
+                                <span className="font-bold">{activeZoomImage.title}</span>
+                                <button
+                                    onClick={() => setActiveZoomImage(null)}
+                                    className="text-slate-400 hover:text-white cursor-pointer"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+                            <img
+                                src={activeZoomImage.url}
+                                alt={activeZoomImage.title}
+                                className="max-h-[85vh] max-w-full object-contain rounded"
+                            />
+                        </div>
+                    </DialogContent>
+                </Dialog>
+            )}
         </div>
     );
 }

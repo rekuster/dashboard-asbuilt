@@ -21,6 +21,9 @@ import {
     Loader2,
     ZoomIn,
     Columns2,
+    Trash2,
+    RefreshCw,
+    Image as ImageIcon,
 } from "lucide-react";
 import { isSameDiscipline, getDisciplineDisplayName } from "../constants";
 import { ImageComparisonModal } from "./ImageComparisonModal";
@@ -162,6 +165,7 @@ export function RoomVerificationView({
     const [bcfIssueId, setBcfIssueId] = useState("");
     const [asBuiltPrintUrls, setAsBuiltPrintUrls] = useState<string[]>([]);
     const [isUploading, setIsUploading] = useState(false);
+    const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
 
     // Modal de Comparação Lado a Lado
     const [comparisonModalOpen, setComparisonModalOpen] = useState(false);
@@ -206,10 +210,10 @@ export function RoomVerificationView({
         });
     };
 
-    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-
+    const uploadImageFile = async (
+        file: File,
+        mode: "replace" | "append" = "replace"
+    ) => {
         setIsUploading(true);
         try {
             const sanitize = (str: string) =>
@@ -217,7 +221,7 @@ export function RoomVerificationView({
                     .normalize("NFD")
                     .replace(/[\u0300-\u036f]/g, "")
                     .replace(/[^a-zA-Z0-9/._-]/g, "_");
-            const fileExt = file.name.split(".").pop();
+            const fileExt = file.name ? file.name.split(".").pop() : "png";
             const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
             const filePath = sanitize(`apontamentos/real/${fileName}`);
 
@@ -231,8 +235,13 @@ export function RoomVerificationView({
                 data: { publicUrl },
             } = supabase.storage.from("project-assets").getPublicUrl(filePath);
 
-            setAsBuiltPrintUrls((prev) => [...prev, publicUrl]);
-            toast.success("Print do Navisworks anexado!");
+            if (mode === "replace" || asBuiltPrintUrls.length === 0) {
+                setAsBuiltPrintUrls([publicUrl]);
+                toast.success("Print do Navisworks atualizado com sucesso!");
+            } else {
+                setAsBuiltPrintUrls((prev) => [...prev, publicUrl]);
+                toast.success("Novo print do Navisworks adicionado!");
+            }
         } catch (error: any) {
             toast.error(error.message || "Erro ao carregar imagem.");
         } finally {
@@ -240,12 +249,40 @@ export function RoomVerificationView({
         }
     };
 
+    const handleFileInputChange = async (
+        e: React.ChangeEvent<HTMLInputElement>,
+        mode: "replace" | "append" = "replace"
+    ) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        e.target.value = "";
+        await uploadImageFile(file, mode);
+    };
+
+    const handlePaste = async (e: React.ClipboardEvent) => {
+        const items = e.clipboardData?.items;
+        if (!items) return;
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf("image") !== -1) {
+                const file = items[i].getAsFile();
+                if (file) {
+                    e.preventDefault();
+                    await uploadImageFile(file, "replace");
+                    break;
+                }
+            }
+        }
+    };
+
     const handleSaveAsBuilt = (id: number, currentStatus?: string) => {
+        const payloadUrl =
+            asBuiltPrintUrls.length > 0 ? JSON.stringify(asBuiltPrintUrls) : null;
+
         updateAsBuiltMutation.mutate({
             id,
-            asBuiltNota: asBuiltNota,
-            bcfIssueId: bcfIssueId,
-            asBuiltPrintUrl: JSON.stringify(asBuiltPrintUrls),
+            asBuiltNota: asBuiltNota || null,
+            bcfIssueId: bcfIssueId || null,
+            asBuiltPrintUrl: payloadUrl,
             status:
                 asBuiltNota || asBuiltPrintUrls.length > 0 || bcfIssueId
                     ? "EM_REVISAO"
@@ -530,42 +567,76 @@ export function RoomVerificationView({
                                     </div>
 
                                     {/* BLOCO 2: FOTO DO AS-BUILT (NAVISWORKS) COM O TEXTO DA VERIFICAÇÃO AO LADO */}
-                                    {(asBuiltPrints.length > 0 || apont.asBuiltNota || isEditing) && (
-                                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-stretch pt-2.5 border-t border-slate-100">
-                                            {/* Foto do As-Built (Esquerda - 6 colunas, tamanho compacto) */}
-                                            <div className="lg:col-span-6 bg-slate-50 p-2 rounded-lg border border-slate-200 space-y-1 flex flex-col">
-                                                <div className="flex items-center justify-between px-0.5">
-                                                    <span className="text-[10px] font-bold uppercase text-[#575756] tracking-wide">
-                                                        Modelo As-Built (Navisworks)
-                                                    </span>
-                                                    <span className="text-[9px] text-slate-400 font-medium flex items-center gap-0.5">
-                                                        <ZoomIn className="w-2.5 h-2.5" /> Clique p/ ampliar
-                                                    </span>
-                                                </div>
+                                    {(() => {
+                                        const displayPrints = isEditing ? asBuiltPrintUrls : asBuiltPrints;
+                                        const hasAnyPrints = displayPrints.length > 0;
+                                        const primaryPrintUrl = hasAnyPrints ? displayPrints[displayPrints.length - 1] : null;
 
-                                                {asBuiltPrints.length > 0 ? (
-                                                    <div
-                                                        className="h-40 bg-slate-900/5 rounded-md overflow-hidden cursor-zoom-in relative group flex items-center justify-center border border-slate-200/80 hover:border-[#9C1915] transition-all"
-                                                        onClick={() => setPreviewImage({ url: asBuiltPrints[0], title: `Modelo As-Built (Navisworks) • BCF ${apont.bcfIssueId || ""}` })}
-                                                        title="Clique para ampliar"
-                                                    >
-                                                        <img
-                                                            src={asBuiltPrints[0]}
-                                                            alt="Modelo As-Built Navisworks"
-                                                            className="w-full h-full object-contain group-hover:scale-105 transition-transform"
-                                                        />
-                                                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                            <div className="bg-black/70 text-white rounded-full p-1.5 shadow-md">
-                                                                <Maximize2 className="w-4 h-4" />
+                                        if (!hasAnyPrints && !apont.asBuiltNota && !isEditing) return null;
+
+                                        return (
+                                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-stretch pt-2.5 border-t border-slate-100">
+                                                {/* Foto do As-Built (Esquerda - 6 colunas, tamanho compacto) */}
+                                                <div className="lg:col-span-6 bg-slate-50 p-2 rounded-lg border border-slate-200 space-y-1 flex flex-col">
+                                                    <div className="flex items-center justify-between px-0.5">
+                                                        <span className="text-[10px] font-bold uppercase text-[#575756] tracking-wide flex items-center gap-1.5">
+                                                            <ImageIcon className="w-3 h-3 text-[#9C1915]" />
+                                                            Modelo As-Built (Navisworks)
+                                                            {isEditing && (
+                                                                <span className="text-[9px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded ml-1">
+                                                                    Em Edição
+                                                                </span>
+                                                            )}
+                                                            {displayPrints.length > 1 && (
+                                                                <span className="text-[9px] font-semibold text-slate-500 ml-1">
+                                                                    ({displayPrints.length} prints)
+                                                                </span>
+                                                            )}
+                                                        </span>
+                                                        {hasAnyPrints && primaryPrintUrl && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() =>
+                                                                    setPreviewImage({
+                                                                        url: primaryPrintUrl,
+                                                                        title: `Modelo As-Built (Navisworks) • BCF ${apont.bcfIssueId || ""}`,
+                                                                    })
+                                                                }
+                                                                className="text-[9px] text-slate-400 hover:text-[#9C1915] font-medium flex items-center gap-0.5 cursor-pointer"
+                                                            >
+                                                                <ZoomIn className="w-2.5 h-2.5" /> Clique p/ ampliar
+                                                            </button>
+                                                        )}
+                                                    </div>
+
+                                                    {hasAnyPrints && primaryPrintUrl ? (
+                                                        <div
+                                                            className="h-40 bg-slate-900/5 rounded-md overflow-hidden cursor-zoom-in relative group flex items-center justify-center border border-slate-200/80 hover:border-[#9C1915] transition-all"
+                                                            onClick={() =>
+                                                                setPreviewImage({
+                                                                    url: primaryPrintUrl,
+                                                                    title: `Modelo As-Built (Navisworks) • BCF ${apont.bcfIssueId || ""}`,
+                                                                })
+                                                            }
+                                                            title="Clique para ampliar"
+                                                        >
+                                                            <img
+                                                                src={primaryPrintUrl}
+                                                                alt="Modelo As-Built Navisworks"
+                                                                className="w-full h-full object-contain group-hover:scale-105 transition-transform"
+                                                            />
+                                                            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                                <div className="bg-black/70 text-white rounded-full p-1.5 shadow-md">
+                                                                    <Maximize2 className="w-4 h-4" />
+                                                                </div>
                                                             </div>
                                                         </div>
-                                                    </div>
-                                                ) : (
-                                                    <div className="h-40 rounded-md border border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 text-xs flex-1">
-                                                        Nenhum print do Navisworks anexado
-                                                    </div>
-                                                )}
-                                            </div>
+                                                    ) : (
+                                                        <div className="h-40 rounded-md border border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 text-xs flex-1">
+                                                            Nenhum print do Navisworks anexado
+                                                        </div>
+                                                    )}
+                                                </div>
 
                                             {/* Texto da Verificação As-Built / Timeline de Comunicação BCF (Direita - 6 colunas) */}
                                             <div className="lg:col-span-6 bg-slate-50/80 p-3.5 rounded-lg border border-slate-200 flex flex-col justify-start space-y-3">
@@ -651,11 +722,15 @@ export function RoomVerificationView({
                                                 </div>
                                             </div>
                                         </div>
-                                    )}
+                                    );
+                                })()}
 
                                     {/* Painel de Edição de Ajustes As-Built */}
                                     {isEditing && (
-                                        <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg space-y-3 animate-in fade-in">
+                                        <div
+                                            onPaste={handlePaste}
+                                            className="p-4 bg-slate-50 border border-slate-200 rounded-lg space-y-3.5 animate-in fade-in"
+                                        >
                                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                                 <div className="sm:col-span-2 space-y-1">
                                                     <label className="text-[10px] font-bold uppercase text-[#575756]">
@@ -676,32 +751,143 @@ export function RoomVerificationView({
                                                     <Input
                                                         value={bcfIssueId}
                                                         onChange={(e) => setBcfIssueId(e.target.value)}
-                                                        placeholder="Ex: 62"
+                                                        placeholder="Ex: 4"
                                                         className="text-xs h-8 rounded-md bg-white border-slate-200 font-bold"
                                                     />
                                                 </div>
                                             </div>
 
-                                            <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-                                                <label className="cursor-pointer inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 bg-white border border-slate-300 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-colors shadow-xs">
-                                                    <Upload className="w-3.5 h-3.5 text-[#9C1915]" />
-                                                    {isUploading ? "Carregando..." : "Subir Print do Navisworks"}
-                                                    <input
-                                                        type="file"
-                                                        accept="image/*"
-                                                        className="hidden"
-                                                        onChange={handleFileUpload}
-                                                        disabled={isUploading}
-                                                    />
-                                                </label>
+                                            {/* Gerenciamento de Prints do Navisworks */}
+                                            <div className="space-y-2 pt-2 border-t border-slate-200">
+                                                <div className="flex items-center justify-between">
+                                                    <label className="text-[10px] font-bold uppercase text-[#575756] flex items-center gap-1.5">
+                                                        <ImageIcon className="w-3.5 h-3.5 text-[#9C1915]" />
+                                                        Print do Modelo As-Built (Navisworks)
+                                                    </label>
+                                                    <span className="text-[10px] text-slate-400 hidden sm:inline">
+                                                        Dica: Você também pode colar um print diretamente com Ctrl+V
+                                                    </span>
+                                                </div>
 
+                                                {asBuiltPrintUrls.length > 0 ? (
+                                                    <div className="p-3 bg-white rounded-lg border border-slate-200 flex flex-wrap items-center gap-3">
+                                                        {asBuiltPrintUrls.map((url, idx) => (
+                                                            <div
+                                                                key={idx}
+                                                                className="relative group w-24 h-20 rounded-md border border-slate-200 overflow-hidden bg-slate-900/5 flex items-center justify-center shrink-0 shadow-2xs"
+                                                            >
+                                                                <img
+                                                                    src={url}
+                                                                    alt={`Print Navisworks ${idx + 1}`}
+                                                                    className="w-full h-full object-cover"
+                                                                />
+                                                                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() =>
+                                                                            setPreviewImage({
+                                                                                url,
+                                                                                title: `Print Navisworks ${idx + 1}`,
+                                                                            })
+                                                                        }
+                                                                        className="p-1 rounded bg-white/20 hover:bg-white/40 text-white cursor-pointer"
+                                                                        title="Visualizar print"
+                                                                    >
+                                                                        <ZoomIn className="w-3.5 h-3.5" />
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            setAsBuiltPrintUrls((prev) =>
+                                                                                prev.filter((_, i) => i !== idx)
+                                                                            );
+                                                                            toast.info("Print removido. Clique em 'Salvar Ajustes' para confirmar.");
+                                                                        }}
+                                                                        className="p-1 rounded bg-red-600/90 hover:bg-red-600 text-white cursor-pointer"
+                                                                        title="Excluir este print"
+                                                                    >
+                                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            {/* Botão Substituir Print */}
+                                                            <label className="cursor-pointer inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-300 px-3 py-1.5 rounded-md transition-colors shadow-2xs">
+                                                                <RefreshCw className={`w-3.5 h-3.5 text-slate-600 ${isUploading ? "animate-spin" : ""}`} />
+                                                                {isUploading ? "Enviando..." : "Substituir Print"}
+                                                                <input
+                                                                    type="file"
+                                                                    accept="image/*"
+                                                                    className="hidden"
+                                                                    onChange={(e) => handleFileInputChange(e, "replace")}
+                                                                    disabled={isUploading}
+                                                                />
+                                                            </label>
+
+                                                            {/* Botão Adicionar Outro */}
+                                                            <label className="cursor-pointer inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 bg-white hover:bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-md transition-colors shadow-2xs">
+                                                                <Upload className="w-3 h-3 text-[#9C1915]" />
+                                                                Adicionar Outro
+                                                                <input
+                                                                    type="file"
+                                                                    accept="image/*"
+                                                                    className="hidden"
+                                                                    onChange={(e) => handleFileInputChange(e, "append")}
+                                                                    disabled={isUploading}
+                                                                />
+                                                            </label>
+
+                                                            {/* Botão Limpar Imagem */}
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => {
+                                                                    setAsBuiltPrintUrls([]);
+                                                                    toast.info("Print removido. Clique em 'Salvar Ajustes' para confirmar.");
+                                                                }}
+                                                                className="h-8 px-2 text-xs font-bold text-red-600 hover:text-red-700 hover:bg-red-50 gap-1 cursor-pointer"
+                                                            >
+                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                                Remover Imagem
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="p-3 bg-white rounded-lg border border-dashed border-slate-300 flex items-center justify-between gap-3">
+                                                        <span className="text-xs text-slate-400 italic">
+                                                            Nenhum print do Navisworks anexado.
+                                                        </span>
+                                                        <label className="cursor-pointer inline-flex items-center gap-1.5 text-xs font-bold text-white bg-[#9C1915] hover:bg-[#7D1411] px-3.5 py-1.5 rounded-md transition-colors shadow-xs">
+                                                            <Upload className="w-3.5 h-3.5" />
+                                                            {isUploading ? "Carregando..." : "Subir Print do Navisworks"}
+                                                            <input
+                                                                type="file"
+                                                                accept="image/*"
+                                                                className="hidden"
+                                                                onChange={(e) => handleFileInputChange(e, "replace")}
+                                                                disabled={isUploading}
+                                                            />
+                                                        </label>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Botão de Salvar Ajustes */}
+                                            <div className="flex items-center justify-end pt-2 border-t border-slate-200">
                                                 <Button
                                                     size="sm"
-                                                    className="h-8 px-4 text-xs font-bold rounded-md bg-[#9C1915] hover:bg-[#7D1411] text-white"
+                                                    className="h-8 px-5 text-xs font-bold rounded-md bg-[#9C1915] hover:bg-[#7D1411] text-white shadow-2xs gap-1.5 cursor-pointer"
                                                     onClick={() => handleSaveAsBuilt(apont.id, apont.status)}
-                                                    disabled={updateAsBuiltMutation.isPending}
+                                                    disabled={updateAsBuiltMutation.isPending || isUploading}
                                                 >
-                                                    <Save className="w-3.5 h-3.5 mr-1.5" />
+                                                    {updateAsBuiltMutation.isPending ? (
+                                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                    ) : (
+                                                        <Save className="w-3.5 h-3.5" />
+                                                    )}
                                                     Salvar Ajustes
                                                 </Button>
                                             </div>
@@ -724,6 +910,30 @@ export function RoomVerificationView({
                 disciplineLabel={discLabel}
                 roomName={salaNome}
             />
+
+            {/* Modal de Zoom da Imagem */}
+            {previewImage && (
+                <Dialog open={!!previewImage} onOpenChange={() => setPreviewImage(null)}>
+                    <DialogContent className="max-w-4xl p-2 bg-black/95 border-none rounded-xl text-white">
+                        <div className="relative flex flex-col items-center justify-center p-2">
+                            <div className="w-full flex justify-between items-center px-2 py-1 text-white text-xs mb-2">
+                                <span className="font-bold">{previewImage.title}</span>
+                                <button
+                                    onClick={() => setPreviewImage(null)}
+                                    className="text-slate-400 hover:text-white cursor-pointer"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+                            <img
+                                src={previewImage.url}
+                                alt={previewImage.title}
+                                className="max-h-[85vh] max-w-full object-contain rounded"
+                            />
+                        </div>
+                    </DialogContent>
+                </Dialog>
+            )}
         </div>
     );
 }

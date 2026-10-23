@@ -25,7 +25,7 @@ export async function getAllApontamentos(projectId: string): Promise<Apontamento
             responsavel: apontamentos.responsavel,
             dataEnvio: apontamentos.dataEnvio,
             enviado: apontamentos.enviado,
-            asBuiltPrintUrl: sql<string | null>`CASE WHEN ${apontamentos.asBuiltPrintUrl} LIKE 'http%' THEN ${apontamentos.asBuiltPrintUrl} WHEN length(coalesce(${apontamentos.asBuiltPrintUrl}, '')) < 1000 THEN ${apontamentos.asBuiltPrintUrl} ELSE NULL END`,
+            asBuiltPrintUrl: sql<string | null>`CASE WHEN ${apontamentos.asBuiltPrintUrl} LIKE 'http%' OR ${apontamentos.asBuiltPrintUrl} LIKE '[%' THEN ${apontamentos.asBuiltPrintUrl} WHEN length(coalesce(${apontamentos.asBuiltPrintUrl}, '')) < 1000 THEN ${apontamentos.asBuiltPrintUrl} ELSE NULL END`,
             bcfIssueId: apontamentos.bcfIssueId,
             fotoUrl: sql<string | null>`CASE WHEN ${apontamentos.fotoUrl} LIKE 'http%' THEN ${apontamentos.fotoUrl} WHEN length(coalesce(${apontamentos.fotoUrl}, '')) < 1000 THEN ${apontamentos.fotoUrl} ELSE NULL END`,
             fotoReferenciaUrl: sql<string | null>`CASE WHEN ${apontamentos.fotoReferenciaUrl} LIKE 'http%' THEN ${apontamentos.fotoReferenciaUrl} WHEN length(coalesce(${apontamentos.fotoReferenciaUrl}, '')) < 1000 THEN ${apontamentos.fotoReferenciaUrl} ELSE NULL END`,

@@ -381,12 +381,13 @@ export function ImageComparisonModal({
                                 </span>
 
                                 {(() => {
+                                    const asBuiltPrimary = asBuiltPrints.length > 0 ? asBuiltPrints[asBuiltPrints.length - 1] : null;
                                     const currentUrl =
                                         viewMode === "obra"
                                             ? activeIssue.fotoUrl
                                             : viewMode === "projeto"
                                             ? activeIssue.fotoReferenciaUrl
-                                            : asBuiltPrints[0];
+                                            : asBuiltPrimary;
                                     return (
                                         currentUrl && (
                                             <a
@@ -405,12 +406,13 @@ export function ImageComparisonModal({
 
                             <div className="flex-1 flex items-center justify-center p-2 overflow-auto bg-black/30">
                                 {(() => {
+                                    const asBuiltPrimary = asBuiltPrints.length > 0 ? asBuiltPrints[asBuiltPrints.length - 1] : null;
                                     const currentUrl =
                                         viewMode === "obra"
                                             ? activeIssue.fotoUrl
                                             : viewMode === "projeto"
                                             ? activeIssue.fotoReferenciaUrl
-                                            : asBuiltPrints[0];
+                                            : asBuiltPrimary;
 
                                     if (!currentUrl) {
                                         return (

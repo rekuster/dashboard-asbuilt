@@ -69,6 +69,33 @@ function getAssetPath(...parts: string[]): string {
 /**
  * Mapeia as siglas das disciplinas para seus nomes completos.
  */
+/**
+ * Retorna a ÚLTIMA foto/print inserida do modelo As-Built (Navisworks).
+ * Trata casos de arrays JSON (armazenados quando múltiplos prints foram enviados),
+ * garantindo que a imagem mais recente seja sempre a utilizada nos relatórios.
+ */
+export function getLatestAsBuiltPrintUrl(urlStr: string | null | undefined): string | null {
+    if (!urlStr) return null;
+    try {
+        const parsed = JSON.parse(urlStr);
+        if (Array.isArray(parsed)) {
+            const valid = parsed.filter((u: any) => typeof u === 'string' && u.trim().length > 0);
+            if (valid.length > 0) {
+                return valid[valid.length - 1].trim();
+            }
+            return null;
+        }
+        if (typeof parsed === 'string' && parsed.trim().length > 0) {
+            return parsed.trim();
+        }
+    } catch {
+        if (typeof urlStr === 'string' && urlStr.trim().length > 0) {
+            return urlStr.trim();
+        }
+    }
+    return null;
+}
+
 function getDisciplineFullName(sigla: string): string {
     const mapping: Record<string, string> = {
         'ELE': 'ELÉTRICA',
@@ -625,7 +652,9 @@ export async function generateAsBuiltReport(projectId: string, filters?: {
             doc.fillColor('#666666').fontSize(10).font('Helvetica-Bold').text('REALIDADE (OBRA)', 85, 95);
 
             const rightX = 85 + imgWidth + 20;
-            await drawAsBuiltImage(item.apontamento.fotoReferenciaUrl, rightX, 110, 220);
+            const asBuiltPrint = getLatestAsBuiltPrintUrl(item.apontamento.asBuiltPrintUrl);
+            const rightModelUrl = asBuiltPrint || item.apontamento.fotoReferenciaUrl;
+            await drawAsBuiltImage(rightModelUrl, rightX, 110, 220);
             doc.fillColor('#666666').fontSize(10).font('Helvetica-Bold').text('MODELO AS-BUILT', rightX, 95);
 
             // Legenda e Dados
@@ -701,6 +730,7 @@ export async function generateExcelReport(projectId: string, edificacao?: string
         { header: 'Divergência', key: 'divergencia', width: 50 },
         { header: 'Responsável', key: 'responsavel', width: 20 },
         { header: 'Data Resolução', key: 'dataResolvido', width: 15 },
+        { header: 'Print As-Built (Último)', key: 'asBuiltPrint', width: 45 },
     ];
     apontamentosData.forEach((item: any) => {
         sheetApontamentos.addRow({
@@ -713,7 +743,8 @@ export async function generateExcelReport(projectId: string, edificacao?: string
             tipo: item.tipo || 'DIVERGÊNCIA',
             divergencia: item.divergencia,
             responsavel: item.responsavel,
-            dataResolvido: item.dataResolvido ? new Date(item.dataResolvido).toLocaleDateString('pt-BR') : 'PENDENTE'
+            dataResolvido: item.dataResolvido ? new Date(item.dataResolvido).toLocaleDateString('pt-BR') : 'PENDENTE',
+            asBuiltPrint: getLatestAsBuiltPrintUrl(item.asBuiltPrintUrl) || ''
         });
     });
 
@@ -877,15 +908,8 @@ export async function generateVerificationReport(projectId: string, filters?: {
             }
         };
 
-        let asBuiltUrl = null;
-        if (ap.asBuiltPrintUrl) {
-            try {
-                const parsed = JSON.parse(ap.asBuiltPrintUrl);
-                if (Array.isArray(parsed) && parsed.length > 0) asBuiltUrl = parsed[0];
-            } catch {
-                asBuiltUrl = ap.asBuiltPrintUrl;
-            }
-        }
+        // Obtém rigorosamente a ÚLTIMA foto inserida do print As-Built
+        const asBuiltUrl = getLatestAsBuiltPrintUrl(ap.asBuiltPrintUrl);
 
         await drawImage(ap.fotoUrl, 40, imgY, "Foto de Campo (Problema):");
         await drawImage(ap.fotoReferenciaUrl, 300, imgY, "Projeto (Referência):");
