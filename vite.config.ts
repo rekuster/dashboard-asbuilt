@@ -62,29 +62,17 @@ export default defineConfig({
         host: true,
         port: 5188,
         proxy: {
-            '/api/trpc': {
+            '/api': {
                 target: 'http://127.0.0.1:3008',
                 changeOrigin: true,
                 secure: false,
-                configure: (proxy) => handleProxyError(proxy, '/api/trpc')
+                configure: (proxy) => handleProxyError(proxy, '/api')
             },
             '/uploads': {
                 target: 'http://127.0.0.1:3008',
                 changeOrigin: true,
                 secure: false,
                 configure: (proxy) => handleProxyError(proxy, '/uploads')
-            },
-            '/api/external': {
-                target: 'http://127.0.0.1:3008',
-                changeOrigin: true,
-                secure: false,
-                configure: (proxy) => handleProxyError(proxy, '/api/external')
-            },
-            '/api/upload-image': {
-                target: 'http://127.0.0.1:3008',
-                changeOrigin: true,
-                secure: false,
-                configure: (proxy) => handleProxyError(proxy, '/api/upload-image')
             },
         },
     },

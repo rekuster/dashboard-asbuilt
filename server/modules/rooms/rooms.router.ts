@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, publicProcedure, viewerProcedure, editorProcedure } from "../../common/trpc";
+import { router, viewerProcedure, editorProcedure } from "../../common/trpc";
 import {
     getAllSalas,
     getSalas,
@@ -19,13 +19,13 @@ import {
 } from "./rooms.service";
 
 export const roomsRouter = router({
-    getAllSalas: publicProcedure
+    getAllSalas: viewerProcedure
         .input(z.object({ projectId: z.string() }))
         .query(async ({ input }) => {
             return await getAllSalas(input.projectId);
         }),
 
-    getSalas: publicProcedure
+    getSalas: viewerProcedure
         .input(
             z.object({
                 projectId: z.string(),
@@ -37,19 +37,19 @@ export const roomsRouter = router({
             return await getSalas(input.projectId, input.limit, input.offset);
         }),
 
-    getSala: publicProcedure
+    getSala: viewerProcedure
         .input(z.object({ id: z.number() }))
         .query(async ({ input }) => {
             return await getSalaById(input.id);
         }),
 
-    getEdificacoes: publicProcedure
+    getEdificacoes: viewerProcedure
         .input(z.object({ projectId: z.string() }))
         .query(async ({ input }) => {
             return await getEdificacoes(input.projectId);
         }),
 
-    getPavimentos: publicProcedure
+    getPavimentos: viewerProcedure
         .input(
             z.object({
                 projectId: z.string(),
@@ -60,7 +60,7 @@ export const roomsRouter = router({
             return await getPavimentos(input.projectId, input.edificacao);
         }),
 
-    getSalasByEdificacao: publicProcedure
+    getSalasByEdificacao: viewerProcedure
         .input(
             z.object({
                 projectId: z.string(),
@@ -71,7 +71,7 @@ export const roomsRouter = router({
             return await getSalasByEdificacao(input.projectId, input.edificacao);
         }),
 
-    getSalasByEdificacaoAndPavimento: publicProcedure
+    getSalasByEdificacaoAndPavimento: viewerProcedure
         .input(
             z.object({
                 projectId: z.string(),
@@ -104,7 +104,7 @@ export const roomsRouter = router({
             return await updateSala(id, data);
         }),
 
-    updateSalaStatus: publicProcedure
+    updateSalaStatus: editorProcedure
         .input(
             z.object({
                 id: z.number(),
@@ -182,19 +182,19 @@ export const roomsRouter = router({
             );
         }),
 
-    getVerificacoes: publicProcedure
+    getVerificacoes: viewerProcedure
         .input(z.object({ salaId: z.number() }))
         .query(async ({ input }) => {
             return await getVerificacoes(input.salaId);
         }),
 
-    getAllVerificacoes: publicProcedure
+    getAllVerificacoes: viewerProcedure
         .input(z.object({ projectId: z.string() }))
         .query(async ({ input }) => {
             return await getAllVerificacoes(input.projectId);
         }),
 
-    upsertVerificacao: publicProcedure
+    upsertVerificacao: editorProcedure
         .input(
             z.object({
                 salaId: z.number(),

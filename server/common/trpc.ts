@@ -1,7 +1,7 @@
 import { initTRPC, TRPCError } from '@trpc/server';
 import type { Request, Response } from 'express';
 import superjson from 'superjson';
-import { getDb, projectMembers, projects, salas, apontamentos } from './db';
+import { getDb, projectMembers, projects, salas, apontamentos, escopoAsBuilt, entregasAsBuilt } from './db';
 import { eq, and, or } from 'drizzle-orm';
 
 export interface Context {
@@ -10,6 +10,7 @@ export interface Context {
     user?: any;
     userId?: string;
     userEmail?: string;
+    exportProjectId?: string;
     projectRole?: string;
     _roleCache?: Map<string, string>;
 }
@@ -59,6 +60,9 @@ export function createProjectProcedure(minRole: 'viewer' | 'parceiro' | 'editor'
         let projectId: string | undefined;
         if (rawInput && typeof rawInput === 'object') {
             projectId = (rawInput as any).projectId || (rawInput as any).id;
+            if (typeof projectId !== 'string') {
+                projectId = undefined;
+            }
         }
 
         const db = await getDb();
@@ -70,18 +74,68 @@ export function createProjectProcedure(minRole: 'viewer' | 'parceiro' | 'editor'
         }
 
         if (!projectId && rawInput && typeof rawInput === 'object') {
-            const lookupId = (rawInput as any).id || (rawInput as any).salaId || (rawInput as any).entregaId;
-            if (typeof lookupId === 'number') {
-                const salaResult = await db.select({ projectId: salas.projectId }).from(salas).where(eq(salas.id, lookupId)).limit(1);
-                if (salaResult.length > 0 && salaResult[0].projectId) {
-                    projectId = salaResult[0].projectId;
+            const inputObj = rawInput as any;
+            const salaId = typeof inputObj.salaId === 'number' ? inputObj.salaId : undefined;
+            const escopoId = typeof inputObj.escopoId === 'number' ? inputObj.escopoId : undefined;
+            const entregaId = typeof inputObj.entregaId === 'number' ? inputObj.entregaId : undefined;
+            const firstIdFromArray = Array.isArray(inputObj.ids) && typeof inputObj.ids[0] === 'number' ? inputObj.ids[0] : undefined;
+            const genericId = typeof inputObj.id === 'number' ? inputObj.id : undefined;
+
+            if (salaId) {
+                const [r] = await db.select({ projectId: salas.projectId }).from(salas).where(eq(salas.id, salaId)).limit(1);
+                if (r?.projectId) projectId = r.projectId;
+            } else if (escopoId) {
+                const [r] = await db.select({ projectId: escopoAsBuilt.projectId }).from(escopoAsBuilt).where(eq(escopoAsBuilt.id, escopoId)).limit(1);
+                if (r?.projectId) projectId = r.projectId;
+            } else if (entregaId) {
+                const [r] = await db.select({ projectId: entregasAsBuilt.projectId }).from(entregasAsBuilt).where(eq(entregasAsBuilt.id, entregaId)).limit(1);
+                if (r?.projectId) projectId = r.projectId;
+            } else if (firstIdFromArray) {
+                const [r] = await db.select({ projectId: apontamentos.projectId }).from(apontamentos).where(eq(apontamentos.id, firstIdFromArray)).limit(1);
+                if (r?.projectId) projectId = r.projectId;
+            } else if (genericId) {
+                const [rSala] = await db.select({ projectId: salas.projectId }).from(salas).where(eq(salas.id, genericId)).limit(1);
+                if (rSala?.projectId) {
+                    projectId = rSala.projectId;
                 } else {
-                    const apontResult = await db.select({ projectId: apontamentos.projectId }).from(apontamentos).where(eq(apontamentos.id, lookupId)).limit(1);
-                    if (apontResult.length > 0 && apontResult[0].projectId) {
-                        projectId = apontResult[0].projectId;
+                    const [rApont] = await db.select({ projectId: apontamentos.projectId }).from(apontamentos).where(eq(apontamentos.id, genericId)).limit(1);
+                    if (rApont?.projectId) {
+                        projectId = rApont.projectId;
+                    } else {
+                        const [rEscopo] = await db.select({ projectId: escopoAsBuilt.projectId }).from(escopoAsBuilt).where(eq(escopoAsBuilt.id, genericId)).limit(1);
+                        if (rEscopo?.projectId) {
+                            projectId = rEscopo.projectId;
+                        } else {
+                            const [rEntrega] = await db.select({ projectId: entregasAsBuilt.projectId }).from(entregasAsBuilt).where(eq(entregasAsBuilt.id, genericId)).limit(1);
+                            if (rEntrega?.projectId) {
+                                projectId = rEntrega.projectId;
+                            }
+                        }
                     }
                 }
             }
+        }
+
+        // Handle Personal Export Token (read-only access scoped to ctx.exportProjectId)
+        if (ctx.exportProjectId) {
+            if (minRole !== 'viewer') {
+                throw new TRPCError({
+                    code: 'FORBIDDEN',
+                    message: 'Token de exportação possui permissão exclusiva de leitura.',
+                });
+            }
+            if (projectId && projectId !== ctx.exportProjectId) {
+                throw new TRPCError({
+                    code: 'FORBIDDEN',
+                    message: 'Token de exportação não autorizado para este projeto.',
+                });
+            }
+            return next({
+                ctx: {
+                    ...ctx,
+                    projectRole: 'viewer',
+                },
+            });
         }
 
         if (!projectId) {

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -21,13 +21,30 @@ import { ConstatacoesModal } from "./ConstatacoesModal";
 
 interface AsBuiltModelsExecutiveSummaryProps {
     projectId: string;
+    initialEmpresa?: string;
+    exportMode?: boolean;
 }
+
+const EMPRESA_LABELS: Record<string, string> = {
+    "Thá": "Thá Engenharia",
+    Ocle: "Ocle Engenharia",
+    AeB: "AeB",
+    Todas: "Todas as Empresas",
+};
 
 export default function AsBuiltModelsExecutiveSummary({
     projectId,
+    initialEmpresa = "Thá",
+    exportMode = false,
 }: AsBuiltModelsExecutiveSummaryProps) {
-    const [selectedEmpresa, setSelectedEmpresa] = useState<string>("Thá");
+    const [selectedEmpresa, setSelectedEmpresa] = useState<string>(initialEmpresa);
     const [isConstatacoesModalOpen, setIsConstatacoesModalOpen] = useState(false);
+
+    useEffect(() => {
+        if (initialEmpresa) {
+            setSelectedEmpresa(initialEmpresa);
+        }
+    }, [initialEmpresa]);
 
     const { data: summary, isLoading } = trpc.analytics.getAsBuiltModelsSummary.useQuery({
         projectId,
@@ -91,35 +108,37 @@ export default function AsBuiltModelsExecutiveSummary({
 
     return (
         <div className="space-y-3.5 animate-in fade-in duration-150 font-sans">
-            {/* Barra de Cabeçalho no Padrão do Sistema */}
-            <div className="bg-white p-3.5 px-4 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5">
-                    <div className="w-1.5 h-6 bg-[#9C1915] rounded-xs shrink-0" />
-                    <div>
-                        <h2 className="text-xs font-bold uppercase tracking-wider text-slate-800">
-                            As-Built • Status dos Modelos 3D & Documentação 2D
-                        </h2>
-                        <p className="text-[11px] text-slate-500">
-                            Acompanhamento de recebimento e validação de modelos e pranchas por contratada
-                        </p>
+            {/* Barra de Cabeçalho no Padrão do Sistema (oculta no exportMode para caber perfeitamente no slide com título do PPT) */}
+            {!exportMode && (
+                <div className="bg-white p-3.5 px-4 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                        <div className="w-1.5 h-6 bg-[#9C1915] rounded-xs shrink-0" />
+                        <div>
+                            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                                As-Built • Status dos Modelos 3D & Documentação 2D
+                            </h2>
+                            <p className="text-[11px] text-slate-500">
+                                Acompanhamento de recebimento e validação de modelos e pranchas por contratada
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold uppercase text-[#6C6A6A]">Contratada:</span>
+                        <Select value={selectedEmpresa} onValueChange={setSelectedEmpresa}>
+                            <SelectTrigger className="text-xs font-bold h-8 w-44 rounded-lg border-slate-200 bg-slate-50 text-slate-800">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="Thá" className="text-xs font-semibold">Thá Engenharia</SelectItem>
+                                <SelectItem value="Ocle" className="text-xs font-semibold">Ocle Engenharia</SelectItem>
+                                <SelectItem value="AeB" className="text-xs font-semibold">AeB</SelectItem>
+                                <SelectItem value="Todas" className="text-xs font-semibold">Todas as Empresas</SelectItem>
+                            </SelectContent>
+                        </Select>
                     </div>
                 </div>
-
-                <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold uppercase text-[#6C6A6A]">Contratada:</span>
-                    <Select value={selectedEmpresa} onValueChange={setSelectedEmpresa}>
-                        <SelectTrigger className="text-xs font-bold h-8 w-44 rounded-lg border-slate-200 bg-slate-50 text-slate-800">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="Thá" className="text-xs font-semibold">Thá Engenharia</SelectItem>
-                            <SelectItem value="Ocle" className="text-xs font-semibold">Ocle Engenharia</SelectItem>
-                            <SelectItem value="AeB" className="text-xs font-semibold">AeB</SelectItem>
-                            <SelectItem value="Todas" className="text-xs font-semibold">Todas as Empresas</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
-            </div>
+            )}
 
             {/* 6 Indicadores Oficiais com Ícones Coloridos:
                 Total Modelos | Entregues | Validados | Com Pendências | Igual ao Projeto | Documentação 2D */}
@@ -280,15 +299,17 @@ export default function AsBuiltModelsExecutiveSummary({
                                 Principais Constatações Técnicas ({selectedEmpresa})
                             </CardTitle>
 
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setIsConstatacoesModalOpen(true)}
-                                className="h-7 px-2.5 text-[11px] font-semibold rounded-md border-slate-200 bg-white hover:bg-slate-50 text-slate-700 gap-1"
-                            >
-                                <Edit2 className="w-3 h-3" />
-                                Editar Constatações
-                            </Button>
+                            {!exportMode && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setIsConstatacoesModalOpen(true)}
+                                    className="h-7 px-2.5 text-[11px] font-semibold rounded-md border-slate-200 bg-white hover:bg-slate-50 text-slate-700 gap-1"
+                                >
+                                    <Edit2 className="w-3 h-3" />
+                                    Editar Constatações
+                                </Button>
+                            )}
                         </CardHeader>
 
                         <CardContent className="p-4 space-y-2.5 text-xs">
@@ -338,7 +359,7 @@ export default function AsBuiltModelsExecutiveSummary({
                 </Card>
             </div>
 
-            {isConstatacoesModalOpen && (
+            {isConstatacoesModalOpen && !exportMode && (
                 <ConstatacoesModal
                     projectId={projectId}
                     empresa={selectedEmpresa}

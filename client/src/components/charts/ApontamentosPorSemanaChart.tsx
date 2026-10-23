@@ -14,9 +14,16 @@ import { Calendar, TrendingUp } from "lucide-react";
 interface ApontamentosPorSemanaChartProps {
     data: { semana: string; count: number; verifiedRooms?: number }[];
     hideTitle?: boolean;
+    exportMode?: boolean;
+    exportDimensions?: { width: number; height: number };
 }
 
-export default function ApontamentosPorSemanaChart({ data, hideTitle }: ApontamentosPorSemanaChartProps) {
+export default function ApontamentosPorSemanaChart({
+    data,
+    hideTitle,
+    exportMode = false,
+    exportDimensions,
+}: ApontamentosPorSemanaChartProps) {
     if (!data || data.length === 0) {
         const emptyState = (
             <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-2">
@@ -26,9 +33,17 @@ export default function ApontamentosPorSemanaChart({ data, hideTitle }: Apontame
         );
         if (hideTitle) return <div className="h-full border border-dashed border-slate-200 rounded-xl bg-slate-50/50">{emptyState}</div>;
         return (
-            <Card className="h-[400px]">
-                <CardHeader><CardTitle className="text-lg">Tendência por Semana</CardTitle></CardHeader>
-                <CardContent className="h-[300px]">{emptyState}</CardContent>
+            <Card
+                className="bg-white border border-slate-100 shadow-sm rounded-2xl overflow-hidden p-5 h-[400px]"
+                style={exportDimensions ? { width: exportDimensions.width, height: exportDimensions.height } : undefined}
+            >
+                <div className="flex items-center gap-2 mb-2">
+                    <Calendar className="w-4 h-4 text-[#940707]" strokeWidth={2.5} />
+                    <h2 className="text-[11px] font-black text-[#545F66] uppercase tracking-widest">
+                        Apontamentos por Semana
+                    </h2>
+                </div>
+                <div className="h-[260px]">{emptyState}</div>
             </Card>
         );
     }
@@ -69,6 +84,7 @@ export default function ApontamentosPorSemanaChart({ data, hideTitle }: Apontame
                     dataKey="count"
                     stroke="#940707"
                     strokeWidth={3}
+                    isAnimationActive={!exportMode}
                     dot={{ r: 4, fill: "#940707", strokeWidth: 2, stroke: "#fff" }}
                     activeDot={{ r: 6, fill: "#940707", strokeWidth: 0 }}
                     label={{ position: 'top', fontSize: 11, fontWeight: 'bold', fill: "#940707", offset: 10 }}
@@ -79,6 +95,7 @@ export default function ApontamentosPorSemanaChart({ data, hideTitle }: Apontame
                     dataKey="verifiedRooms"
                     stroke="#22c55e"
                     strokeWidth={3}
+                    isAnimationActive={!exportMode}
                     dot={{ r: 4, fill: "#22c55e", strokeWidth: 2, stroke: "#fff" }}
                     activeDot={{ r: 6, fill: "#22c55e", strokeWidth: 0 }}
                     label={{ position: 'top', fontSize: 11, fontWeight: 'bold', fill: "#22c55e", offset: 10 }}
@@ -89,15 +106,23 @@ export default function ApontamentosPorSemanaChart({ data, hideTitle }: Apontame
 
     if (hideTitle) return chartContent;
 
+    const innerChartHeight = exportDimensions ? exportDimensions.height - 68 : 320;
+
     return (
-        <Card className="bg-white border border-slate-100 shadow-sm rounded-2xl overflow-hidden p-5 h-[400px]">
+        <Card
+            className="bg-white border border-slate-100 shadow-sm rounded-2xl overflow-hidden p-5 h-[400px]"
+            style={exportDimensions ? { width: exportDimensions.width, height: exportDimensions.height } : undefined}
+        >
             <div className="flex items-center gap-2 mb-2">
                 <Calendar className="w-4 h-4 text-[#940707]" strokeWidth={2.5} />
                 <h2 className="text-[11px] font-black text-[#545F66] uppercase tracking-widest">
                     Apontamentos por Semana
                 </h2>
             </div>
-            <div className="h-[320px] pt-4">
+            <div
+                className={exportDimensions ? "pt-2" : "h-[320px] pt-4"}
+                style={exportDimensions ? { height: innerChartHeight } : undefined}
+            >
                 {chartContent}
             </div>
         </Card>

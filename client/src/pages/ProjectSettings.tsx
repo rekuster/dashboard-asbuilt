@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useProjectRole } from '@/hooks/useProjectRole';
 import MembersTab from '@/components/dashboard/MembersTab';
+import { PowerPointExportCard } from '@/components/dashboard/PowerPointExportCard';
 
 export default function ProjectSettings() {
     const { id } = useParams<{ id: string }>();
@@ -679,6 +680,7 @@ function DisciplinesConfigTab({ projectId, inputClass }: { projectId: string; in
             </Card>
 
             <SteclaCloudLinksCard projectId={projectId} inputClass={inputClass} />
+            <PowerPointExportCard projectId={projectId} inputClass={inputClass} />
         </div>
     );
 }

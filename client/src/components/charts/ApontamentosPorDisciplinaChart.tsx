@@ -6,12 +6,14 @@ import {
     ResponsiveContainer,
     Legend,
 } from "recharts";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Info } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { Users } from "lucide-react";
 
 interface ApontamentosPorDisciplinaChartProps {
     data: { disciplina: string; count: number }[];
     hideTitle?: boolean;
+    exportMode?: boolean;
+    exportDimensions?: { width: number; height: number };
 }
 
 const COLORS = [
@@ -61,7 +63,12 @@ const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, per
     );
 };
 
-export default function ApontamentosPorDisciplinaChart({ data, hideTitle }: ApontamentosPorDisciplinaChartProps) {
+export default function ApontamentosPorDisciplinaChart({
+    data,
+    hideTitle,
+    exportMode = false,
+    exportDimensions,
+}: ApontamentosPorDisciplinaChartProps) {
     if (!data || data.length === 0) {
         const emptyState = (
             <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-2">
@@ -71,9 +78,17 @@ export default function ApontamentosPorDisciplinaChart({ data, hideTitle }: Apon
         );
         if (hideTitle) return <div className="h-full border border-dashed border-slate-200 rounded-xl bg-slate-50/50">{emptyState}</div>;
         return (
-            <Card className="h-[320px] pt-4">
-                <CardHeader><CardTitle className="text-lg">Distribuição por Disciplina</CardTitle></CardHeader>
-                <CardContent className="h-[300px]">{emptyState}</CardContent>
+            <Card
+                className="bg-white border border-slate-100 shadow-sm rounded-2xl overflow-hidden p-5 h-[400px]"
+                style={exportDimensions ? { width: exportDimensions.width, height: exportDimensions.height } : undefined}
+            >
+                <div className="flex items-center gap-2 mb-2">
+                    <Users className="w-4 h-4 text-[#940707]" strokeWidth={2.5} />
+                    <h2 className="text-[11px] font-black text-[#545F66] uppercase tracking-widest">
+                        Apontamentos por Disciplina
+                    </h2>
+                </div>
+                <div className="h-[260px]">{emptyState}</div>
             </Card>
         );
     }
@@ -85,12 +100,13 @@ export default function ApontamentosPorDisciplinaChart({ data, hideTitle }: Apon
                     data={data}
                     cx="50%"
                     cy="45%"
-                    innerRadius={55}
-                    outerRadius={75}
+                    innerRadius={exportDimensions ? 45 : 55}
+                    outerRadius={exportDimensions ? 65 : 75}
                     paddingAngle={3}
                     dataKey="count"
                     nameKey="disciplina"
                     minAngle={15}
+                    isAnimationActive={!exportMode}
                     label={renderCustomizedLabel}
                     labelLine={false}
                 >
@@ -132,15 +148,23 @@ export default function ApontamentosPorDisciplinaChart({ data, hideTitle }: Apon
 
     if (hideTitle) return chartContent;
 
+    const innerChartHeight = exportDimensions ? exportDimensions.height - 68 : 320;
+
     return (
-        <Card className="bg-white border border-slate-100 shadow-sm rounded-2xl overflow-hidden p-5 h-[400px]">
+        <Card
+            className="bg-white border border-slate-100 shadow-sm rounded-2xl overflow-hidden p-5 h-[400px]"
+            style={exportDimensions ? { width: exportDimensions.width, height: exportDimensions.height } : undefined}
+        >
             <div className="flex items-center gap-2 mb-2">
                 <Users className="w-4 h-4 text-[#940707]" strokeWidth={2.5} />
                 <h2 className="text-[11px] font-black text-[#545F66] uppercase tracking-widest">
                     Apontamentos por Disciplina
                 </h2>
             </div>
-            <div className="h-[320px] pt-4">
+            <div
+                className={exportDimensions ? "pt-2" : "h-[320px] pt-4"}
+                style={exportDimensions ? { height: innerChartHeight } : undefined}
+            >
                 {chartContent}
             </div>
         </Card>

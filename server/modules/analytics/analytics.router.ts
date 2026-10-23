@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, publicProcedure } from "../../common/trpc";
+import { router, viewerProcedure, editorProcedure } from "../../common/trpc";
 import {
     getKPIs,
     getKPIsPorEdificacao,
@@ -18,7 +18,7 @@ import {
 } from "./analytics.service";
 
 export const analyticsRouter = router({
-    getAsBuiltModelsSummary: publicProcedure
+    getAsBuiltModelsSummary: viewerProcedure
         .input(
             z.object({
                 projectId: z.string(),
@@ -29,7 +29,7 @@ export const analyticsRouter = router({
             return await getAsBuiltModelsSummary(input.projectId, input.empresa);
         }),
 
-    getConstatacoes: publicProcedure
+    getConstatacoes: viewerProcedure
         .input(
             z.object({
                 projectId: z.string(),
@@ -40,7 +40,7 @@ export const analyticsRouter = router({
             return await getConstatacoes(input.projectId, input.empresa);
         }),
 
-    saveConstatacoes: publicProcedure
+    saveConstatacoes: editorProcedure
         .input(
             z.object({
                 projectId: z.string(),
@@ -60,13 +60,13 @@ export const analyticsRouter = router({
             return await saveConstatacoes(input);
         }),
 
-    getKPIs: publicProcedure
+    getKPIs: viewerProcedure
         .input(z.object({ projectId: z.string() }))
         .query(async ({ input }) => {
             return await getKPIs(input.projectId);
         }),
 
-    getKPIsPorEdificacao: publicProcedure
+    getKPIsPorEdificacao: viewerProcedure
         .input(
             z.object({
                 projectId: z.string(),
@@ -78,13 +78,13 @@ export const analyticsRouter = router({
             return kpis ? { ...kpis, edificacao: input.edificacao } : null;
         }),
 
-    getTendenciaVerificacao: publicProcedure
+    getTendenciaVerificacao: viewerProcedure
         .input(z.object({ projectId: z.string() }))
         .query(async ({ input }) => {
             return await getTendenciaVerificacao(input.projectId);
         }),
 
-    getTendenciaVerificacaoPorEdificacao: publicProcedure
+    getTendenciaVerificacaoPorEdificacao: viewerProcedure
         .input(
             z.object({
                 projectId: z.string(),
@@ -95,7 +95,7 @@ export const analyticsRouter = router({
             return await getTendenciaVerificacaoPorEdificacao(input.projectId, input.edificacao);
         }),
 
-    getStatsStatus: publicProcedure
+    getStatsStatus: viewerProcedure
         .input(
             z.object({
                 projectId: z.string(),
@@ -106,7 +106,7 @@ export const analyticsRouter = router({
             return await getStatsStatus(input.projectId, input.edificacao);
         }),
 
-    getTopSalasImpactadas: publicProcedure
+    getTopSalasImpactadas: viewerProcedure
         .input(
             z.object({
                 projectId: z.string(),
@@ -117,13 +117,13 @@ export const analyticsRouter = router({
             return await getTopSalasImpactadas(input.projectId, input.edificacao);
         }),
 
-    getApontamentosPorSala: publicProcedure
+    getApontamentosPorSala: viewerProcedure
         .input(z.object({ projectId: z.string() }))
         .query(async ({ input }) => {
             return await getApontamentosPorSala(input.projectId);
         }),
 
-    getApontamentosPorDisciplina: publicProcedure
+    getApontamentosPorDisciplina: viewerProcedure
         .input(
             z.object({
                 projectId: z.string(),
@@ -134,7 +134,7 @@ export const analyticsRouter = router({
             return await getApontamentosPorDisciplina(input.projectId, input.edificacao);
         }),
 
-    getApontamentosPorSemana: publicProcedure
+    getApontamentosPorSemana: viewerProcedure
         .input(
             z.object({
                 projectId: z.string(),
@@ -145,7 +145,7 @@ export const analyticsRouter = router({
             return await getApontamentosPorSemana(input.projectId, input.edificacao);
         }),
 
-    getStatsPorDisciplina: publicProcedure
+    getStatsPorDisciplina: viewerProcedure
         .input(
             z.object({
                 projectId: z.string(),
@@ -156,7 +156,7 @@ export const analyticsRouter = router({
             return await getStatsPorDisciplina(input.projectId, input.edificacao);
         }),
 
-    getValidacaoIntegridade: publicProcedure
+    getValidacaoIntegridade: viewerProcedure
         .input(z.object({ projectId: z.string() }))
         .query(async ({ input }) => {
             return await getValidacaoIntegridade(input.projectId);

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, publicProcedure, editorProcedure } from "../../common/trpc";
+import { router, viewerProcedure, editorProcedure } from "../../common/trpc";
 import {
     getHistoricoRelatorios,
     markApontamentosAsSentByFilters,
@@ -11,13 +11,13 @@ import {
 import { handleExcelUpload } from "../../uploadHandler";
 
 export const reportsRouter = router({
-    getHistoricoRelatorios: publicProcedure
+    getHistoricoRelatorios: viewerProcedure
         .input(z.object({ projectId: z.string() }))
         .query(async ({ input }) => {
             return await getHistoricoRelatorios(input.projectId);
         }),
 
-    markApontamentosAsSentByFilters: publicProcedure
+    markApontamentosAsSentByFilters: editorProcedure
         .input(
             z.object({
                 projectId: z.string(),
@@ -35,7 +35,7 @@ export const reportsRouter = router({
             return await markApontamentosAsSentByFilters(input.projectId, input);
         }),
 
-    getPDFReport: publicProcedure
+    getPDFReport: viewerProcedure
         .input(
             z.object({
                 projectId: z.string(),
@@ -61,7 +61,7 @@ export const reportsRouter = router({
             return buffer.toString("base64");
         }),
 
-    getExcelReport: publicProcedure
+    getExcelReport: viewerProcedure
         .input(
             z.object({
                 projectId: z.string(),
@@ -74,7 +74,7 @@ export const reportsRouter = router({
             return buffer.toString("base64");
         }),
 
-    getAsBuiltReport: publicProcedure
+    getAsBuiltReport: viewerProcedure
         .input(
             z.object({
                 projectId: z.string(),
@@ -94,7 +94,7 @@ export const reportsRouter = router({
             return buffer.toString("base64");
         }),
 
-    getVerificationReport: publicProcedure
+    getVerificationReport: viewerProcedure
         .input(
             z.object({
                 projectId: z.string(),

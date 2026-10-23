@@ -14,6 +14,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import ExportChartPage from "./pages/ExportChartPage";
 import NotFound from "./pages/NotFound";
 
 function RecoveryRedirect() {
@@ -30,6 +31,18 @@ function RecoveryRedirect() {
 }
 
 function Router() {
+    const [location] = useLocation();
+
+    // Clean standalone export route without AppLayout sidebar/header
+    if (location.startsWith("/export/")) {
+        return (
+            <Switch>
+                <Route path="/export/:projectId/grafico/:tipo" component={ExportChartPage} />
+                <Route component={NotFound} />
+            </Switch>
+        );
+    }
+
     return (
         <AppLayout>
             <RecoveryRedirect />

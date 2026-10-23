@@ -8,6 +8,7 @@ import { issuesRouter } from "../modules/issues/issues.router";
 import { deliveriesRouter } from "../modules/deliveries/deliveries.router";
 import { analyticsRouter } from "../modules/analytics/analytics.router";
 import { reportsRouter } from "../modules/reports/reports.router";
+import { exportRouter } from "../modules/export/export.router";
 
 import {
     saveMasterList,
@@ -190,6 +191,7 @@ export const appRouter = router({
     projects: combinedProjectsRouter,
     members: membersRouter,
     dashboard: dashboardRouter,
+    export: exportRouter,
 
     // Standalone domain routers
     rooms: roomsRouter,

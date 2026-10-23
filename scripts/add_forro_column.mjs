@@ -1,6 +1,11 @@
+import 'dotenv/config';
 import postgres from 'postgres';
 
-const DATABASE_URL = 'postgresql://postgres.mwjgsaurifctbatsindf:stecla387205@aws-0-us-west-2.pooler.supabase.com:6543/postgres?sslmode=require';
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) {
+    console.error('❌ Erro: DATABASE_URL não definida no ambiente (.env).');
+    process.exit(1);
+}
 
 const sql = postgres(DATABASE_URL, { ssl: { rejectUnauthorized: false }, max: 1 });
 

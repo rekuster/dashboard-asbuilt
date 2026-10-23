@@ -36,7 +36,7 @@ const ICON_VARIANT_STYLES: Record<
     green: {
         badge: "bg-emerald-50 border border-emerald-200",
         icon: "text-emerald-600",
-        valueText: "text-slate-900",
+        valueText: "text-emerald-600 font-extrabold",
     },
     orange: {
         badge: "bg-amber-50 border border-amber-200",
