@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { Sparkles, Loader2, Plus } from "lucide-react";
+import { Sparkles, Loader2, Plus, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
@@ -13,7 +13,12 @@ export function PowerPointExportCard({
     inputClass: string;
 }) {
     const utils = trpc.useUtils();
-    const { data: tokens = [], isLoading } = trpc.export.listTokens.useQuery({ projectId });
+    const { data: rawTokens, isLoading, isError, error } = trpc.export.listTokens.useQuery(
+        { projectId },
+        { retry: 1 }
+    );
+    const tokens = Array.isArray(rawTokens) ? rawTokens : [];
+
     const [tokenName, setTokenName] = useState("Suplemento PowerPoint Semanal");
     const [newlyCreatedToken, setNewlyCreatedToken] = useState<string | null>(null);
     const [selectedEmpresaPreview, setSelectedEmpresaPreview] = useState<string>("Thá");
@@ -193,6 +198,15 @@ export function PowerPointExportCard({
                         <code className="block w-full p-2 rounded bg-white border border-emerald-200 text-xs font-mono text-emerald-950 break-all">
                             {newlyCreatedToken}
                         </code>
+                    </div>
+                )}
+
+                {isError && (
+                    <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>
+                            Não foi possível carregar a lista de tokens remotos ({error?.message || "Erro desconhecido"}). Verifique suas permissões de administrador.
+                        </span>
                     </div>
                 )}
 

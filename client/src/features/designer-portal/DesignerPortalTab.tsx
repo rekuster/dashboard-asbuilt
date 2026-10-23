@@ -88,7 +88,12 @@ export default function DesignerPortalTab({
     const companiesList = useMemo(() => {
         if (project?.companiesConfig) {
             try {
-                return JSON.parse(project.companiesConfig);
+                const parsed = JSON.parse(project.companiesConfig);
+                if (Array.isArray(parsed)) return parsed.filter((c) => typeof c === 'string' && !!c.trim());
+                if (parsed && typeof parsed === 'object') {
+                    if (Array.isArray(parsed._items)) return parsed._items.filter((c) => typeof c === 'string' && !!c.trim());
+                    if (Array.isArray(parsed.companies)) return parsed.companies.filter((c) => typeof c === 'string' && !!c.trim());
+                }
             } catch (e) {
                 // ignore
             }

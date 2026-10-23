@@ -83,6 +83,35 @@ export async function updateProject(id: string, data: Partial<Project>) {
     const db = await getDb();
     if (!db) return null;
 
+    if (data.companiesConfig !== undefined && data.companiesConfig !== null) {
+        try {
+            const [current] = await db
+                .select({ companiesConfig: projects.companiesConfig })
+                .from(projects)
+                .where(eq(projects.id, id))
+                .limit(1);
+
+            if (current?.companiesConfig) {
+                const currentParsed = JSON.parse(current.companiesConfig);
+                if (currentParsed && typeof currentParsed === "object" && Array.isArray(currentParsed._exportTokens)) {
+                    const incomingParsed = JSON.parse(data.companiesConfig);
+                    const incomingItems = Array.isArray(incomingParsed)
+                        ? incomingParsed
+                        : Array.isArray(incomingParsed?._items)
+                        ? incomingParsed._items
+                        : [];
+
+                    data.companiesConfig = JSON.stringify({
+                        _items: incomingItems,
+                        _exportTokens: currentParsed._exportTokens,
+                    });
+                }
+            }
+        } catch {
+            // Keep incoming as is
+        }
+    }
+
     const result = await db
         .update(projects)
         .set({ ...data, updatedAt: new Date() })

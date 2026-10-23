@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { useProjectRole } from '@/hooks/useProjectRole';
 import MembersTab from '@/components/dashboard/MembersTab';
 import { PowerPointExportCard } from '@/components/dashboard/PowerPointExportCard';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 export default function ProjectSettings() {
     const { id } = useParams<{ id: string }>();
@@ -282,6 +283,9 @@ function DisciplinesConfigTab({ projectId, inputClass }: { projectId: string; in
     const [newCompany, setNewCompany] = useState('');
     const [saving, setSaving] = useState(false);
 
+    const safeCompanies = Array.isArray(companies) ? companies : [];
+    const safeDisciplines = Array.isArray(disciplines) ? disciplines : [];
+
     const updateProject = trpc.projects.update.useMutation({
         onSuccess: () => {
             toast.success('Relação de disciplinas e responsáveis salva com sucesso!');
@@ -295,26 +299,88 @@ function DisciplinesConfigTab({ projectId, inputClass }: { projectId: string; in
         }
     });
 
+    const handleFillDefaults = (showToast = true) => {
+        const defaultStecla = [
+            { sigla: 'ELE', nome: 'Instalações Elétricas', responsavel: 'Ocle' },
+            { sigla: 'CLI', nome: 'Climatização', responsavel: 'Ocle' },
+            { sigla: 'PCI', nome: 'Proteção Contra Incêndio (PCI)', responsavel: 'Ocle' },
+            { sigla: 'SDAI', nome: 'Detecção e Alarme (SDAI)', responsavel: 'Ocle' },
+            { sigla: 'LOG', nome: 'CFTV e Lógica', responsavel: 'Ocle' },
+            { sigla: 'UTI', nome: 'Utilidades', responsavel: 'Ocle' },
+            { sigla: 'ELEMT', nome: 'Barramento e Média Tensão', responsavel: 'Ocle' },
+            { sigla: 'SPDA', nome: 'Para-raios (SPDA)', responsavel: 'Ocle' },
+            { sigla: 'HID', nome: 'Instalações Hidrossanitárias', responsavel: 'Thá' },
+            { sigla: 'EST', nome: 'Estrutura de Concreto', responsavel: 'Thá' },
+            { sigla: 'ARQ', nome: 'Arquitetura', responsavel: 'Thá' },
+            { sigla: 'MET', nome: 'Estrutura Metálica', responsavel: 'Thá' },
+            { sigla: 'FORRO', nome: 'Forro', responsavel: 'Stecla' }
+        ];
+
+        setCompanies(prev => {
+            const current = Array.isArray(prev) ? prev : [];
+            const merged = [...current];
+            ["Thá", "Ocle", "Stecla", "Instaladora"].forEach(c => {
+                if (!merged.some(m => m.toLowerCase() === c.toLowerCase())) {
+                    merged.push(c);
+                }
+            });
+            return merged;
+        });
+
+        setDisciplines(defaultStecla);
+        if (showToast) {
+            toast.info('Disciplinas padrão Stecla carregadas!');
+        }
+    };
+
     useEffect(() => {
-        if (project?.disciplinesConfig) {
+        if (!project) return;
+
+        // Parse disciplinas
+        if (project.disciplinesConfig) {
             try {
                 const parsed = JSON.parse(project.disciplinesConfig);
-                const mapped = parsed.map((item: any) => ({
-                    sigla: (item.sigla || item.disciplina || "").toUpperCase(),
-                    nome: item.nome || item.sigla || item.disciplina || "",
-                    responsavel: item.responsavel || ""
-                }));
+                const rawList = Array.isArray(parsed)
+                    ? parsed
+                    : Array.isArray(parsed?.disciplines)
+                    ? parsed.disciplines
+                    : [];
+
+                const mapped = rawList
+                    .map((item: any) => ({
+                        sigla: (item?.sigla || item?.disciplina || "").toUpperCase(),
+                        nome: item?.nome || item?.sigla || item?.disciplina || "",
+                        responsavel: item?.responsavel || ""
+                    }))
+                    .filter((d: DisciplineEntry) => !!d.sigla);
+
                 setDisciplines(mapped);
             } catch (e) {
                 setDisciplines([]);
             }
         } else {
-            handleFillDefaults();
+            handleFillDefaults(false);
         }
 
-        if (project?.companiesConfig) {
+        // Parse empresas
+        if (project.companiesConfig) {
             try {
-                const loadedCompanies = JSON.parse(project.companiesConfig);
+                const rawParsed = JSON.parse(project.companiesConfig);
+                let loadedCompanies: string[] = [];
+                if (Array.isArray(rawParsed)) {
+                    loadedCompanies = rawParsed.filter((c): c is string => typeof c === 'string' && !!c.trim());
+                } else if (rawParsed && typeof rawParsed === 'object') {
+                    if (Array.isArray(rawParsed._items)) {
+                        loadedCompanies = rawParsed._items.filter((c: any): c is string => typeof c === 'string' && !!c.trim());
+                    } else if (Array.isArray(rawParsed.companies)) {
+                        loadedCompanies = rawParsed.companies.filter((c: any): c is string => typeof c === 'string' && !!c.trim());
+                    }
+                }
+
+                if (loadedCompanies.length === 0) {
+                    loadedCompanies = ["Thá", "Ocle", "Stecla", "Instaladora"];
+                }
+
                 setCompanies(loadedCompanies);
                 if (loadedCompanies.length > 0 && !newResp) {
                     setNewResp(loadedCompanies[0]);
@@ -332,10 +398,10 @@ function DisciplinesConfigTab({ projectId, inputClass }: { projectId: string; in
     }, [project]);
 
     useEffect(() => {
-        if (companies.length > 0 && !companies.includes(newResp)) {
-            setNewResp(companies[0]);
+        if (safeCompanies.length > 0 && (!newResp || !safeCompanies.includes(newResp))) {
+            setNewResp(safeCompanies[0]);
         }
-    }, [companies, newResp]);
+    }, [safeCompanies, newResp]);
 
     const handleAddCompany = () => {
         const cleanName = newCompany.trim();
@@ -343,22 +409,22 @@ function DisciplinesConfigTab({ projectId, inputClass }: { projectId: string; in
             toast.error('Informe o nome da empresa.');
             return;
         }
-        if (companies.some(c => c.toLowerCase() === cleanName.toLowerCase())) {
+        if (safeCompanies.some(c => c.toLowerCase() === cleanName.toLowerCase())) {
             toast.error('Esta empresa já está cadastrada.');
             return;
         }
-        setCompanies(prev => [...prev, cleanName]);
+        setCompanies(prev => [...(Array.isArray(prev) ? prev : []), cleanName]);
         setNewCompany('');
         if (!newResp) setNewResp(cleanName);
         toast.success(`Empresa "${cleanName}" adicionada.`);
     };
 
     const handleRemoveCompany = (company: string) => {
-        if (disciplines.some(d => d.responsavel.toLowerCase() === company.toLowerCase())) {
+        if (safeDisciplines.some(d => d.responsavel.toLowerCase() === company.toLowerCase())) {
             toast.error(`Não é possível excluir "${company}" pois ela está vinculada a disciplinas cadastradas!`);
             return;
         }
-        setCompanies(prev => prev.filter(c => c !== company));
+        setCompanies(prev => (Array.isArray(prev) ? prev : []).filter(c => c !== company));
         toast.info(`Empresa "${company}" removida.`);
     };
 
@@ -377,18 +443,18 @@ function DisciplinesConfigTab({ projectId, inputClass }: { projectId: string; in
             toast.error('Selecione uma empresa responsável.');
             return;
         }
-        if (disciplines.some(d => d.sigla.toUpperCase() === discUpper)) {
+        if (safeDisciplines.some(d => d.sigla.toUpperCase() === discUpper)) {
             toast.error(`A sigla ${discUpper} já está cadastrada.`);
             return;
         }
-        setDisciplines(prev => [...prev, { sigla: discUpper, nome: nomeClean, responsavel: newResp }]);
+        setDisciplines(prev => [...(Array.isArray(prev) ? prev : []), { sigla: discUpper, nome: nomeClean, responsavel: newResp }]);
         setNewDisc('');
         setNewNome('');
         toast.success(`Disciplina ${discUpper} vinculada.`);
     };
 
     const handleRemoveDiscipline = (index: number) => {
-        setDisciplines(prev => prev.filter((_, i) => i !== index));
+        setDisciplines(prev => (Array.isArray(prev) ? prev : []).filter((_, i) => i !== index));
     };
 
     const startEditDiscipline = (idx: number, item: DisciplineEntry) => {
@@ -405,52 +471,35 @@ function DisciplinesConfigTab({ projectId, inputClass }: { projectId: string; in
             toast.error('Sigla e nome não podem ser vazios.');
             return;
         }
-        if (disciplines.some((d, i) => i !== idx && d.sigla.toUpperCase() === cleanSigla)) {
+        if (safeDisciplines.some((d, i) => i !== idx && d.sigla.toUpperCase() === cleanSigla)) {
             toast.error('Esta sigla já está em uso.');
             return;
         }
-        setDisciplines(prev => prev.map((item, i) => i === idx ? { sigla: cleanSigla, nome: cleanNome, responsavel: editResp } : item));
+        setDisciplines(prev => (Array.isArray(prev) ? prev : []).map((item, i) => i === idx ? { sigla: cleanSigla, nome: cleanNome, responsavel: editResp } : item));
         setEditingIdx(null);
         toast.success('Disciplina editada.');
     };
 
-    const handleFillDefaults = () => {
-        const defaultStecla = [
-            { sigla: 'ELE', nome: 'Instalações Elétricas', responsavel: 'Ocle' },
-            { sigla: 'CLI', nome: 'Climatização', responsavel: 'Ocle' },
-            { sigla: 'PCI', nome: 'Proteção Contra Incêndio (PCI)', responsavel: 'Ocle' },
-            { sigla: 'SDAI', nome: 'Detecção e Alarme (SDAI)', responsavel: 'Ocle' },
-            { sigla: 'LOG', nome: 'CFTV e Lógica', responsavel: 'Ocle' },
-            { sigla: 'UTI', nome: 'Utilidades', responsavel: 'Ocle' },
-            { sigla: 'ELEMT', nome: 'Barramento e Média Tensão', responsavel: 'Ocle' },
-            { sigla: 'SPDA', nome: 'Para-raios (SPDA)', responsavel: 'Ocle' },
-            { sigla: 'HID', nome: 'Instalações Hidrossanitárias', responsavel: 'Thá' },
-            { sigla: 'EST', nome: 'Estrutura de Concreto', responsavel: 'Thá' },
-            { sigla: 'ARQ', nome: 'Arquitetura', responsavel: 'Thá' },
-            { sigla: 'MET', nome: 'Estrutura Metálica', responsavel: 'Thá' },
-            { sigla: 'FORRO', nome: 'Forro', responsavel: 'Stecla' }
-        ];
-
-        setCompanies(prev => {
-            const merged = [...prev];
-            ["Thá", "Ocle", "Stecla", "Instaladora"].forEach(c => {
-                if (!merged.some(m => m.toLowerCase() === c.toLowerCase())) {
-                    merged.push(c);
-                }
-            });
-            return merged;
-        });
-
-        setDisciplines(defaultStecla);
-        toast.info('Disciplinas padrão Stecla carregadas!');
-    };
-
     const handleSave = () => {
         setSaving(true);
+        let companiesPayload = JSON.stringify(safeCompanies);
+        if (project?.companiesConfig) {
+            try {
+                const existing = JSON.parse(project.companiesConfig);
+                if (existing && typeof existing === 'object' && Array.isArray(existing._exportTokens)) {
+                    companiesPayload = JSON.stringify({
+                        _items: safeCompanies,
+                        _exportTokens: existing._exportTokens,
+                    });
+                }
+            } catch {
+                // Keep safeCompanies
+            }
+        }
         updateProject.mutate({
             id: projectId,
-            disciplinesConfig: JSON.stringify(disciplines),
-            companiesConfig: JSON.stringify(companies)
+            disciplinesConfig: JSON.stringify(safeDisciplines),
+            companiesConfig: companiesPayload,
         });
     };
 
@@ -461,7 +510,7 @@ function DisciplinesConfigTab({ projectId, inputClass }: { projectId: string; in
                     <div className="flex items-center gap-2">
                         <ShieldCheck className="w-4 h-4 text-[#9C1915]" />
                         <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-800">
-                            Relação de Disciplinas & Responsáveis ({disciplines.length})
+                            Relação de Disciplinas & Responsáveis ({safeDisciplines.length})
                         </CardTitle>
                     </div>
 
@@ -511,7 +560,7 @@ function DisciplinesConfigTab({ projectId, inputClass }: { projectId: string; in
 
                             <div className="border border-slate-200 rounded-lg overflow-hidden bg-white">
                                 <div className="divide-y divide-slate-100 max-h-[220px] overflow-y-auto custom-scrollbar">
-                                    {companies.map((c, idx) => (
+                                    {safeCompanies.map((c, idx) => (
                                         <div key={idx} className="px-3 py-1.5 flex items-center justify-between text-xs hover:bg-slate-50/80">
                                             <span className="font-semibold text-slate-800">{c}</span>
                                             <button 
@@ -555,9 +604,9 @@ function DisciplinesConfigTab({ projectId, inputClass }: { projectId: string; in
                                         value={newResp} 
                                         onChange={(e) => setNewResp(e.target.value)} 
                                         className={`${inputClass} h-7.5`}
-                                        disabled={companies.length === 0}
+                                        disabled={safeCompanies.length === 0}
                                     >
-                                        {companies.map((c, i) => (
+                                        {safeCompanies.map((c, i) => (
                                             <option key={i} value={c}>{c}</option>
                                         ))}
                                     </select>
@@ -580,14 +629,14 @@ function DisciplinesConfigTab({ projectId, inputClass }: { projectId: string; in
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">
-                                        {disciplines.length === 0 ? (
+                                        {safeDisciplines.length === 0 ? (
                                             <tr>
                                                 <td colSpan={4} className="py-6 text-center text-slate-400 italic">
                                                     Nenhuma disciplina cadastrada.
                                                 </td>
                                             </tr>
                                         ) : (
-                                            disciplines.map((item, idx) => {
+                                            safeDisciplines.map((item, idx) => {
                                                 const isEditing = editingIdx === idx;
 
                                                 return (
@@ -614,7 +663,7 @@ function DisciplinesConfigTab({ projectId, inputClass }: { projectId: string; in
                                                                         onChange={(e) => setEditResp(e.target.value)} 
                                                                         className="w-full px-1.5 py-0.5 border rounded text-xs"
                                                                     >
-                                                                        {companies.map((c, i) => (
+                                                                        {safeCompanies.map((c, i) => (
                                                                             <option key={i} value={c}>{c}</option>
                                                                         ))}
                                                                     </select>
@@ -679,8 +728,13 @@ function DisciplinesConfigTab({ projectId, inputClass }: { projectId: string; in
                 </CardContent>
             </Card>
 
-            <SteclaCloudLinksCard projectId={projectId} inputClass={inputClass} />
-            <PowerPointExportCard projectId={projectId} inputClass={inputClass} />
+            <ErrorBoundary fallbackTitle="Não foi possível carregar os Links do SteclaCloud">
+                <SteclaCloudLinksCard projectId={projectId} inputClass={inputClass} />
+            </ErrorBoundary>
+
+            <ErrorBoundary fallbackTitle="Não foi possível carregar o Suplemento PowerPoint">
+                <PowerPointExportCard projectId={projectId} inputClass={inputClass} />
+            </ErrorBoundary>
         </div>
     );
 }
